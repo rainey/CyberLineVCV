@@ -26,6 +26,18 @@ The vocal system decomposes as:
   area-function tables for human / nonhuman tracts arrive as data (human MRI
   tables from Story–Titze; deer/koala from the CT literature later).
 
+### Design principle: no direct formant editing
+
+Users never specify formant frequencies or formant tables directly. Formants
+are an *emergent property* of the physical model: they exist only as
+resonances of the current tract geometry, and every change to them must come
+from perturbing model parameters (tongue position, constriction, VTL, velum,
+lip termination, larynx tension/pressure). If a module exposes a knob, the
+knob moves **anatomy**, never a resonance frequency. This keeps the modeling
+physical (the resonances stay coupled to each other the way real tube modes
+are) and makes the modules *predictable anatomical instruments* rather than
+fixed filter banks.
+
 ### v1 module list
 
 | Module slug | Type name | Function |
@@ -36,8 +48,11 @@ The vocal system decomposes as:
 
 ### Roadmap (not v1)
 
-- `cyberline-formant-chamber` — Klatt-style cascaded formant resonators with
-  vowel tables ("tables of filters" sibling; cheap, any input source)
+- `cyberline-formant-chamber` — **contingent** (see note): Klatt-style cascaded
+  formant resonators with vowel *tables*. This is the one planned module that
+  would expose resonance frequencies as data, violating the no-direct-formant
+  principle — include only if wanted as an explicitly "not-physical" utility
+  (Voder lineage), clearly separate from the anatomical modules.
 - `cyberline-velar-folds` / second-source module — independent excitor for
   biphonation (koala velar folds, elephant vestibular folds precedents)
 - Species table packs (deer, koala, gazelle) with published CT area functions
