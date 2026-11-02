@@ -247,7 +247,7 @@ than from per-stage curve menus.
 | # | Name | Range | Notes |
 |---|---|---|---|
 | G1 | TRIGGER | edge | starts one breath (one-shot envelope: inhale runs to DEPTH, exhale begins automatically — no sustained level needed); retrigger mid-exhale = catch-breath |
-| G2 | GATE | 0/1 | breath pedal (all modes): rising edge starts a breath; held high = inhale to DEPTH and HOLD (cuts an in-progress exhale); release = exhale from current volume |
+| G2 | GATE | 0/1 | breath pedal (all modes except PHASOR): rising edge starts a breath; held high = inhale to DEPTH and HOLD (cuts an in-progress exhale); release = exhale from current volume. **In PHASOR mode this input is the phase CV** (0–10 V → 0–1) |
 | G3 | DEPTH CV | 0–10 V → 0–1 | modulates tidal volume |
 
 ### Outputs
@@ -263,7 +263,7 @@ than from per-stage curve menus.
 
 | Knob/switch | Default | Notes |
 |---|---|---|
-| MODE | CYCLE | CYCLE (free breathing), TRIG (one-shot envelope), CLOSED (air retained after exhale — whale-style recycling) |
+| MODE | CYCLE | CYCLE (free breathing), TRIG (one-shot envelope), CLOSED (air retained after exhale — whale-style recycling), PHASOR (phase-driven; see below) |
 | RATE | 12/min | breathing rate in CYCLE mode |
 | DEPTH | 0.7 | tidal volume; in TRIG/CLOSED also sets envelope sustain *duration* (energy-limited) |
 | INHALE | 0.4 s | time to fill |
@@ -295,6 +295,15 @@ than from per-stage curve menus.
   elapses, then tops up and exhales again, no trigger needed. When the
   natural physics (inhale time + drain law) is slower than the period, the
   natural duration wins; the drain is never accelerated to hit RATE.
+- **PHASOR mode (phase-driven):** the GATE input becomes the phase CV
+  (0–10 V → 0–1 of one breath cycle): 0–50% = inhale (volume ∝ p), 50–100% =
+  exhale (drain shape follows EFFORT: exponential at 0, linear plateau at 1).
+  The external phasor owns the timing — INHALE/MAX FLOW are ignored, RATE is
+  ignored. FLOW reports the actual dV/dt (including phase jumps), so its
+  magnitude scales with phasor speed. Accepts any unipolar 0–10 V ramp;
+  bipolar sources should be offset/attenuated first (e.g. Fundamental 8vert).
+  Phase is continuous, so the module tracks external acceleration, deceler-
+  ation, and reversal (reversal re-inhales — FLOW flips positive).
 - **Trigger vs gate semantics:** TRIGGER is a pure one-shot — a short clock
   pulse suffices; the attack (inhale) runs to DEPTH and the exhale (release)
   begins on its own (attack completion never depends on the trigger still

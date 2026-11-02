@@ -42,7 +42,7 @@ struct CyberlineLungs : rack::engine::Module {
 		NUM_LIGHTS
 	};
 
-	enum Mode { CYCLE = 0, TRIG = 1, CLOSED = 2 };
+	enum Mode { CYCLE = 0, TRIG = 1, CLOSED = 2, PHASOR = 3 };
 
 	// State (integrated at control rate)
 	float volume = 0.f;      // 0..1 reservoir fill
@@ -58,6 +58,7 @@ struct CyberlineLungs : rack::engine::Module {
 	// Output interpolation (per sample)
 	float outPressure = 0.f, outVolume = 0.f, outFlow = 0.f, outPhase = 0.f;
 	float tgtPressure = 0.f, tgtVolume = 0.f, tgtFlow = 0.f, tgtPhase = 0.f;
+	float lastPhasorVolume = 0.f; // PHASOR mode: previous tick's volume (dV/dt)
 
 	static constexpr int PHYS_INTERVAL = 32;
 	int physCounter = 0;
@@ -69,10 +70,10 @@ struct CyberlineLungs : rack::engine::Module {
 		configParam(INHALE_PARAM, 0.05f, 3.f, 0.4f, "Inhale time", " s");
 		configParam(MAXFLOW_PARAM, 0.f, 1.f, 0.5f, "Max flow (gasp-calm)");
 		configParam(EFFORT_PARAM, 0.f, 1.f, 0.5f, "Effort (recoil-plateau)");
-		configSwitch(MODE_PARAM, 0.f, 2.f, 0.f, "Mode",
-			{"Cycle", "Trigger", "Closed"});
+		configSwitch(MODE_PARAM, 0.f, 3.f, 0.f, "Mode",
+			{"Cycle", "Trigger", "Closed", "Phasor"});
 		configInput(TRIGGER_INPUT, "Trigger (one-shot breath)");
-		configInput(GATE_INPUT, "Gate (pedal: inhale/hold while high)");
+		configInput(GATE_INPUT, "Gate (pedal) / Phase CV (Phasor mode)");
 		configInput(DEPTHCV_INPUT, "Depth CV (0-10 V)");
 		configOutput(PRESSURE_OUTPUT, "Pressure (0-10 V)");
 		configOutput(VOLUME_OUTPUT, "Volume (CV)");
@@ -85,6 +86,7 @@ struct CyberlineLungs : rack::engine::Module {
 	void reset() {
 		volume = 0.f; pressure = 0.f; flow = 0.f; phase = 0.f;
 		exhaling = false; inhaleHold = 0; cycleTimer = 0.f;
+		lastPhasorVolume = 0.f;
 		outPressure = outVolume = outFlow = outPhase = 0.f;
 		tgtPressure = tgtVolume = tgtFlow = tgtPhase = 0.f;
 	}

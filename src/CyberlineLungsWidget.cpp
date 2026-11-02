@@ -49,6 +49,49 @@ struct CyberlineLungsWidget : rack::app::ModuleWidget {
 		}
 	};
 
+	// 4-position snap switch (Cycle/Trigger/Closed/Phasor). Stock
+	// componentlibrary tops out at 3 positions (CKSSThree), so this is a
+	// Knob subclass: snap = true gives integer values, wheel, double-click
+	// reset and undo for free; draw() renders a vertical 4-slot track.
+	struct ModeSwitch : rack::app::Knob {
+		ModeSwitch() {
+			snap = true;
+			box.size = rack::Vec(18.f, 34.f);
+		}
+
+		float slotY(int i) const {
+			// 4 slots evenly spread, inset to keep the handle inside
+			return 8.f + i * (box.size.y - 16.f) / 3.f;
+		}
+
+		void draw(const DrawArgs& args) override {
+			float w = box.size.x, h = box.size.y;
+			// track
+			nvgBeginPath(args.vg);
+			nvgRoundedRect(args.vg, w * 0.5f - 3.5f, 2.f, 7.f, h - 4.f, 3.5f);
+			nvgFillColor(args.vg, nvgRGB(0x0d, 0x0f, 0x12));
+			nvgFill(args.vg);
+			nvgStrokeWidth(args.vg, 1.f);
+			nvgStrokeColor(args.vg, nvgRGB(0x2a, 0x2e, 0x35));
+			nvgStroke(args.vg);
+			// slot ticks
+			for (int i = 0; i < 4; i++) {
+				nvgBeginPath(args.vg);
+				nvgCircle(args.vg, w * 0.5f, slotY(i), 1.2f);
+				nvgFillColor(args.vg, nvgRGB(0x44, 0x4c, 0x56));
+				nvgFill(args.vg);
+			}
+			// handle at the snapped position
+			float v = getParamQuantity()
+				? getParamQuantity()->getValue() : 0.f;
+			int pos = (int) std::round(rack::math::clamp(v, 0.f, 3.f));
+			nvgBeginPath(args.vg);
+			nvgRoundedRect(args.vg, 1.f, slotY(pos) - 5.f, w - 2.f, 10.f, 4.f);
+			nvgFillColor(args.vg, nvgRGB(0x5a, 0xc8, 0xe0));
+			nvgFill(args.vg);
+		}
+	};
+
 	static void drawPanel(const rack::widget::Widget::DrawArgs& args, float panelW) {
 		NVGcolor bg = nvgRGB(0x16, 0x19, 0x1a);
 		NVGcolor edge = nvgRGB(0x2a, 0x2e, 0x35);
@@ -110,7 +153,6 @@ struct CyberlineLungsWidget : rack::app::ModuleWidget {
 
 		using rack::componentlibrary::RoundBlackKnob;
 		using rack::componentlibrary::RoundSmallBlackKnob;
-		using rack::componentlibrary::CKSSThree;
 		using rack::componentlibrary::PJ301MPort;
 
 		float cx = PANEL_W * 0.5f;
@@ -121,7 +163,7 @@ struct CyberlineLungsWidget : rack::app::ModuleWidget {
 		addParam(rack::createParamCentered<RoundSmallBlackKnob>(rack::Vec(colL, 106), module, CyberlineLungs::INHALE_PARAM));
 		addParam(rack::createParamCentered<RoundSmallBlackKnob>(rack::Vec(colR, 106), module, CyberlineLungs::MAXFLOW_PARAM));
 		addParam(rack::createParamCentered<RoundSmallBlackKnob>(rack::Vec(colL, 156), module, CyberlineLungs::EFFORT_PARAM));
-		addParam(rack::createParamCentered<CKSSThree>(rack::Vec(colR, 156), module, CyberlineLungs::MODE_PARAM));
+		addParam(rack::createParamCentered<ModeSwitch>(rack::Vec(colR, 156), module, CyberlineLungs::MODE_PARAM));
 
 		// Phase light beside the mode switch
 		addChild(rack::createLightCentered<rack::componentlibrary::SmallLight<rack::componentlibrary::GreenLight>>(
