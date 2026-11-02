@@ -32,6 +32,16 @@
         "Envelope generator",
         "Utility"
       ]
+    },
+    {
+      "slug": "cyberline-oral-chamber",
+      "name": "Oral Chamber",
+      "description": "Kelly-Lochbaum waveguide vocal tract with tongue/velum/constriction CVs, variable tract length (species scaling), nasal branch, and audio injection position",
+      "tags": [
+        "Physical modeling",
+        "Filter",
+        "Vocal"
+      ]
     }
   ]
 }
