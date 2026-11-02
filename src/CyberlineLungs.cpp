@@ -79,7 +79,13 @@ void CyberlineLungs::process(const ProcessArgs& args) {
 				}
 			}
 		} else {
-			// Exhale: flow driven by recoil + effort regulation
+			// Exhale: flow driven by recoil + effort regulation.
+			// NOTE: the state floor is 0 (no explicit residual-volume
+			// constant — see spec §5b DSP notes). The physiological
+			// end-of-phrase exponential taper comes from drive ∝ volume:
+			// at EFFORT 0 the drain is exponential (drive shrinks with the
+			// remaining air), at EFFORT 1 it is a flattened plateau until
+			// the reservoir empties.
 			float recoil = volume;                 // pressure available
 			float drive = (1.f - effort) * recoil  // unregulated decay
 				+ effort * depth;                  // flattened plateau

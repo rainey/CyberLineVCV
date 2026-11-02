@@ -274,9 +274,19 @@ than from per-stage curve menus.
 
 - Two state integrators: volume `V` (driven by flow) and the pressure shaping
   described by recoil + effort. Exhale pressure ~
-  `k·(V − residual)·recoil + effort·regulated(V)`; the exact shaping is
-  implemented to satisfy the two anchor behaviors: exponential recoil decay at
-  EFFORT 0, flat plateau until air runs out at EFFORT 1.
+  `k·V·recoil + effort·regulated(V)`; the exact shaping is implemented to
+  satisfy the two anchor behaviors: exponential recoil decay at EFFORT 0,
+  flat plateau until air runs out at EFFORT 1.
+- **State floor = 0 V, no explicit residual volume.** Physiologically, lungs
+  stop at residual volume (~20% of capacity), but the module does NOT model
+  that as a floor constant: the state range is 0..1 and 0 V *is* the floor.
+  The audible effect of the residual floor — the end-of-phrase exponential
+  taper — is preserved instead through the drain law: exhale drive ∝
+  remaining volume (recoil term), so the last stretch drains slowly and
+  fades. Renormalizing avoids a hidden discontinuity in the state space
+  (VOLUME output would otherwise stall at ~2 V for no user-facing reason).
+  Real residual-volume *numbers* only matter for a future species/capacity
+  pass (scaling DEPTH/capacity), not for the floor mechanics.
 - **Energy-limited sustain:** envelope duration scales with DEPTH; in CLOSED
   mode, subsequent triggers start from current V — durations shrink until the
   system refills (patch VOLUME to logic to sequence "breath management").
