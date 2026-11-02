@@ -5,9 +5,16 @@
 
 namespace cyberline {
 
-// Shared label font for programmatic panels (inline: one instance per TU
-// set via the linker). Loaded lazily from the Rack system dir; drawn via
+// Shared label font for programmatic panels. `inline` + function-local
+// static = exactly one instance program-wide (the earlier per-.cpp copies
+// were ODR violations). Loaded lazily from the Rack system dir; drawn via
 // nvgFontFaceId like Rack's own LedDisplay widgets.
+//
+// Assumes a single Rack context for the process lifetime (true for the
+// standalone app and Cardinal). The cached nanovg font handle belongs to
+// that context's Window, so a host that destroyed and recreated the context
+// while keeping the plugin loaded would render dead handles (invisible
+// labels) — re-key the cache on the context pointer if that ever matters.
 inline std::shared_ptr<rack::window::Font> getLabelFont() {
 	static std::shared_ptr<rack::window::Font> font;
 	if (!font && rack::contextGet()) {
@@ -21,5 +28,4 @@ extern rack::plugin::Model* modelCyberlineLarynx;
 extern rack::plugin::Model* modelCyberlineLungs;
 extern rack::plugin::Model* modelCyberlineOralChamber;
 extern rack::plugin::Model* modelCyberlineVoice;
-// later: modelCyberlineOralChamber, modelCyberlineVoice
 } // namespace cyberline

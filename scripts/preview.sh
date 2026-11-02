@@ -16,27 +16,29 @@
 #   slow under llvmpipe, so expect ~1-2 minutes. On shared machines this is
 #   also politer than GPU contention.
 # - Fresh user dir every run (crash-flag pollution hangs headless runs on a
-#   modal recovery dialog).
-# - Screenshots land in <userdir>/screenshots/cyberline/ (path echoed at end).
+#   modal recovery dialog); removed on exit.
+# - Screenshots are copied to /tmp/opencode/rackuser-previews/cyberline/
+#   (stable path, overwritten each run) so they outlive the scratch dir.
 # - Rack 2 scans the OS-arch plugin dir (plugins-lin-x64), NOT plugins-v2.
 
 zoom=${1:-1}
 set -e
 cd "$(dirname "$0")/.."
 
-RACK_BIN=/tmp/opencode/rack241/Rack2Free/Rack
+RACK_DIR_BIN=/tmp/opencode/rack241/Rack2Free
+RACK_BIN=$RACK_DIR_BIN/Rack
+OUT_DIR=/tmp/opencode/rackuser-previews
+
 # Fresh user dir every run: a polluted dir (e.g. crash flags from a previous
 # GPU failure) makes Rack block on a modal crash-recovery dialog before
 # screenshotting, which hangs headless runs.
 USER_DIR=$(mktemp -d /tmp/opencode/rackuser.XXXXXX)
+trap 'rm -rf "$USER_DIR"' EXIT
 
-# 1. link plugin.so WITHOUT -lRack (symbols resolve at host load time)
-nice -n 10 g++ -o plugin.so \
-	build/src/CyberlineLarynx.cpp.o build/src/CyberlineLarynxWidget.cpp.o \
-	build/src/CyberlineLungs.cpp.o build/src/CyberlineLungsWidget.cpp.o \
-	build/src/CyberlineOralChamber.cpp.o build/src/CyberlineOralChamberWidget.cpp.o \
-	build/src/CyberlineVoice.cpp.o build/src/CyberlineVoiceWidget.cpp.o \
-	build/src/plugin.cpp.o \
+# 1. link plugin.so WITHOUT -lRack (symbols resolve at host load time).
+# Glob, not a hand-list: -shared tolerates missing objects silently, and a
+# stale hand-list turns "new module not linked" into "no screenshots yet".
+nice -n 10 g++ -o plugin.so build/src/*.cpp.o \
 	-shared -static-libstdc++ -static-libgcc
 
 # 2. install into the OS-arch plugin dir Rack 2 actually scans
@@ -44,9 +46,18 @@ PLUGIN_DIR=$USER_DIR/plugins-lin-x64/cyberline
 mkdir -p "$PLUGIN_DIR"
 cp plugin.json plugin.so LICENSE "$PLUGIN_DIR/"
 
-# 3. screenshot mode (renders every installed module)
-cd /tmp/opencode/rack241/Rack2Free
-LIBGL_ALWAYS_SOFTWARE=1 nice -n 10 timeout 300 ./Rack -u $USER_DIR -t $zoom
+# 3. screenshot mode (renders every installed module).
+# `|| true`: a Rack crash/timeout must not abort before the epilogue reports
+# where any partial output was copied.
+cd "$RACK_DIR_BIN"
+LIBGL_ALWAYS_SOFTWARE=1 nice -n 10 timeout 300 "$RACK_BIN" -u $USER_DIR -t $zoom || true
+
+# 4. publish screenshots at a stable path
+rm -rf "$OUT_DIR"
+mkdir -p "$OUT_DIR"
+if [[ -d $USER_DIR/screenshots ]]; then
+	cp -r "$USER_DIR/screenshots/." "$OUT_DIR/"
+fi
 
 echo "---"
-ls -la $USER_DIR/screenshots/cyberline/ 2>/dev/null || echo "no screenshots yet"
+ls -la "$OUT_DIR/cyberline/" 2>/dev/null || echo "no screenshots yet"
