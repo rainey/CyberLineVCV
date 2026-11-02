@@ -5,23 +5,30 @@
 
 namespace cyberline {
 
-// Shared label font for programmatic panels. `inline` + function-local
-// static = exactly one instance program-wide (the earlier per-.cpp copies
-// were ODR violations). Loaded lazily from the Rack system dir; drawn via
-// nvgFontFaceId like Rack's own LedDisplay widgets.
+// Shared label font for programmatic panels. Re-resolved every draw (the
+// host Window's own fontCache makes that cheap) so a destroyed-and-recreated
+// GL context re-loads instead of holding a dead nanovg font handle.
 //
-// Assumes a single Rack context for the process lifetime (true for the
-// standalone app and Cardinal). The cached nanovg font handle belongs to
-// that context's Window, so a host that destroyed and recreated the context
-// while keeping the plugin loaded would render dead handles (invisible
-// labels) — re-key the cache on the context pointer if that ever matters.
+// Resolution order:
+//   1. Plugin-bundled copy (res/fonts/DejaVuSans.ttf, vendored with its
+//      permissive Bitstream/DejaVu license). Resolves in Cardinal/JayBird
+//      via share/cardinal/<slug>/ and in stock Rack via the plugin install
+//      dir — the only path that works everywhere without host help.
+//   2. Rack/Cardinal system font. Under stock Rack this is a real file;
+//      under Cardinal the Window constructor pre-seeds its fontCache with
+//      an embedded fallback under exactly this key, so no disk file is
+//      needed even when res/ is not deployed.
 inline std::shared_ptr<rack::window::Font> getLabelFont() {
-	static std::shared_ptr<rack::window::Font> font;
-	if (!font && rack::contextGet()) {
-		font = rack::contextGet()->window->loadFont(
-			rack::system::join(rack::asset::systemDir, "res/fonts/DejaVuSans.ttf"));
+	auto ctx = rack::contextGet();
+	if (!ctx)
+		return nullptr;
+	if (pluginInstance && !pluginInstance->path.empty()) {
+		auto font = ctx->window->loadFont(
+			rack::asset::plugin(pluginInstance, "res/fonts/DejaVuSans.ttf"));
+		if (font && font->handle >= 0)
+			return font;
 	}
-	return font;
+	return ctx->window->loadFont(rack::asset::system("res/fonts/DejaVuSans.ttf"));
 }
 
 // Panel title: brand + module name, bottom-center (all four panels have
@@ -48,3 +55,8 @@ extern rack::plugin::Model* modelCyberlineLungs;
 extern rack::plugin::Model* modelCyberlineOralChamber;
 extern rack::plugin::Model* modelCyberlineVoice;
 } // namespace cyberline
+
+// The per-plugin instance pointer. Declared at global scope to match
+// plugin.cpp's definition; JayBird's build renames the symbol to
+// pluginInstance__cyberline via -DpluginInstance on all cyberline TUs.
+extern rack::Plugin* pluginInstance;
