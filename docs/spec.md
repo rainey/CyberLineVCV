@@ -88,6 +88,23 @@ fixed filter banks.
   clamp. The PinkTromboneVCV port's blowups (NaN under audio-rate modulation,
   silent-state lockup) are the cautionary precedent; both failure modes get
   explicit guards, not hope.
+- **Signed-CV convention ("FLOW")**: suite-level interface standard — when a
+  cyberline output is signed, **the sign carries physical meaning**
+  (direction/state of the modeled system), never "inverted value." Primary
+  case: Lungs FLOW (+ = inhale, − = exhale, magnitude = flow intensity).
+  Where it reappears later (e.g. forward/backward wave components if the
+  Chamber ever exposes taps), the same rule applies.
+  - Interop with foreign modules is via three documented transforms:
+    rectify (sign → gate), zero-cross trigger (sign reversal → breath-boundary
+    clock), and bipolar use (sign as polarity on crossfaders/panners/filter
+    morph inputs). All three go in the manual.
+  - Panel requirement: signed outputs carry a "±" glyph and a sign LED
+    (color-coded per direction); any suite input accepting signed CV
+    documents its behavior on negative values (e.g. Larynx PRESSURE goes
+    silent on negative = physiologically correct, no phonation while
+    inhaling; rectify explicitly to model inhaled/circular phonation).
+  - Every signed output also has a plain unipolar/gate sibling where it makes
+    sense (Lungs PHASE) for logic-friendly use.
 
 ## 3. `cyberline-larynx` — Larynx
 
