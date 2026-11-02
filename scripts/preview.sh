@@ -52,9 +52,13 @@ cp plugin.json plugin.so LICENSE "$PLUGIN_DIR/"
 cd "$RACK_DIR_BIN"
 LIBGL_ALWAYS_SOFTWARE=1 nice -n 10 timeout 300 "$RACK_BIN" -u $USER_DIR -t $zoom || true
 
-# 4. publish screenshots at a stable path
+# 4. publish screenshots + the fresh plugin.so at a stable path.
+# Publishing plugin.so matters: the scratch dir is deleted on exit, so this
+# is the only surviving copy of the exact binary that rendered these PNGs
+# (e.g. for copying into an interactive-GUI user dir).
 rm -rf "$OUT_DIR"
 mkdir -p "$OUT_DIR"
+cp plugin.so "$OUT_DIR/"
 if [[ -d $USER_DIR/screenshots ]]; then
 	cp -r "$USER_DIR/screenshots/." "$OUT_DIR/"
 fi
