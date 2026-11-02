@@ -1,0 +1,27 @@
+{
+  "slug": "cyberline",
+  "name": "cyberline",
+  "version": "1.0.0",
+  "license": "MIT",
+  "brand": "Cyberline",
+  "author": "cyberline contributors",
+  "authorEmail": "",
+  "authorUrl": "",
+  "pluginUrl": "",
+  "manualUrl": "",
+  "sourceUrl": "",
+  "donateUrl": "",
+  "changelogUrl": "",
+  "modules": [
+    {
+      "slug": "cyberline-larynx",
+      "name": "Larynx",
+      "description": "LF-glottis voice source (Fant-Liljencrants) with fold-length allometry, tension/pressure CV, and semi-coupled tract feedback",
+      "tags": [
+        "Physical modeling",
+        "Oscillator",
+        "Synth voice"
+      ]
+    }
+  ]
+}
