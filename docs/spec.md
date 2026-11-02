@@ -45,6 +45,7 @@ fixed filter banks.
 | `cyberline-larynx` | `CyberlineLarynx` | LF-glottis source (Fant–Liljencrants), CV-driven |
 | `cyberline-oral-chamber` | `CyberlineOralChamber` | KL waveguide tract filter with tongue/velum/constriction/injection |
 | `cyberline-voice` | `CyberlineVoice` | Fused Larynx+Chamber, pre-patched internally, feedback knob live |
+| `cyberline-lungs` | `CyberlineLungs` | Breath-pressure reservoir; doubles as a physically-shaped envelope generator |
 
 ### Roadmap (not v1)
 
@@ -64,9 +65,9 @@ fixed filter banks.
   have air sacs too). Whale precedent for the flagship architecture itself:
   Cazau et al. 2016 (Sci. Reports) couple a two-mass source to a time-domain
   wave-reflection tract and reproduce chaos/frequency jumps.
-- Lungs idea (patch-level, no new module): closed-system air recycling —
-  a "recycle" mode returning exhaled air as input pressure (whale-style
-  sustained drones).
+- Lungs: CLOSED mode ships in v1 (the closed-system air-recycling idea);
+  a possible v2 extension is an explicit laryngeal-sac intermediate stage
+  between exhale and refill.
 
 ## 2. Conventions
 
@@ -216,6 +217,58 @@ implementations).
 Extra knob unique to Voice: none in v1 beyond convenience layout — keeps it
 honest. (Larynx height / integrated-coupling parameters belong to the v2
 flagship.)
+
+## 5b. `cyberline-lungs` — Breath (reservoir / envelope generator)
+
+Models a respiratory reservoir: tidal volume filled by inhale, drained by
+exhale; output pressure = elastic recoil + muscular effort. Doubles as a
+general-purpose envelope generator whose curves come from the physics rather
+than from per-stage curve menus.
+
+### Inputs
+
+| # | Name | Range | Notes |
+|---|---|---|---|
+| G1 | TRIGGER | edge | starts one breath cycle (mode TRIG) |
+| G2 | GATE | 0/1 | inhale while high (pedal-style, all modes) |
+| G3 | DEPTH CV | 0–10 V → 0–1 | modulates tidal volume |
+
+### Outputs
+
+| # | Name | Notes |
+|---|---|---|
+| O1 | PRESSURE | 0–10 V; main output, patches directly into Larynx PRESSURE |
+| O2 | VOLUME | CV 0–1, current lung volume (the "fuel gauge") |
+| O3 | FLOW | signed CV: + during inhale, − during exhale; patchable (noise gates, filters, whistles) |
+| O4 | PHASE | gate, high during exhale (voiced air) |
+
+### Parameters
+
+| Knob/switch | Default | Notes |
+|---|---|---|
+| MODE | CYCLE | CYCLE (free breathing), TRIG (one-shot envelope), CLOSED (air retained after exhale — whale-style recycling) |
+| RATE | 12/min | breathing rate in CYCLE mode |
+| DEPTH | 0.7 | tidal volume; in TRIG/CLOSED also sets envelope sustain *duration* (energy-limited) |
+| INHALE | 0.4 s | time to fill |
+| MAX FLOW | — | inhale speed ceiling (calm ↔ gasp) |
+| EFFORT | 0.5 | 0 = pure elastic recoil decay (exponential), 1 = actively flattened plateau (speech-like sustain) until volume is spent |
+
+### DSP notes
+
+- Two state integrators: volume `V` (driven by flow) and the pressure shaping
+  described by recoil + effort. Exhale pressure ~
+  `k·(V − residual)·recoil + effort·regulated(V)`; the exact shaping is
+  implemented to satisfy the two anchor behaviors: exponential recoil decay at
+  EFFORT 0, flat plateau until air runs out at EFFORT 1.
+- **Energy-limited sustain:** envelope duration scales with DEPTH; in CLOSED
+  mode, subsequent triggers start from current V — durations shrink until the
+  system refills (patch VOLUME to logic to sequence "breath management").
+- Retrigger during exhale: cut to a short catch-breath (no artificial
+  smoothing; the physics provides the click-free shape).
+- Outputs are sample-rate-smoothed CV (block-rate physics, per-sample output
+  interpolation). NaN guards per suite conventions.
+- Non-feature (deliberate): no per-stage linear/log curve menus; curve
+  character is EFFORT/DEPTH physics.
 
 ## 6. Panels
 
