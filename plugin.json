@@ -42,6 +42,16 @@
         "Filter",
         "Vocal"
       ]
+    },
+    {
+      "slug": "cyberline-voice",
+      "name": "Voice",
+      "description": "Fused Larynx and Oral Chamber with internal semi-coupled feedback loop; exposes pre-tract source and both radiation outputs",
+      "tags": [
+        "Physical modeling",
+        "Synth voice",
+        "Vocal"
+      ]
     }
   ]
 }
