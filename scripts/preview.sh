@@ -15,14 +15,20 @@
 # - Software GL (LIBGL_ALWAYS_SOFTWARE=1) is forced: the screenshot path is
 #   slow under llvmpipe, so expect ~1-2 minutes. On shared machines this is
 #   also politer than GPU contention.
-# - Screenshots land in /tmp/opencode/rackuser/screenshots/cyberline/.
+# - Fresh user dir every run (crash-flag pollution hangs headless runs on a
+#   modal recovery dialog).
+# - Screenshots land in <userdir>/screenshots/cyberline/ (path echoed at end).
+# - Rack 2 scans the OS-arch plugin dir (plugins-lin-x64), NOT plugins-v2.
 
 zoom=${1:-1}
 set -e
 cd "$(dirname "$0")/.."
 
 RACK_BIN=/tmp/opencode/rack241/Rack2Free/Rack
-USER_DIR=/tmp/opencode/rackuser
+# Fresh user dir every run: a polluted dir (e.g. crash flags from a previous
+# GPU failure) makes Rack block on a modal crash-recovery dialog before
+# screenshotting, which hangs headless runs.
+USER_DIR=$(mktemp -d /tmp/opencode/rackuser.XXXXXX)
 
 # 1. link plugin.so WITHOUT -lRack (symbols resolve at host load time)
 nice -n 10 g++ -o plugin.so \
@@ -33,8 +39,8 @@ nice -n 10 g++ -o plugin.so \
 	build/src/plugin.cpp.o \
 	-shared -static-libstdc++ -static-libgcc
 
-# 2. install into a scratch user dir
-PLUGIN_DIR=$USER_DIR/plugins-v2/cyberline
+# 2. install into the OS-arch plugin dir Rack 2 actually scans
+PLUGIN_DIR=$USER_DIR/plugins-lin-x64/cyberline
 mkdir -p "$PLUGIN_DIR"
 cp plugin.json plugin.so LICENSE "$PLUGIN_DIR/"
 
