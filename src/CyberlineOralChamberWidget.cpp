@@ -1,4 +1,5 @@
 // CyberlineOralChamberWidget — programmatic panel (no SVG assets). 16 HP.
+// Three-column grid; label 16 px above its widget.
 
 #include "CyberlineOralChamber.hpp"
 #include "CyberlineModels.hpp"
@@ -7,7 +8,7 @@
 namespace cyberline {
 
 struct CyberlineOralChamberWidget : rack::app::ModuleWidget {
-	static constexpr float PANEL_W = 16 * 15.f; // 16 HP in px
+	static constexpr float PANEL_W = 16 * 15.f;
 
 	static void drawPanel(const rack::widget::Widget::DrawArgs& args, float panelW) {
 		NVGcolor bg = nvgRGB(0x17, 0x18, 0x1d);
@@ -29,29 +30,29 @@ struct CyberlineOralChamberWidget : rack::app::ModuleWidget {
 		nvgFill(args.vg);
 
 		nvgFontSize(args.vg, 8);
-		nvgFontFace(args.vg, "bold");
+		auto font = getLabelFont();
+		if (font && font->handle >= 0)
+			nvgFontFaceId(args.vg, font->handle);
 		nvgTextAlign(args.vg, NVG_ALIGN_CENTER | NVG_ALIGN_BOTTOM);
 		nvgFillColor(args.vg, label);
 		auto text = [&](float x, float y, const char* s) {
 			nvgText(args.vg, x, y, s, NULL);
 		};
 
-		float c1 = panelW * 0.25f, c2 = panelW * 0.75f;
-		text(c1, 22, "VTL cm");
-		text(c2, 22, "MUSCLE");
-		text(c1, 50, "TONGUE X");
-		text(c2, 50, "TONGUE Y");
-		text(c1, 78, "VELUM");
-		text(c2, 78, "WALL");
-		text(c1, 106, "C.POS");
-		text(c2, 106, "C.WIDTH");
-		text(c1, 134, "FRIC");
-		text(c2, 134, "INJ POS");
+		float c1 = panelW * 0.2f, c2 = panelW * 0.5f, c3 = panelW * 0.8f;
+		text(c1, 24, "VTL cm");    text(c3, 24, "MUSCLE");
+		text(c1, 60, "TNG X");     text(c2, 60, "TNG Y");   text(c3, 60, "VELUM");
+		text(c1, 94, "C.POS");     text(c2, 94, "C.WIDTH"); text(c3, 94, "FRIC");
+		text(c1, 128, "WALL");     text(c2, 128, "INJ POS");
 
-		text(c1, 160, "SRC");
-		text(c2, 160, "INJECT");
-		text(c1, 224, "LIPS");
-		text(c2, 224, "NOSE");
+		text(c1, 160, "SRC");      text(c3, 160, "INJECT");
+		text(panelW * 0.09f, 200, "TNGX");  text(panelW * 0.245f, 200, "TNGY");
+		text(panelW * 0.40f, 200, "VEL");   text(panelW * 0.56f, 200, "CPOS");
+		text(panelW * 0.71f, 200, "CWID");  text(panelW * 0.87f, 200, "FRIC");
+		text(panelW * 0.5f, 240, "INJPOS CV");
+
+		text(c1, 286, "LIPS");     text(c2, 286, "NOSE");   text(c3, 286, "SHAPE");
+		text(panelW * 0.35f, 330, "PROBE");
 	}
 
 	CyberlineOralChamberWidget(CyberlineOralChamber* module) {
@@ -67,38 +68,37 @@ struct CyberlineOralChamberWidget : rack::app::ModuleWidget {
 		using rack::componentlibrary::RoundSmallBlackKnob;
 		using rack::componentlibrary::PJ301MPort;
 
-		float c1 = PANEL_W * 0.25f, c2 = PANEL_W * 0.75f;
+		float c1 = PANEL_W * 0.2f, c2 = PANEL_W * 0.5f, c3 = PANEL_W * 0.8f;
 
 		addParam(rack::createParamCentered<RoundBlackKnob>(rack::Vec(c1, 40), module, CyberlineOralChamber::VTL_PARAM));
-		addParam(rack::createParamCentered<RoundBlackKnob>(rack::Vec(c2, 40), module, CyberlineOralChamber::SPEED_PARAM));
-		addParam(rack::createParamCentered<RoundSmallBlackKnob>(rack::Vec(c1, 66), module, CyberlineOralChamber::TONGUEX_PARAM));
-		addParam(rack::createParamCentered<RoundSmallBlackKnob>(rack::Vec(c2, 66), module, CyberlineOralChamber::TONGUEY_PARAM));
-		addParam(rack::createParamCentered<RoundSmallBlackKnob>(rack::Vec(c1, 92), module, CyberlineOralChamber::VELUM_PARAM));
-		addParam(rack::createParamCentered<RoundSmallBlackKnob>(rack::Vec(c2, 92), module, CyberlineOralChamber::WALL_PARAM));
-		addParam(rack::createParamCentered<RoundSmallBlackKnob>(rack::Vec(c1, 118), module, CyberlineOralChamber::CONSTRPOS_PARAM));
-		addParam(rack::createParamCentered<RoundSmallBlackKnob>(rack::Vec(c2, 118), module, CyberlineOralChamber::CONSTRW_PARAM));
-		addParam(rack::createParamCentered<RoundSmallBlackKnob>(rack::Vec(c1, 144), module, CyberlineOralChamber::FRIC_PARAM));
+		addParam(rack::createParamCentered<RoundBlackKnob>(rack::Vec(c3, 40), module, CyberlineOralChamber::SPEED_PARAM));
+		addParam(rack::createParamCentered<RoundSmallBlackKnob>(rack::Vec(c1, 76), module, CyberlineOralChamber::TONGUEX_PARAM));
+		addParam(rack::createParamCentered<RoundSmallBlackKnob>(rack::Vec(c2, 76), module, CyberlineOralChamber::TONGUEY_PARAM));
+		addParam(rack::createParamCentered<RoundSmallBlackKnob>(rack::Vec(c3, 76), module, CyberlineOralChamber::VELUM_PARAM));
+		addParam(rack::createParamCentered<RoundSmallBlackKnob>(rack::Vec(c1, 110), module, CyberlineOralChamber::CONSTRPOS_PARAM));
+		addParam(rack::createParamCentered<RoundSmallBlackKnob>(rack::Vec(c2, 110), module, CyberlineOralChamber::CONSTRW_PARAM));
+		addParam(rack::createParamCentered<RoundSmallBlackKnob>(rack::Vec(c3, 110), module, CyberlineOralChamber::FRIC_PARAM));
+		addParam(rack::createParamCentered<RoundSmallBlackKnob>(rack::Vec(c1, 144), module, CyberlineOralChamber::WALL_PARAM));
 		addParam(rack::createParamCentered<RoundSmallBlackKnob>(rack::Vec(c2, 144), module, CyberlineOralChamber::INJPOS_PARAM));
 
-		// Source inputs
-		addInput(rack::createInputCentered<PJ301MPort>(rack::Vec(c1, 182), module, CyberlineOralChamber::SOURCE_INPUT));
-		addInput(rack::createInputCentered<PJ301MPort>(rack::Vec(c2, 182), module, CyberlineOralChamber::INJECT_INPUT));
+		addInput(rack::createInputCentered<PJ301MPort>(rack::Vec(c1, 176), module, CyberlineOralChamber::SOURCE_INPUT));
+		addInput(rack::createInputCentered<PJ301MPort>(rack::Vec(c3, 176), module, CyberlineOralChamber::INJECT_INPUT));
 
-		// CV inputs row (compact, center band)
-		float cvRow = 246.f;
-		addInput(rack::createInputCentered<PJ301MPort>(rack::Vec(PANEL_W * 0.11f, cvRow), module, CyberlineOralChamber::TONGUEX_INPUT));
-		addInput(rack::createInputCentered<PJ301MPort>(rack::Vec(PANEL_W * 0.26f, cvRow), module, CyberlineOralChamber::TONGUEY_INPUT));
-		addInput(rack::createInputCentered<PJ301MPort>(rack::Vec(PANEL_W * 0.41f, cvRow), module, CyberlineOralChamber::VELUM_INPUT));
+		float cvRow = 216.f;
+		addInput(rack::createInputCentered<PJ301MPort>(rack::Vec(PANEL_W * 0.09f, cvRow), module, CyberlineOralChamber::TONGUEX_INPUT));
+		addInput(rack::createInputCentered<PJ301MPort>(rack::Vec(PANEL_W * 0.245f, cvRow), module, CyberlineOralChamber::TONGUEY_INPUT));
+		addInput(rack::createInputCentered<PJ301MPort>(rack::Vec(PANEL_W * 0.40f, cvRow), module, CyberlineOralChamber::VELUM_INPUT));
 		addInput(rack::createInputCentered<PJ301MPort>(rack::Vec(PANEL_W * 0.56f, cvRow), module, CyberlineOralChamber::CONSTRPOS_INPUT));
 		addInput(rack::createInputCentered<PJ301MPort>(rack::Vec(PANEL_W * 0.71f, cvRow), module, CyberlineOralChamber::CONSTRW_INPUT));
-		addInput(rack::createInputCentered<PJ301MPort>(rack::Vec(PANEL_W * 0.86f, cvRow), module, CyberlineOralChamber::FRIC_INPUT));
+		addInput(rack::createInputCentered<PJ301MPort>(rack::Vec(PANEL_W * 0.87f, cvRow), module, CyberlineOralChamber::FRIC_INPUT));
 
-		// Outputs
-		addOutput(rack::createOutputCentered<PJ301MPort>(rack::Vec(c1, 300), module, CyberlineOralChamber::LIPS_OUTPUT));
-		addOutput(rack::createOutputCentered<PJ301MPort>(rack::Vec(c2, 300), module, CyberlineOralChamber::NOSE_OUTPUT));
-		addOutput(rack::createOutputCentered<PJ301MPort>(rack::Vec(PANEL_W * 0.35f, 344), module, CyberlineOralChamber::SHAPE_OUTPUT));
-		addOutput(rack::createOutputCentered<PJ301MPort>(rack::Vec(PANEL_W * 0.65f, 344), module, CyberlineOralChamber::PROBE_OUTPUT));
-		addInput(rack::createInputCentered<PJ301MPort>(rack::Vec(c2, 344), module, CyberlineOralChamber::INJPOS_INPUT));
+		addInput(rack::createInputCentered<PJ301MPort>(rack::Vec(c2, 256), module, CyberlineOralChamber::INJPOS_INPUT));
+
+		float outRow = 302.f;
+		addOutput(rack::createOutputCentered<PJ301MPort>(rack::Vec(c1, outRow), module, CyberlineOralChamber::LIPS_OUTPUT));
+		addOutput(rack::createOutputCentered<PJ301MPort>(rack::Vec(c2, outRow), module, CyberlineOralChamber::NOSE_OUTPUT));
+		addOutput(rack::createOutputCentered<PJ301MPort>(rack::Vec(c3, outRow), module, CyberlineOralChamber::SHAPE_OUTPUT));
+		addOutput(rack::createOutputCentered<PJ301MPort>(rack::Vec(PANEL_W * 0.35f, 346), module, CyberlineOralChamber::PROBE_OUTPUT));
 	}
 
 	void draw(const DrawArgs& args) override {

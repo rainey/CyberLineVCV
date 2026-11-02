@@ -1,4 +1,5 @@
 // CyberlineLungsWidget — programmatic panel (no SVG assets). 14 HP.
+// Single column; label 16 px above its widget.
 
 #include "CyberlineLungs.hpp"
 #include "CyberlineModels.hpp"
@@ -7,7 +8,7 @@
 namespace cyberline {
 
 struct CyberlineLungsWidget : rack::app::ModuleWidget {
-	static constexpr float PANEL_W = 14 * 15.f; // 14 HP in px
+	static constexpr float PANEL_W = 14 * 15.f;
 
 	static void drawPanel(const rack::widget::Widget::DrawArgs& args, float panelW) {
 		NVGcolor bg = nvgRGB(0x16, 0x19, 0x1a);
@@ -29,7 +30,9 @@ struct CyberlineLungsWidget : rack::app::ModuleWidget {
 		nvgFill(args.vg);
 
 		nvgFontSize(args.vg, 8);
-		nvgFontFace(args.vg, "bold");
+		auto font = getLabelFont();
+		if (font && font->handle >= 0)
+			nvgFontFaceId(args.vg, font->handle);
 		nvgTextAlign(args.vg, NVG_ALIGN_CENTER | NVG_ALIGN_BOTTOM);
 		nvgFillColor(args.vg, label);
 		auto text = [&](float x, float y, const char* s) {
@@ -37,14 +40,22 @@ struct CyberlineLungsWidget : rack::app::ModuleWidget {
 		};
 
 		float cx = panelW * 0.5f;
-		text(cx, 22, "RATE");
-		text(cx, 50, "DEPTH");
-		text(cx, 78, "INHALE");
-		text(cx, 106, "FLOW MAX");
-		text(cx, 134, "EFFORT");
+		text(cx, 26, "RATE");
+		text(cx, 66, "DEPTH");
+		text(cx, 104, "INHALE s");
+		text(cx, 136, "FLOW MAX");
+		text(cx, 168, "EFFORT");
+		text(cx, 200, "MODE");
 
-		text(cx, 162, "TRIG   GATE   DEPTH");
-		text(cx, 222, "PRESS  VOL  FLOW+-  PHASE");
+		// inputs
+		text(panelW * 0.25f, 234, "TRIG");
+		text(cx, 234, "GATE");
+		text(panelW * 0.75f, 234, "DEPTH CV");
+		// outputs
+		text(panelW * 0.15f, 286, "PRESS");
+		text(panelW * 0.38f, 286, "VOL");
+		text(panelW * 0.62f, 286, "FLOW +-");
+		text(panelW * 0.85f, 286, "PHASE");
 	}
 
 	CyberlineLungsWidget(CyberlineLungs* module) {
@@ -58,33 +69,32 @@ struct CyberlineLungsWidget : rack::app::ModuleWidget {
 
 		using rack::componentlibrary::RoundBlackKnob;
 		using rack::componentlibrary::RoundSmallBlackKnob;
+		using rack::componentlibrary::Trimpot;
 		using rack::componentlibrary::PJ301MPort;
 
 		float cx = PANEL_W * 0.5f;
 
-		addParam(rack::createParamCentered<RoundBlackKnob>(rack::Vec(cx, 40), module, CyberlineLungs::RATE_PARAM));
-		addParam(rack::createParamCentered<RoundBlackKnob>(rack::Vec(cx, 68), module, CyberlineLungs::DEPTH_PARAM));
-		addParam(rack::createParamCentered<RoundSmallBlackKnob>(rack::Vec(cx, 94), module, CyberlineLungs::INHALE_PARAM));
-		addParam(rack::createParamCentered<RoundSmallBlackKnob>(rack::Vec(cx, 120), module, CyberlineLungs::MAXFLOW_PARAM));
-		addParam(rack::createParamCentered<RoundSmallBlackKnob>(rack::Vec(cx, 146), module, CyberlineLungs::EFFORT_PARAM));
-		addParam(rack::createParamCentered<rack::componentlibrary::Trimpot>(rack::Vec(cx, 172), module, CyberlineLungs::MODE_PARAM));
+		addParam(rack::createParamCentered<RoundBlackKnob>(rack::Vec(cx, 44), module, CyberlineLungs::RATE_PARAM));
+		addParam(rack::createParamCentered<RoundBlackKnob>(rack::Vec(cx, 84), module, CyberlineLungs::DEPTH_PARAM));
+		addParam(rack::createParamCentered<RoundSmallBlackKnob>(rack::Vec(cx, 120), module, CyberlineLungs::INHALE_PARAM));
+		addParam(rack::createParamCentered<RoundSmallBlackKnob>(rack::Vec(cx, 152), module, CyberlineLungs::MAXFLOW_PARAM));
+		addParam(rack::createParamCentered<RoundSmallBlackKnob>(rack::Vec(cx, 184), module, CyberlineLungs::EFFORT_PARAM));
+		addParam(rack::createParamCentered<Trimpot>(rack::Vec(cx, 216), module, CyberlineLungs::MODE_PARAM));
 
-		// Inputs row
-		float row = 190.f;
+		// Phase light beside the mode switch
+		addChild(rack::createLightCentered<rack::componentlibrary::SmallLight<rack::componentlibrary::GreenLight>>(
+			rack::Vec(cx + 22, 216), module, CyberlineLungs::PHASE_LIGHT));
+
+		float row = 250.f;
 		addInput(rack::createInputCentered<PJ301MPort>(rack::Vec(PANEL_W * 0.25f, row), module, CyberlineLungs::TRIGGER_INPUT));
 		addInput(rack::createInputCentered<PJ301MPort>(rack::Vec(cx, row), module, CyberlineLungs::GATE_INPUT));
 		addInput(rack::createInputCentered<PJ301MPort>(rack::Vec(PANEL_W * 0.75f, row), module, CyberlineLungs::DEPTHCV_INPUT));
 
-		// Outputs row
-		float row2 = 250.f;
+		float row2 = 302.f;
 		addOutput(rack::createOutputCentered<PJ301MPort>(rack::Vec(PANEL_W * 0.15f, row2), module, CyberlineLungs::PRESSURE_OUTPUT));
 		addOutput(rack::createOutputCentered<PJ301MPort>(rack::Vec(PANEL_W * 0.38f, row2), module, CyberlineLungs::VOLUME_OUTPUT));
 		addOutput(rack::createOutputCentered<PJ301MPort>(rack::Vec(PANEL_W * 0.62f, row2), module, CyberlineLungs::FLOW_OUTPUT));
 		addOutput(rack::createOutputCentered<PJ301MPort>(rack::Vec(PANEL_W * 0.85f, row2), module, CyberlineLungs::PHASE_OUTPUT));
-
-		// Phase light between rows
-		addChild(rack::createLightCentered<rack::componentlibrary::SmallLight<rack::componentlibrary::GreenLight>>(
-			rack::Vec(cx, 218), module, CyberlineLungs::PHASE_LIGHT));
 	}
 
 	void draw(const DrawArgs& args) override {
