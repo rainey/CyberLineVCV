@@ -10,6 +10,45 @@ namespace cyberline {
 struct CyberlineLungsWidget : rack::app::ModuleWidget {
 	static constexpr float PANEL_W = 14 * 15.f;
 
+	// "Lung" gauge: a circle that inflates with the reservoir volume and
+	// color-codes the phase (cyan inhale / warm exhale / dim dot at rest).
+	// Makes the burst-then-rest CYCLE rhythm visible at a glance. Drawn
+	// from module state per the spec §2 visualization convention; reads
+	// engine floats from the GUI thread (benign for a meter).
+	struct BreathGauge : rack::widget::Widget {
+		CyberlineLungs* module;
+		BreathGauge(CyberlineLungs* m) : module(m) {}
+
+		void draw(const DrawArgs& args) override {
+			float vol = 0.f, phase = 0.f;
+			bool resting = true;
+			if (module && std::isfinite(module->volume)) {
+				vol = rack::math::clamp(module->volume, 0.f, 1.f);
+				phase = module->phase;
+				resting = !module->exhaling && vol <= 0.001f;
+			}
+			float cx = box.size.x * 0.5f, cy = box.size.y * 0.5f;
+
+			// reservoir ring (fixed outer bound)
+			nvgBeginPath(args.vg);
+			nvgCircle(args.vg, cx, cy, 11.f);
+			nvgStrokeWidth(args.vg, 1.f);
+			nvgStrokeColor(args.vg, nvgRGB(0x2a, 0x2e, 0x35));
+			nvgStroke(args.vg);
+
+			// volume fill
+			NVGcolor fill = resting
+				? nvgRGB(0x3a, 0x40, 0x48)                 // at rest
+				: (phase > 0.5f
+					? nvgRGB(0xe0, 0x7a, 0x5a)             // exhaling (warm)
+					: nvgRGB(0x5a, 0xc8, 0xe0));           // inhaling (cyan)
+			nvgBeginPath(args.vg);
+			nvgCircle(args.vg, cx, cy, 1.5f + vol * 9.f);
+			nvgFillColor(args.vg, fill);
+			nvgFill(args.vg);
+		}
+	};
+
 	static void drawPanel(const rack::widget::Widget::DrawArgs& args, float panelW) {
 		NVGcolor bg = nvgRGB(0x16, 0x19, 0x1a);
 		NVGcolor edge = nvgRGB(0x2a, 0x2e, 0x35);
@@ -86,6 +125,14 @@ struct CyberlineLungsWidget : rack::app::ModuleWidget {
 		// Phase light beside the mode switch
 		addChild(rack::createLightCentered<rack::componentlibrary::SmallLight<rack::componentlibrary::GreenLight>>(
 			rack::Vec(colR + 22, 156), module, CyberlineLungs::PHASE_LIGHT));
+
+		// Lung gauge, dead-center between the knob columns
+		{
+			auto gauge = new BreathGauge(module);
+			gauge->box.pos = rack::Vec(93.f, 150.f);
+			gauge->box.size = rack::Vec(24.f, 24.f);
+			addChild(gauge);
+		}
 
 		float row = 220.f;
 		addInput(rack::createInputCentered<PJ301MPort>(rack::Vec(PANEL_W * 0.25f, row), module, CyberlineLungs::TRIGGER_INPUT));
