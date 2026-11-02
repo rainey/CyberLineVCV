@@ -51,6 +51,8 @@ struct CyberlineLarynxWidget : rack::app::ModuleWidget {
 		text(c1, 208, "PRESS");    text(c2, 208, "FB IN");
 		// outputs
 		text(c1, 256, "VOICED");   text(c2, 256, "N.MOD");
+
+		drawPanelTitle(args, panelW, "LARYNX");
 	}
 
 	CyberlineLarynxWidget(CyberlineLarynx* module) {

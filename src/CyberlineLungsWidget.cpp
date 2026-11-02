@@ -56,6 +56,8 @@ struct CyberlineLungsWidget : rack::app::ModuleWidget {
 		text(panelW * 0.38f, 286, "VOL");
 		text(panelW * 0.62f, 286, "FLOW +-");
 		text(panelW * 0.85f, 286, "PHASE");
+
+		drawPanelTitle(args, panelW, "BREATH");
 	}
 
 	CyberlineLungsWidget(CyberlineLungs* module) {

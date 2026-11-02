@@ -24,6 +24,25 @@ inline std::shared_ptr<rack::window::Font> getLabelFont() {
 	return font;
 }
 
+// Panel title: brand + module name, bottom-center (all four panels have
+// dead space below the output row; the corner screws don't reach the
+// centered text). Called at the end of each drawPanel.
+inline void drawPanelTitle(const rack::widget::Widget::DrawArgs& args, float panelW, const char* name) {
+	auto font = getLabelFont();
+	if (!font || font->handle < 0)
+		return;
+	nvgFontFaceId(args.vg, font->handle);
+	nvgTextAlign(args.vg, NVG_ALIGN_CENTER | NVG_ALIGN_BOTTOM);
+	nvgFillColor(args.vg, nvgRGB(0x6a, 0x74, 0x80));
+	nvgFontSize(args.vg, 7);
+	nvgText(args.vg, panelW * 0.5f, 362, "CYBERLINE", NULL);
+	nvgFillColor(args.vg, nvgRGB(0xd8, 0xde, 0xe4));
+	nvgFontSize(args.vg, 11);
+	nvgTextLetterSpacing(args.vg, 1.0);
+	nvgText(args.vg, panelW * 0.5f, 374, name, NULL);
+	nvgTextLetterSpacing(args.vg, 0.0);
+}
+
 extern rack::plugin::Model* modelCyberlineLarynx;
 extern rack::plugin::Model* modelCyberlineLungs;
 extern rack::plugin::Model* modelCyberlineOralChamber;

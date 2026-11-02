@@ -50,6 +50,8 @@ struct CyberlineVoiceWidget : rack::app::ModuleWidget {
 		text(c1, 226, "TNGX CV"); text(c2, 226, "VELUM CV"); text(c3, 226, "TNGY CV");
 
 		text(c1, 274, "LIPS");    text(c2, 274, "NOSE");   text(c3, 274, "SOURCE");
+
+		drawPanelTitle(args, panelW, "VOICE");
 	}
 
 	CyberlineVoiceWidget(CyberlineVoice* module) {

@@ -53,6 +53,8 @@ struct CyberlineOralChamberWidget : rack::app::ModuleWidget {
 
 		text(c1, 286, "LIPS");     text(c2, 286, "NOSE");   text(c3, 286, "SHAPE");
 		text(panelW * 0.35f, 330, "PROBE");
+
+		drawPanelTitle(args, panelW, "ORAL CHAMBER");
 	}
 
 	CyberlineOralChamberWidget(CyberlineOralChamber* module) {
