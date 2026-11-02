@@ -24,6 +24,7 @@
 zoom=${1:-1}
 set -e
 cd "$(dirname "$0")/.."
+REPO_DIR=$(pwd)
 
 RACK_DIR_BIN=/tmp/opencode/rack241/Rack2Free
 RACK_BIN=$RACK_DIR_BIN/Rack
@@ -58,7 +59,7 @@ LIBGL_ALWAYS_SOFTWARE=1 nice -n 10 timeout 300 "$RACK_BIN" -u $USER_DIR -t $zoom
 # (e.g. for copying into an interactive-GUI user dir).
 rm -rf "$OUT_DIR"
 mkdir -p "$OUT_DIR"
-cp plugin.so "$OUT_DIR/"
+cp "$REPO_DIR/plugin.so" "$OUT_DIR/"
 if [[ -d $USER_DIR/screenshots ]]; then
 	cp -r "$USER_DIR/screenshots/." "$OUT_DIR/"
 fi
