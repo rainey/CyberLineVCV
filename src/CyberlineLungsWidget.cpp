@@ -84,6 +84,7 @@ struct CyberlineLungsWidget : rack::app::ModuleWidget {
 		text(colL, 30, "RATE");      text(colR, 30, "DEPTH");
 		text(colL, 84, "INHALE s");  text(colR, 84, "FLOW MAX");
 		text(colL, 134, "EFFORT");   text(colR, 134, "MODE");
+		text(colR + 22, 146, "PHASE");
 
 		// inputs
 		text(panelW * 0.25f, 196, "TRIG");
@@ -109,7 +110,7 @@ struct CyberlineLungsWidget : rack::app::ModuleWidget {
 
 		using rack::componentlibrary::RoundBlackKnob;
 		using rack::componentlibrary::RoundSmallBlackKnob;
-		using rack::componentlibrary::Trimpot;
+		using rack::componentlibrary::CKSSThree;
 		using rack::componentlibrary::PJ301MPort;
 
 		float cx = PANEL_W * 0.5f;
@@ -120,7 +121,7 @@ struct CyberlineLungsWidget : rack::app::ModuleWidget {
 		addParam(rack::createParamCentered<RoundSmallBlackKnob>(rack::Vec(colL, 106), module, CyberlineLungs::INHALE_PARAM));
 		addParam(rack::createParamCentered<RoundSmallBlackKnob>(rack::Vec(colR, 106), module, CyberlineLungs::MAXFLOW_PARAM));
 		addParam(rack::createParamCentered<RoundSmallBlackKnob>(rack::Vec(colL, 156), module, CyberlineLungs::EFFORT_PARAM));
-		addParam(rack::createParamCentered<Trimpot>(rack::Vec(colR, 156), module, CyberlineLungs::MODE_PARAM));
+		addParam(rack::createParamCentered<CKSSThree>(rack::Vec(colR, 156), module, CyberlineLungs::MODE_PARAM));
 
 		// Phase light beside the mode switch
 		addChild(rack::createLightCentered<rack::componentlibrary::SmallLight<rack::componentlibrary::GreenLight>>(

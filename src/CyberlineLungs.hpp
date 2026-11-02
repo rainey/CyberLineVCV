@@ -69,7 +69,8 @@ struct CyberlineLungs : rack::engine::Module {
 		configParam(INHALE_PARAM, 0.05f, 3.f, 0.4f, "Inhale time", " s");
 		configParam(MAXFLOW_PARAM, 0.f, 1.f, 0.5f, "Max flow (gasp-calm)");
 		configParam(EFFORT_PARAM, 0.f, 1.f, 0.5f, "Effort (recoil-plateau)");
-		configParam(MODE_PARAM, 0.f, 2.f, 0.f, "Mode");
+		configSwitch(MODE_PARAM, 0.f, 2.f, 0.f, "Mode",
+			{"Cycle", "Trigger", "Closed"});
 		configInput(TRIGGER_INPUT, "Trigger (one-shot)");
 		configInput(GATE_INPUT, "Gate (inhale while high)");
 		configInput(DEPTHCV_INPUT, "Depth CV (0-10 V)");
