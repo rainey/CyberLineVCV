@@ -58,7 +58,15 @@ fixed filter banks.
 - Species table packs (deer, koala, gazelle) with published CT area functions
 - Voder-style gesture module (playable CV surface)
 - Flagship integrated two-mass model (Ishizaka–Flanagan/Lucero) with full
-  source–filter coupling
+  source–filter coupling, plus **laryngeal sac** (Helmholtz branch at the
+  glottal end — the whale feature; per Cazau 2016, sac inflation lowers its
+  formant toward F0 and is a chaos/size-exaggeration mechanism; great apes
+  have air sacs too). Whale precedent for the flagship architecture itself:
+  Cazau et al. 2016 (Sci. Reports) couple a two-mass source to a time-domain
+  wave-reflection tract and reproduce chaos/frequency jumps.
+- Lungs idea (patch-level, no new module): closed-system air recycling —
+  a "recycle" mode returning exhaled air as input pressure (whale-style
+  sustained drones).
 
 ## 2. Conventions
 
@@ -108,6 +116,7 @@ reimplemented from the 1985 paper, plus guards and modular control).
 |---|---|---|---|
 | TENSION | 0.6 | 0–1 | |
 | PRESSURE | 0.8 | 0–1 | replaces PT's `intensity` envelope; smoothed internally |
+| FOLD LENGTH | 14 mm | 2–45 mm | vocal-fold length; allometric F0 scaling per Charlton/Fletcher mammal law (`log10 F0 = −1.43·log10 L(mm) + 4.01` at zero tension), plus mass/dim timbre effect (thicker folds = darker). Human ≈ 13–15 mm, giraffe 41 mm; keeps DRIFT/creak behavior physical at big sizes |
 | FREQ OCT | −2…+2 | octave offset for L1 | F0 clamped 20–2000 Hz after CV; below 20 Hz the LF period grows unbounded (PT silent-state bug) |
 | DRIFT | 0.3 | 0–1 | simplex wobble on F0 and tenseness (PT's `autoWobble`/vibrato noise terms), depth scaled |
 | VIBRATO RATE | 6 Hz | 0–12 | sinusoid vibrato depth fixed small; CV of pitch comes from patching |
