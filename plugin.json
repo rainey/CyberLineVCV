@@ -22,6 +22,16 @@
         "Oscillator",
         "Synth voice"
       ]
+    },
+    {
+      "slug": "cyberline-lungs",
+      "name": "Breath",
+      "description": "Respiratory pressure reservoir and physically-shaped envelope generator with energy-limited sustain and whale-style air retention mode",
+      "tags": [
+        "Physical modeling",
+        "Envelope generator",
+        "Utility"
+      ]
     }
   ]
 }

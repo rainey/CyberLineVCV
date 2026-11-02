@@ -13,4 +13,5 @@ void init(rack::Plugin* p) {
 	pluginInstance = p;
 
 	p->addModel(cyberline::modelCyberlineLarynx);
+	p->addModel(cyberline::modelCyberlineLungs);
 }

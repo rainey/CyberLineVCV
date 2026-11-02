@@ -5,5 +5,6 @@
 
 namespace cyberline {
 extern rack::plugin::Model* modelCyberlineLarynx;
-// later: modelCyberlineOralChamber, modelCyberlineVoice, modelCyberlineLungs
+extern rack::plugin::Model* modelCyberlineLungs;
+// later: modelCyberlineOralChamber, modelCyberlineVoice
 } // namespace cyberline
