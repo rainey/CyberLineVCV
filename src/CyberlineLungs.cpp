@@ -33,9 +33,17 @@ void CyberlineLungs::process(const ProcessArgs& args) {
 		bool start = false;
 		if (mode == CYCLE) {
 			float rate = params[RATE_PARAM].getValue();
-			// free-running breath loop: fill then drain
-			if (!exhaling && volume >= depth * 0.999f) exhaling = true;
-			if (exhaling && volume <= 0.02f) { exhaling = false; }
+			// Free-running breath loop. RATE sets the breath period
+			// (60/rate) as a *floor*: after a breath completes, the lungs
+			// rest until the period elapses, then top up and exhale. When
+			// the natural physics (inhale + drain law) is slower than the
+			// period, the natural duration wins — the drain is never
+			// accelerated to hit RATE.
+			cycleTimer += dt;
+			if (!exhaling && cycleTimer >= 60.f / rate
+					&& volume < depth * 0.999f) {
+				start = true;
+			}
 			// resync inhale duration roughly to cycle period
 			inhaleTime = std::fmin(inhaleTime, 60.f / rate * 0.5f);
 		} else if (trigRising) {
@@ -59,6 +67,7 @@ void CyberlineLungs::process(const ProcessArgs& args) {
 			flow = fmaxf(f, 0.f) * (0.3f + 0.7f * maxFlow);
 			if (flow < 0.01f) flow = 0.01f;
 			phase = 0.f;
+			cycleTimer = 0.f;   // breath period measured from inhale start
 		}
 
 		// Gate held high: inhale (all modes)
@@ -96,8 +105,14 @@ void CyberlineLungs::process(const ProcessArgs& args) {
 			flow = -drive;
 			phase = 1.f;
 			if (volume <= 0.001f) {
+				// breath over: system at rest in ALL modes — flow 0, phase
+				// gate low, exhaling cleared. Previously this only cleaned
+				// up in CYCLE, leaving FLOW stuck at -drive and PHASE stuck
+				// high in TRIG/CLOSED until the next trigger.
+				volume = 0.f;
 				flow = 0.f;
-				if (mode == CYCLE) { exhaling = false; phase = 0.f; }
+				phase = 0.f;
+				exhaling = false;
 			}
 		}
 

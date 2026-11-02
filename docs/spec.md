@@ -290,6 +290,11 @@ than from per-stage curve menus.
 - **Energy-limited sustain:** envelope duration scales with DEPTH; in CLOSED
   mode, subsequent triggers start from current V — durations shrink until the
   system refills (patch VOLUME to logic to sequence "breath management").
+- **CYCLE free-run:** RATE sets the breath period (60/RATE seconds) as a
+  *floor* — after a breath completes, the module rests until the period
+  elapses, then tops up and exhales again, no trigger needed. When the
+  natural physics (inhale time + drain law) is slower than the period, the
+  natural duration wins; the drain is never accelerated to hit RATE.
 - Retrigger during exhale: cut to a short catch-breath (no artificial
   smoothing; the physics provides the click-free shape).
 - Outputs are sample-rate-smoothed CV (block-rate physics, per-sample output
