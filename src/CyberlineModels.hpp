@@ -3,6 +3,13 @@
 #pragma once
 #include <rack.hpp>
 
+// The per-plugin instance pointer (defined in plugin.cpp at global scope;
+// JayBird's build renames the token to pluginInstance__cyberline via
+// -DpluginInstance on all cyberline TUs). Declared at global scope, before
+// namespace cyberline, so the mangled name matches plugin.cpp's definition
+// and getLabelFont() below can use it.
+extern rack::Plugin* pluginInstance;
+
 namespace cyberline {
 
 // Shared label font for programmatic panels. Re-resolved every draw (the
@@ -55,8 +62,3 @@ extern rack::plugin::Model* modelCyberlineLungs;
 extern rack::plugin::Model* modelCyberlineOralChamber;
 extern rack::plugin::Model* modelCyberlineVoice;
 } // namespace cyberline
-
-// The per-plugin instance pointer. Declared at global scope to match
-// plugin.cpp's definition; JayBird's build renames the symbol to
-// pluginInstance__cyberline via -DpluginInstance on all cyberline TUs.
-extern rack::Plugin* pluginInstance;

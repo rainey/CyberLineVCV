@@ -31,8 +31,10 @@ void CyberlineVoice::process(const ProcessArgs& args) {
 			+ inputs[V_TONGUEX_INPUT].getVoltage(), 0.f, 10.f) / 10.f;
 		float ty = rack::math::clamp(params[V_TONGUEY_PARAM].getValue()
 			+ inputs[V_TONGUEY_INPUT].getVoltage(), 0.f, 10.f) / 10.f;
+		// same tongue mapping as the Chamber: knob bottom = closed,
+		// ~6 = neutral tract, top = wide (see CyberlineOralChamber.cpp)
 		tract.setTongue(tract.bladeStart + tx * (tract.tipStart - tract.bladeStart),
-			0.3f + ty * 3.5f);
+			1.5f + ty * 3.8f);
 		tract.setVelum(rack::math::clamp(params[V_VELUM_PARAM].getValue()
 			+ inputs[V_VELUM_INPUT].getVoltage() * 0.1f, 0.f, 1.f));
 		tract.muscleSpeed = 2.f + params[V_SPEED_PARAM].getValue() * 38.f;

@@ -20,13 +20,18 @@ void CyberlineOralChamber::process(const ProcessArgs& args) {
 			tract.setGeometry(vtlCm, args.sampleRate);
 		}
 
-		// Tongue X: 0..10 V -> blade..tip index. Y: 0..10 -> diameter 0.3..3.8
+		// Tongue X: 0..10 V -> blade..tip index. Y: knob bottom = closed
+		// (stop consonants), ~6 = neutral tract, top = wide open.
+		// setTongue maps tongue diameter dia to a tract minimum of
+		// d_min = 0.3 + (dia-2)/1.5, so this knob value inverts that:
+		// dia = 1.5 + ty*3.8  ->  d_min ~= 2.53*ty - 0.03 (clamped at 0.05),
+		// i.e. closed at 0, neutral (1.5) at ~6, wide (2.5) at 10.
 		float tx = rack::math::clamp(params[TONGUEX_PARAM].getValue()
 			+ inputs[TONGUEX_INPUT].getVoltage(), 0.f, 10.f) / 10.f;
 		float ty = rack::math::clamp(params[TONGUEY_PARAM].getValue()
 			+ inputs[TONGUEY_INPUT].getVoltage(), 0.f, 10.f) / 10.f;
 		float idx = tract.bladeStart + tx * (tract.tipStart - tract.bladeStart);
-		float dia = 0.3f + ty * 3.5f;
+		float dia = 1.5f + ty * 3.8f;
 		tract.setTongue(idx, dia);
 
 		// Velum: 0..10 V -> 0..1

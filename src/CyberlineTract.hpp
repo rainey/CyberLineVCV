@@ -208,6 +208,20 @@ struct CyberlineTract {
 			addTurbulence(amt, constrPos);
 		}
 
+		// external injection at fractional position — added to the state
+		// BEFORE the scattering loop so it enters the junction computation
+		// (added after, the mouth update overwrites R/L and it is lost)
+		if (inject != 0.f) {
+			int ip = (int) std::floor(injectPos);
+			if (ip < 0) ip = 0;
+			if (ip > n - 2) ip = n - 2;
+			float frac = injectPos - (float) ip;
+			R[ip] += inject * (1.f - frac) * 0.5f;
+			L[ip] += inject * (1.f - frac) * 0.5f;
+			R[ip + 1] += inject * frac * 0.5f;
+			L[ip + 1] += inject * frac * 0.5f;
+		}
+
 		// glottal-end junction (source + external inject at glottal end
 		// handled by caller feeding `source`)
 		jr[0] = L[0] * glottalReflection + source;
@@ -219,18 +233,6 @@ struct CyberlineTract {
 			float w = r * (R[i - 1] + L[i]);
 			jr[i] = R[i - 1] - w;
 			jl[i] = L[i] + w;
-		}
-
-		// external injection at fractional position
-		if (inject != 0.f) {
-			int ip = (int) std::floor(injectPos);
-			if (ip < 0) ip = 0;
-			if (ip > n - 2) ip = n - 2;
-			float frac = injectPos - (float) ip;
-			R[ip] += inject * (1.f - frac) * 0.5f;
-			L[ip] += inject * (1.f - frac) * 0.5f;
-			R[ip + 1] += inject * frac * 0.5f;
-			L[ip + 1] += inject * frac * 0.5f;
 		}
 
 		// three-way junction with nose
