@@ -71,8 +71,8 @@ struct CyberlineLungs : rack::engine::Module {
 		configParam(EFFORT_PARAM, 0.f, 1.f, 0.5f, "Effort (recoil-plateau)");
 		configSwitch(MODE_PARAM, 0.f, 2.f, 0.f, "Mode",
 			{"Cycle", "Trigger", "Closed"});
-		configInput(TRIGGER_INPUT, "Trigger (one-shot)");
-		configInput(GATE_INPUT, "Gate (inhale while high)");
+		configInput(TRIGGER_INPUT, "Trigger (one-shot breath)");
+		configInput(GATE_INPUT, "Gate (pedal: inhale/hold while high)");
 		configInput(DEPTHCV_INPUT, "Depth CV (0-10 V)");
 		configOutput(PRESSURE_OUTPUT, "Pressure (0-10 V)");
 		configOutput(VOLUME_OUTPUT, "Volume (CV)");

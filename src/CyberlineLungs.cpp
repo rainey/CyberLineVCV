@@ -18,6 +18,7 @@ void CyberlineLungs::process(const ProcessArgs& args) {
 
 	bool gate = inputs[GATE_INPUT].getVoltage() >= 1.f;
 	bool gateRising = gate && !gateWasHigh;
+	bool gateFalling = !gate && gateWasHigh;
 	gateWasHigh = gate;
 
 	bool trig = inputs[TRIGGER_INPUT].getVoltage() >= 1.f;
@@ -52,15 +53,8 @@ void CyberlineLungs::process(const ProcessArgs& args) {
 		if (gateRising) start = true;   // gate edge also starts a cycle
 
 		if (start) {
-			// catch-breath: refill target from current volume
+			// catch-breath: refill from current volume
 			exhaling = false;
-			float fill = depth;
-			if (mode == CLOSED) {
-				// whale mode: air retained; a new "trigger" can only
-				// inhale what the reservoir is missing
-				fill = depth;
-			}
-			(void)fill; // inhale integrates toward depth below
 			float it = std::fmax(inhaleTime, 0.05f);
 			// inhale flow magnitude: reach depth within it, scaled by maxFlow
 			float f = (depth - volume) / it;
@@ -70,22 +64,33 @@ void CyberlineLungs::process(const ProcessArgs& args) {
 			cycleTimer = 0.f;   // breath period measured from inhale start
 		}
 
-		// Gate held high: inhale (all modes)
-		if (gate && !exhaling) {
+		// Gate pedal (all modes): held high = inhale toward depth, then
+		// HOLD the breath in; also cuts an in-progress exhale
+		// (catch-breath). Exhale happens on release (below) or when a
+		// one-shot attack completes with the gate low.
+		if (gate) {
+			exhaling = false;
 			float f = (depth - volume) / std::fmax(inhaleTime, 0.05f);
 			flow = fmaxf(f, 0.f) * (0.3f + 0.7f * maxFlow);
 			phase = 0.f;
 		}
+
+		// Gate release: let the held breath go
+		if (gateFalling && !start && !exhaling && volume > 0.001f)
+			exhaling = true;
 
 		// Integrate volume
 		if (!exhaling) {
 			volume += flow * dt;
 			if (volume >= depth) {
 				volume = depth;
-				if (mode == CYCLE || trigWasHigh || gate) {
-					// switch to exhale
-					exhaling = true;
-				}
+				// One-shot attack complete: exhale begins automatically
+				// unless the gate pedal holds the breath in. (Previously
+				// this required trig/gate to STILL be high here, which
+				// stranded any breath whose trigger ended during the
+				// ~0.65 s attack at full volume — the "pressure stuck
+				// high, never oscillates" bug.)
+				if (!gate) exhaling = true;
 			}
 		} else {
 			// Exhale: flow driven by recoil + effort regulation.

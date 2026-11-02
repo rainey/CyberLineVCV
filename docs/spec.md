@@ -246,8 +246,8 @@ than from per-stage curve menus.
 
 | # | Name | Range | Notes |
 |---|---|---|---|
-| G1 | TRIGGER | edge | starts one breath cycle (mode TRIG) |
-| G2 | GATE | 0/1 | inhale while high (pedal-style, all modes) |
+| G1 | TRIGGER | edge | starts one breath (one-shot envelope: inhale runs to DEPTH, exhale begins automatically — no sustained level needed); retrigger mid-exhale = catch-breath |
+| G2 | GATE | 0/1 | breath pedal (all modes): rising edge starts a breath; held high = inhale to DEPTH and HOLD (cuts an in-progress exhale); release = exhale from current volume |
 | G3 | DEPTH CV | 0–10 V → 0–1 | modulates tidal volume |
 
 ### Outputs
@@ -295,8 +295,14 @@ than from per-stage curve menus.
   elapses, then tops up and exhales again, no trigger needed. When the
   natural physics (inhale time + drain law) is slower than the period, the
   natural duration wins; the drain is never accelerated to hit RATE.
-- Retrigger during exhale: cut to a short catch-breath (no artificial
-  smoothing; the physics provides the click-free shape).
+- **Trigger vs gate semantics:** TRIGGER is a pure one-shot — a short clock
+  pulse suffices; the attack (inhale) runs to DEPTH and the exhale (release)
+  begins on its own (attack completion never depends on the trigger still
+  being high). GATE is a pedal: while high, the lungs inhale toward DEPTH
+  and hold; a high gate also cuts an in-progress exhale (catch-breath), and
+  on release the breath is let out from the current volume. Retriggering
+  mid-exhale always cuts to a fresh inhale (no artificial smoothing; the
+  physics provides the click-free shape).
 - Outputs are sample-rate-smoothed CV (block-rate physics, per-sample output
   interpolation). NaN guards per suite conventions.
 - Non-feature (deliberate): no per-stage linear/log curve menus; curve
