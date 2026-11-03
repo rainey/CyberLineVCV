@@ -19,19 +19,21 @@ void CyberlineOralChamber::process(const ProcessArgs& args) {
 			tract.setGeometry(vtlCm, args.sampleRate);
 		}
 
-		// Tongue X: 0..10 V -> blade..tip index. Y: knob bottom = closed
-		// (stop consonants), ~6 = neutral tract, top = wide open.
-		// setTongue maps tongue diameter dia to a tract minimum of
-		// d_min = 0.3 + (dia-2)/1.5, so this knob value inverts that:
-		// dia = 1.5 + ty*3.8  ->  d_min ~= 2.53*ty - 0.03 (clamped at 0),
-		// i.e. closed at 0, neutral (1.5) at ~6, wide (2.5) at 10.
+		// Tongue X: 0..10 V -> blade..tip index.
+		// Tongue Y: quadratic response curve (u = 0.22*ty + 0.78*ty^2) to give
+		// ~2x finer resolution in the narrow-constriction region (d_min = 0..0.8 cm)
+		// where waveguide area ratios (A = d^2) produce the strongest formant shifts:
+		//   knob 0   -> d_min = 0.00 cm (full occlusion / stop consonant)
+		//   knob 2.5 -> d_min ~ 0.21 cm (close vowels /i/, /u/, approximants)
+		//   knob 5.0 -> d_min ~ 0.69 cm (mid vowels right at 12 o'clock default)
+		//   knob 7.7 -> d_min ~ 1.50 cm (neutral uniform tract)
+		//   knob 10  -> d_min ~ 2.30 cm (wide open /a/)
 		float tx = rack::math::clamp(params[TONGUEX_PARAM].getValue()
 			+ inputs[TONGUEX_INPUT].getVoltage(), 0.f, 10.f) / 10.f;
 		float ty = rack::math::clamp(params[TONGUEY_PARAM].getValue()
 			+ inputs[TONGUEY_INPUT].getVoltage(), 0.f, 10.f) / 10.f;
 		float idx = tract.bladeStart + tx * (tract.tipStart - tract.bladeStart);
-		float dia = 1.5f + ty * 3.8f;
-		tract.setTongue(idx, dia);
+		tract.setTongue(idx, CyberlineTract::mapTongueYDiameter(ty));
 
 		// Velum: 0..10 V -> 0..1
 		float vel = rack::math::clamp(params[VELUM_PARAM].getValue()
@@ -39,11 +41,17 @@ void CyberlineOralChamber::process(const ProcessArgs& args) {
 		tract.setVelum(vel);
 
 		// Constriction position/width/amount (position -1 = off when param+CV
-		// both zero)
+		// both zero).
+		// C.WIDTH uses CyberlineTract::mapConstrWidth's quadratic curve mapped
+		// to d = 0..1.50 cm so the upper half of the knob isn't wasted above
+		// the 1.5 cm neutral oral diameter, and the default 12 o'clock position
+		// (5.0 -> d = 0.42 cm) sits right in the peak of the [0.30, 0.70] cm
+		// fricative turbulence window.
 		float cp = params[CONSTRPOS_PARAM].getValue()
 			+ inputs[CONSTRPOS_INPUT].getVoltage();
-		float cw = params[CONSTRW_PARAM].getValue()
-			+ inputs[CONSTRW_INPUT].getVoltage();
+		float cwNorm = rack::math::clamp(params[CONSTRW_PARAM].getValue()
+			+ inputs[CONSTRW_INPUT].getVoltage(), 0.f, 10.f) * 0.1f;
+		float cw = CyberlineTract::mapConstrWidth(cwNorm);
 		float fr = rack::math::clamp(params[FRIC_PARAM].getValue()
 			+ inputs[FRIC_INPUT].getVoltage() * 0.1f, 0.f, 1.f);
 		float cpos = (cp <= 0.01f) ? -1.f

@@ -247,6 +247,25 @@ struct CyberlineTract {
 		fricativeAmount = amount;
 	}
 
+	// Maps normalized Tongue Y (0..1 from 0..10 V knob+CV) through a quadratic
+	// taper to setTongue's diameter parameter (1.5..5.0), giving ~2x finer
+	// resolution in the close/mid vowel constriction region (d_min = 0..0.8 cm).
+	static float mapTongueYDiameter(float tyNorm) {
+		float ty = std::fmax(0.f, std::fmin(tyNorm, 1.f));
+		float tyCurved = ty * (0.22f + 0.78f * ty);
+		return 1.5f + tyCurved * 3.5f;
+	}
+
+	// Maps normalized Constriction Width (0..1 from 0..10 V knob+CV) through a
+	// quadratic taper to setConstriction's width parameter (0..5.0 -> target
+	// diameter d = 0..1.50 cm), placing default 0.5 right at peak fricative
+	// turbulence (d = 0.42 cm) with no dead zone above the 1.5 cm rest roof.
+	static float mapConstrWidth(float cwNorm) {
+		float cw = std::fmax(0.f, std::fmin(cwNorm, 1.f));
+		float cwCurved = cw * (0.12f + 0.88f * cw);
+		return cwCurved * 5.0f;
+	}
+
 	// One oversample step (call 2x per audio sample with lambda 0.5 then 1.0).
 	// source: excitation at glottal end. inject: external source sample.
 	// injectPos: section index (fractional) for inject. noise: white noise.
