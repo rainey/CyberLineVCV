@@ -15,9 +15,10 @@ void CyberlineLarynx::process(const ProcessArgs& args) {
 		float tension = rack::math::clamp(
 			params[TENSION_PARAM].getValue()
 			+ inputs[TENSION_INPUT].getVoltage() * 0.1f, 0.f, 1.f);
-		float pressure = rack::math::clamp(
-			params[PRESSURE_PARAM].getValue()
-			+ inputs[PRESSURE_INPUT].getVoltage() * 0.1f, 0.f, 1.f);
+		float pKnob = params[PRESSURE_PARAM].getValue();
+		float pressure = inputs[PRESSURE_INPUT].isConnected()
+			? rack::math::clamp(pKnob * inputs[PRESSURE_INPUT].getVoltage() * 0.1f, -1.f, 1.f)
+			: rack::math::clamp(pKnob, 0.f, 1.f);
 
 		// Allometric base frequency from fold length (mm):
 		// log10(F0) = -1.43 * log10(L_mm) + 4.01   (mammal mean-F0 law)
@@ -35,7 +36,7 @@ void CyberlineLarynx::process(const ProcessArgs& args) {
 
 		// Pressure -> pitch coupling, additive in Hz (2-3 Hz per cmH2O in vivo,
 		// scaled: full pressure ~= +30 Hz at coupling max)
-		f0 += params[PCOUPLE_PARAM].getValue() * pressure * 30.f;
+		f0 += params[PCOUPLE_PARAM].getValue() * std::fabs(pressure) * 30.f;
 
 		glottis.setTargets(f0, tension, pressure, foldLen);
 	}

@@ -21,7 +21,8 @@ struct CyberlineLungs : rack::engine::Module {
 		INHALE_PARAM,
 		MAXFLOW_PARAM,
 		EFFORT_PARAM,
-		MODE_PARAM,     // 3-position switch: CYCLE / TRIG / CLOSED
+		MODE_PARAM,     // 4-position switch: CYCLE / TRIG / CLOSED / PHASOR
+		INHMUTE_PARAM,  // 2-position switch: 0 = Suction (-P / gasp), 1 = Inhale Mute (0 V)
 		NUM_PARAMS
 	};
 	enum InputIds {
@@ -46,10 +47,12 @@ struct CyberlineLungs : rack::engine::Module {
 
 	// State (integrated at control rate)
 	float volume = 0.f;      // 0..1 reservoir fill
-	float pressure = 0.f;    // 0..1 output value (pre 10V scale)
+	float pressure = 0.f;    // -0.5..1 output value (pre 10V scale)
 	float flow = 0.f;        // -1..1 signed flow
-	float phase = 0.f;       // 1 during exhale, 0 inhale
+	float phase = 0.f;       // 1 during exhale, 0 inhale/hold
+	bool inhaling = false;
 	bool exhaling = false;
+	float closedBurstTarget = 0.f;
 	bool gateWasHigh = false;
 	bool trigWasHigh = false;
 	bool trigPending = false;
@@ -74,10 +77,12 @@ struct CyberlineLungs : rack::engine::Module {
 		configParam(EFFORT_PARAM, 0.f, 1.f, 0.5f, "Effort (recoil-plateau)");
 		configSwitch(MODE_PARAM, 0.f, 3.f, 0.f, "Mode",
 			{"Cycle", "Trigger", "Closed", "Phasor"});
-		configInput(TRIGGER_INPUT, "Trigger (one-shot breath)");
-		configInput(GATE_INPUT, "Gate (pedal) / Phase CV (Phasor mode)");
+		configSwitch(INHMUTE_PARAM, 0.f, 1.f, 0.f, "Inhale pressure",
+			{"Suction (-P / gasp)", "Mute (0 V on inhale)"});
+		configInput(TRIGGER_INPUT, "Trigger (one-shot breath / Closed refill)");
+		configInput(GATE_INPUT, "Gate (breath hold / Closed release valve / Phasor CV)");
 		configInput(DEPTHCV_INPUT, "Depth CV (0-10 V)");
-		configOutput(PRESSURE_OUTPUT, "Pressure (0-10 V)");
+		configOutput(PRESSURE_OUTPUT, "Pressure (-5..+10 V or 0..+10 V)");
 		configOutput(VOLUME_OUTPUT, "Volume (CV)");
 		configOutput(FLOW_OUTPUT, "Flow (signed CV: + inhale, - exhale)");
 		configOutput(PHASE_OUTPUT, "Phase (gate: exhale)");
@@ -87,7 +92,8 @@ struct CyberlineLungs : rack::engine::Module {
 
 	void reset() {
 		volume = 0.f; pressure = 0.f; flow = 0.f; phase = 0.f;
-		exhaling = false; cycleTimer = 0.f;
+		inhaling = false; exhaling = false;
+		closedBurstTarget = 0.f; cycleTimer = 0.f;
 		gateWasHigh = trigWasHigh = false;
 		trigPending = gateRisePending = gateFallPending = false;
 		lastPhasorVolume = 0.f;

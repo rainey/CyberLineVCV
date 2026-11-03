@@ -16,9 +16,10 @@ void CyberlineVoice::process(const ProcessArgs& args) {
 		float tension = rack::math::clamp(
 			params[V_TENSION_PARAM].getValue() + inputs[V_TENSION_INPUT].getVoltage() * 0.1f,
 			0.f, 1.f);
-		float pressure = rack::math::clamp(
-			params[V_PRESSURE_PARAM].getValue() + inputs[V_PRESSURE_INPUT].getVoltage() * 0.1f,
-			0.f, 1.f);
+		float pKnob = params[V_PRESSURE_PARAM].getValue();
+		float pressure = inputs[V_PRESSURE_INPUT].isConnected()
+			? rack::math::clamp(pKnob * inputs[V_PRESSURE_INPUT].getVoltage() * 0.1f, -1.f, 1.f)
+			: rack::math::clamp(pKnob, 0.f, 1.f);
 		storedTension = tension;
 		storedPressure = pressure;
 
@@ -31,7 +32,7 @@ void CyberlineVoice::process(const ProcessArgs& args) {
 		float oct = std::round(params[V_PITCHOCT_PARAM].getValue());
 		float f0 = cachedAllo * std::pow(2.f, v + oct)
 			* std::sqrt(std::fmax(storedTension, 0.01f) / 0.6f);
-		f0 += params[V_PCOUPLE_PARAM].getValue() * storedPressure * 30.f;
+		f0 += params[V_PCOUPLE_PARAM].getValue() * std::fabs(storedPressure) * 30.f;
 		glottis.setTargets(f0, storedTension, storedPressure, foldLen);
 
 		float vtl = params[V_VTL_PARAM].getValue();

@@ -78,7 +78,7 @@ struct CyberlineGlottis {
 		if (tenseness < 0.01f) tenseness = 0.01f;
 		if (tenseness > 1.f) tenseness = 1.f;
 		targetTenseness = tenseness;
-		if (amp < 0.f) amp = 0.f;
+		if (amp < -1.f) amp = -1.f;
 		if (amp > 1.f) amp = 1.f;
 		targetAmp = amp;
 		if (foldLen < 2.f) foldLen = 2.f;
@@ -218,13 +218,15 @@ struct CyberlineGlottis {
 				* (1.f - 0.03f * std::fabs(fbSmooth) + 0.02f * fbSmooth);
 			float tensPeriod = oldTenseness + (newTenseness - oldTenseness) * lambda
 				- 0.12f * fbSmooth;
+			if (intensity < -0.02f) {
+				// Ingressive phonation (reverse downward airflow against superior
+				// vocal fold margin): reduced effective vibrating mass raises F0
+				// ~12% with softer mucosal closure (lower effective tenseness).
+				f0Period *= 1.12f;
+				tensPeriod *= 0.72f;
+			}
 			setupWaveform(f0Period, tensPeriod);
 		}
-
-		// Effective amplitude: pressure intensity plus smoothed feedback drive
-		float ampEff = intensity + fbSmooth * 0.6f;
-		if (ampEff < 0.f) ampEff = 0.f;
-		if (ampEff > 1.5f) ampEff = 1.5f;
 
 		// LF waveform (two branches)
 		float t = timeInWaveform / waveformLength;
@@ -234,13 +236,34 @@ struct CyberlineGlottis {
 		else
 			wave = E0 * std::exp(alpha * t) * std::sin(omega * t);
 
-		// Aspiration noise, gated to the open phase
-		float voicedGate = 0.1f + 0.2f * std::fmax(0.f, std::sin(2.f * (float) M_PI * t));
-		float ti = curTenseness * intensity;
-		noiseModulator = ti * voicedGate + (1.f - ti) * 0.3f;
-		float aspiration = intensity * oneMinusSqrtTenseness * noiseModulator * noise;
+		float out = 0.f;
+		if (intensity >= 0.f) {
+			// Egressive (exhale) phonation: standard LF pulse + gated aspiration
+			float ampEff = (intensity > 1e-4f) ? (intensity + fbSmooth * 0.6f) : 0.f;
+			if (ampEff < 0.f) ampEff = 0.f;
+			if (ampEff > 1.5f) ampEff = 1.5f;
 
-		float out = wave * ampEff + aspiration * 0.2f;
+			float voicedGate = 0.1f + 0.2f * std::fmax(0.f, std::sin(2.f * (float) M_PI * t));
+			float ti = curTenseness * intensity;
+			noiseModulator = ti * voicedGate + (1.f - ti) * 0.3f * (intensity > 1e-4f ? 1.f : 0.f);
+			float aspiration = intensity * oneMinusSqrtTenseness * noiseModulator * noise;
+
+			out = wave * ampEff + aspiration * 0.2f;
+		} else {
+			// Ingressive (inhale / suction) mechanics:
+			// Downward suction against upward-pointing vocal folds requires a
+			// higher threshold (suction * fold adduction) before periodic voicing
+			// catches; below threshold, only inspiratory breath hiss occurs.
+			float suction = -intensity;
+			float ingDrive = suction * (0.35f + 0.65f * curTenseness);
+			float voicedAmt = std::fmax(0.f, (ingDrive - 0.14f) / 0.86f);
+			float voicedGate = 0.15f + 0.25f * std::fmax(0.f, std::sin(2.f * (float) M_PI * t));
+			noiseModulator = std::fmin(1.f, suction * (0.45f + 0.35f * voicedGate));
+			float aspiration = suction * (0.4f + 0.6f * oneMinusSqrtTenseness)
+				* noiseModulator * noise;
+			// Inverted glottal pulse polarity on ingressive oscillation + elevated breathiness
+			out = -wave * (voicedAmt * 0.65f) + aspiration * 0.35f;
+		}
 
 		// NaN/inf guard: reinitialize and continue
 		if (!std::isfinite(out) || !std::isfinite(timeInWaveform) || !std::isfinite(totalTime)) {

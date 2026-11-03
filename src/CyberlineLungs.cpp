@@ -38,134 +38,233 @@ void CyberlineLungs::process(const ProcessArgs& args) {
 		float effort = params[EFFORT_PARAM].getValue();
 		float inhaleTime = params[INHALE_PARAM].getValue();
 		float maxFlow = params[MAXFLOW_PARAM].getValue();
+		bool muteInhale = params[INHMUTE_PARAM].getValue() >= 0.5f;
 
-			if (mode == PHASOR) {
-				// Phase-driven: the GATE input is the phase CV
-				// (0-10 V -> 0-1 of the breath cycle). 0-50% inhale,
-				// 50-100% exhale; EFFORT shapes the drain curve, while
-				// INHALE/MAX FLOW are ignored (the external phasor owns
-				// the timing). FLOW reports the actual dV/dt, so its
-				// magnitude follows the phasor speed — including jumps.
-				float p = rack::math::clamp(
-					inputs[GATE_INPUT].getVoltage() * 0.1f, 0.f, 1.f);
-				if (p <= 0.5f) {
-					volume = depth * (p / 0.5f);
+		if (mode == PHASOR) {
+			// Phase-driven: the GATE input is the phase CV
+			// (0-10 V -> 0-1 of the breath cycle). 0-50% inhale,
+			// 50-100% exhale; EFFORT shapes the drain curve, while
+			// INHALE/MAX FLOW are ignored (the external phasor owns
+			// the timing). FLOW reports the actual dV/dt, so its
+			// magnitude follows the phasor speed — including jumps.
+			float p = rack::math::clamp(
+				inputs[GATE_INPUT].getVoltage() * 0.1f, 0.f, 1.f);
+			if (p <= 0.5f) {
+				volume = depth * (p / 0.5f);
+			} else {
+				float t = 1.f - (p - 0.5f) / 0.5f; // 1 start, 0 end
+				float k = 0.4f + 2.6f * (1.f - effort);
+				float e = (std::exp(-k * (1.f - t)) - std::exp(-k))
+					/ (1.f - std::exp(-k));
+				volume = depth * ((1.f - effort) * e + effort * t);
+			}
+			if (!std::isfinite(volume)) volume = 0.f;
+			flow = rack::math::clamp(
+				(volume - lastPhasorVolume) / std::fmax(dt, 1e-6f),
+				-1.f, 1.f);
+			lastPhasorVolume = volume;
+			inhaling = (flow > 0.002f);
+			exhaling = (flow < -0.002f);
+			phase = exhaling ? 1.f : 0.f;
+		} else if (mode == CLOSED) {
+			// CLOSED mode (valved air rationing / mid-breath hold):
+			// - TRIG rising edge catches a breath (inhales to depth and holds at top).
+			// - When GATE is patched, GATE acts as the airway/glottal release valve:
+			//   GATE high = exhale from remaining volume; GATE low = close airway and
+			//   hold remaining breath mid-lung (VOL flat, FLOW = 0, PRESS = 0).
+			// - When GATE is unpatched, TRIG inhales to depth when empty, and
+			//   subsequent TRIGs release stepped ~35% phrase bursts with mid-breath
+			//   holds in between until empty.
+			bool gateConnected = inputs[GATE_INPUT].isConnected();
+			bool trigConnected = inputs[TRIGGER_INPUT].isConnected();
+
+			if (gateConnected) {
+				bool startInhale = trigRising
+					|| (!trigConnected && gateRising && volume <= 0.01f);
+				if (startInhale) {
+					inhaling = true;
 					exhaling = false;
 					phase = 0.f;
-				} else {
-					float t = 1.f - (p - 0.5f) / 0.5f; // 1 start, 0 end
-					float k = 0.4f + 2.6f * (1.f - effort);
-					float e = (std::exp(-k * (1.f - t)) - std::exp(-k))
-						/ (1.f - std::exp(-k));
-					volume = depth * ((1.f - effort) * e + effort * t);
-					exhaling = true;
-					phase = 1.f;
 				}
-				if (!std::isfinite(volume)) volume = 0.f;
-				flow = rack::math::clamp(
-					(volume - lastPhasorVolume) / std::fmax(dt, 1e-6f),
-					-1.f, 1.f);
-				lastPhasorVolume = volume;
+				if (inhaling) {
+					float it = std::fmax(inhaleTime, 0.05f);
+					float f = std::fmax((depth - volume) / it, 0.08f);
+					flow = f * (0.3f + 0.7f * maxFlow);
+					volume += flow * dt;
+					phase = 0.f;
+					if (volume >= depth) {
+						volume = depth;
+						inhaling = false;
+						// Top hold unless GATE valve is currently held open
+						if (gate && (!trigRising || !trigConnected)) {
+							exhaling = true;
+						} else {
+							exhaling = false;
+							flow = 0.f;
+						}
+					}
+				} else {
+					// Not inhaling: GATE controls the expiratory valve
+					if (gate && volume > 0.001f) {
+						exhaling = true;
+					} else {
+						// Top, mid, or bottom breath-hold
+						exhaling = false;
+						flow = 0.f;
+						phase = 0.f;
+					}
+				}
 			} else {
-			// Start a breath cycle (CYCLE auto, TRIG/CLOSED on trigger)
+				// Unpatched GATE fallback: TRIG refills when empty, or releases
+				// a rationed ~35% phrase burst and holds mid-breath between triggers.
+				if (trigRising) {
+					if (volume <= 0.02f) {
+						inhaling = true;
+						exhaling = false;
+						phase = 0.f;
+					} else {
+						inhaling = false;
+						exhaling = true;
+						closedBurstTarget = std::fmax(0.f, volume - 0.35f * depth);
+					}
+				}
+				if (inhaling) {
+					float it = std::fmax(inhaleTime, 0.05f);
+					float f = std::fmax((depth - volume) / it, 0.08f);
+					flow = f * (0.3f + 0.7f * maxFlow);
+					volume += flow * dt;
+					phase = 0.f;
+					if (volume >= depth) {
+						volume = depth;
+						inhaling = false;
+						exhaling = false;
+						flow = 0.f; // Hold at top until next trigger releases a burst
+					}
+				}
+			}
+
+			if (exhaling) {
+				float recoil = volume;
+				float drive = (1.f - effort) * recoil + effort * depth;
+				float k = 0.4f + 2.6f * (1.f - effort);
+				volume -= drive * k * dt;
+				if (volume < 0.f) volume = 0.f;
+				flow = -drive;
+				phase = 1.f;
+				if (!gateConnected && volume <= closedBurstTarget) {
+					// End of rationed phrase burst -> mid-breath hold
+					flow = 0.f;
+					phase = 0.f;
+					exhaling = false;
+				}
+				if (volume <= 0.001f) {
+					volume = 0.f;
+					flow = 0.f;
+					phase = 0.f;
+					exhaling = false;
+					inhaling = false;
+				}
+			}
+		} else {
+			// CYCLE and TRIG modes:
+			// Start a breath cycle (CYCLE auto, TRIG on trigger, or GATE rising edge)
 			bool start = false;
 			if (mode == CYCLE) {
 				float rate = params[RATE_PARAM].getValue();
-				// Free-running breath loop. RATE sets the breath period
-				// (60/rate) as a *floor*: after a breath completes, the lungs
-				// rest until the period elapses, then top up and exhale. When
-				// the natural physics (inhale + drain law) is slower than the
-				// period, the natural duration wins — the drain is never
-				// accelerated to hit RATE.
 				cycleTimer += dt;
-				if (!exhaling && cycleTimer >= 60.f / rate
+				if (!inhaling && !exhaling && cycleTimer >= 60.f / rate
 						&& volume < depth * 0.999f) {
 					start = true;
 				}
-				// resync inhale duration roughly to cycle period
 				inhaleTime = std::fmin(inhaleTime, 60.f / rate * 0.5f);
 			} else if (trigRising) {
 				start = true;
 			}
-			if (gateRising) start = true;   // gate edge also starts a cycle
+			if (gateRising) start = true;
 
 			if (start) {
-				// catch-breath: refill from current volume
+				inhaling = true;
 				exhaling = false;
 				float it = std::fmax(inhaleTime, 0.05f);
-				// inhale flow magnitude: reach depth within it, scaled by maxFlow
-				float f = (depth - volume) / it;
-				flow = fmaxf(f, 0.f) * (0.3f + 0.7f * maxFlow);
+				float f = std::fmax((depth - volume) / it, 0.05f);
+				flow = f * (0.3f + 0.7f * maxFlow);
 				if (flow < 0.01f) flow = 0.01f;
 				phase = 0.f;
-				cycleTimer = 0.f;   // breath period measured from inhale start
+				cycleTimer = 0.f;
 			}
 
-			// Gate pedal (all modes): held high = inhale toward depth, then
-			// HOLD the breath in; also cuts an in-progress exhale
-			// (catch-breath). Exhale happens on release (below) or when a
-			// one-shot attack completes with the gate low.
+			// Gate pedal: held high = inhale toward depth, then HOLD the breath
+			// at the top (flow = 0, press = 0); also cuts an in-progress exhale.
 			if (gate) {
 				exhaling = false;
-				float f = (depth - volume) / std::fmax(inhaleTime, 0.05f);
-				flow = fmaxf(f, 0.f) * (0.3f + 0.7f * maxFlow);
 				phase = 0.f;
+				if (volume < depth) {
+					inhaling = true;
+					float f = std::fmax((depth - volume) / std::fmax(inhaleTime, 0.05f), 0.05f);
+					flow = f * (0.3f + 0.7f * maxFlow);
+				} else {
+					volume = depth;
+					inhaling = false;
+					flow = 0.f;
+				}
 			}
 
 			// Gate release: let the held breath go
-			if (gateFalling && !start && !exhaling && volume > 0.001f)
+			if (gateFalling && !start && !exhaling && volume > 0.001f) {
+				inhaling = false;
 				exhaling = true;
+			}
 
 			// Integrate volume
-			if (!exhaling) {
+			if (inhaling) {
 				volume += flow * dt;
 				if (volume >= depth) {
 					volume = depth;
-					// One-shot attack complete: exhale begins automatically
-					// unless the gate pedal holds the breath in. (Previously
-					// this required trig/gate to STILL be high here, which
-					// stranded any breath whose trigger ended during the
-					// ~0.65 s attack at full volume — the "pressure stuck
-					// high, never oscillates" bug.)
-					if (!gate) exhaling = true;
+					inhaling = false;
+					if (!gate) {
+						exhaling = true;
+					} else {
+						// Top Breath-Hold: lungs full, gate held high -> zero flow immediately
+						exhaling = false;
+						flow = 0.f;
+					}
 				}
-			} else {
-				// Exhale: flow driven by recoil + effort regulation.
-				// NOTE: the state floor is 0 (no explicit residual-volume
-				// constant — see spec §5b DSP notes). The physiological
-				// end-of-phrase exponential taper comes from drive ∝ volume:
-				// at EFFORT 0 the drain is exponential (drive shrinks with the
-				// remaining air), at EFFORT 1 it is a flattened plateau until
-				// the reservoir empties.
-				float recoil = volume;                 // pressure available
-				float drive = (1.f - effort) * recoil  // unregulated decay
-					+ effort * depth;                  // flattened plateau
-				// exponential drain toward residual
+			} else if (exhaling) {
+				float recoil = volume;
+				float drive = (1.f - effort) * recoil + effort * depth;
 				float k = 0.4f + 2.6f * (1.f - effort);
 				volume -= drive * k * dt;
 				if (volume < 0.f) volume = 0.f;
 				flow = -drive;
 				phase = 1.f;
 				if (volume <= 0.001f) {
-					// breath over: system at rest in ALL modes — flow 0, phase
-					// gate low, exhaling cleared. Previously this only cleaned
-					// up in CYCLE, leaving FLOW stuck at -drive and PHASE stuck
-					// high in TRIG/CLOSED until the next trigger.
 					volume = 0.f;
 					flow = 0.f;
 					phase = 0.f;
 					exhaling = false;
+					inhaling = false;
 				}
+			} else {
+				// Top Hold or Bottom Rest (!inhaling && !exhaling)
+				flow = 0.f;
+				phase = 0.f;
 			}
-			}
+		}
 
-
-		// Pressure output from volume: recoil + regulated component
-		float recoil = volume;
-		float regulated = effort * depth * (volume > 0.02f ? 1.f : volume / 0.02f);
-		pressure = (1.f - effort) * recoil + regulated;
-		if (pressure < 0.f) pressure = 0.f;
-		if (pressure > 1.f) pressure = 1.f;
+		// Subglottal pressure output:
+		// - Exhaling: positive outward phonation drive (recoil + effort, 0..+10 V)
+		// - Inhaling (flow > 0): negative inspiratory suction (-5..0 V) in GASP
+		//   mode, or 0 V when Inhale Mute is active
+		// - Breath-Hold (Top, Mid, or Bottom, flow == 0): 0 V
+		if (exhaling && volume > 0.001f) {
+			float recoil = volume;
+			float regulated = effort * depth * (volume > 0.02f ? 1.f : volume / 0.02f);
+			pressure = rack::math::clamp((1.f - effort) * recoil + regulated, 0.f, 1.f);
+		} else if (!exhaling && flow > 0.002f && !muteInhale) {
+			pressure = -rack::math::clamp(flow * 0.35f, 0.f, 0.5f);
+		} else {
+			pressure = 0.f;
+		}
 
 		// Output targets
 		tgtPressure = pressure;
@@ -184,7 +283,7 @@ void CyberlineLungs::process(const ProcessArgs& args) {
 	if (!std::isfinite(outPressure)) reset();
 
 	outputs[PRESSURE_OUTPUT].setVoltage(
-		rack::math::clamp(outPressure * 10.f, 0.f, 10.f));
+		rack::math::clamp(outPressure * 10.f, -5.f, 10.f));
 	outputs[VOLUME_OUTPUT].setVoltage(
 		rack::math::clamp(outVolume * 10.f, 0.f, 10.f));
 	outputs[FLOW_OUTPUT].setVoltage(

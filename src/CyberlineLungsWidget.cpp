@@ -97,12 +97,14 @@ struct CyberlineLungsWidget : rack::app::ModuleWidget {
 		void draw(const DrawArgs& args) override {
 			// Default to ~68% inhaled in module browser (when module == nullptr)
 			float vol = 0.68f, phase = 0.f;
-			bool exhaling = false, resting = false;
+			bool exhaling = false, inhaling = true, holding = false, resting = false;
 			if (module && std::isfinite(module->volume)) {
 				vol = rack::math::clamp(module->volume, 0.f, 1.f);
 				phase = module->phase;
 				exhaling = module->exhaling || (phase > 0.5f);
-				resting = !exhaling && vol <= 0.005f && std::fabs(module->flow) < 0.005f;
+				inhaling = module->inhaling || (!exhaling && module->flow > 0.005f);
+				holding = !exhaling && !inhaling && vol > 0.01f;
+				resting = !exhaling && !inhaling && vol <= 0.01f;
 			}
 			float w = box.size.x, h = box.size.y;
 			float cx = w * 0.5f, cy = h * 0.52f;
@@ -110,6 +112,7 @@ struct CyberlineLungsWidget : rack::app::ModuleWidget {
 
 			NVGcolor neonCyan  = nvgRGB(0x40, 0xe0, 0xff);
 			NVGcolor neonAmber = nvgRGB(0xff, 0x88, 0x54);
+			NVGcolor neonMint  = nvgRGB(0x58, 0xe8, 0xa8);
 
 			// Hollow chamfered cyber-HUD bezel
 			float ch = 6.f;
@@ -173,13 +176,15 @@ struct CyberlineLungsWidget : rack::app::ModuleWidget {
 				nvgFontFaceId(vg, font->handle);
 				nvgFontSize(vg, 6.f);
 				nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_TOP);
-				nvgFillColor(vg, (!resting && !exhaling)
-					? neonCyan : nvgRGB(0x4a, 0x62, 0x70));
+				nvgFillColor(vg, inhaling ? neonCyan : nvgRGB(0x4a, 0x62, 0x70));
 				nvgText(vg, 8.f, 5.f, "INHALE", NULL);
 
+				nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_TOP);
+				nvgFillColor(vg, holding ? neonMint : nvgRGBA(0x4a, 0x62, 0x70, 120));
+				nvgText(vg, w * 0.28f, 5.f, "HOLD", NULL);
+
 				nvgTextAlign(vg, NVG_ALIGN_RIGHT | NVG_ALIGN_TOP);
-				nvgFillColor(vg, (!resting && exhaling)
-					? neonAmber : nvgRGB(0x6c, 0x54, 0x50));
+				nvgFillColor(vg, exhaling ? neonAmber : nvgRGB(0x6c, 0x54, 0x50));
 				nvgText(vg, w - 8.f, 5.f, "EXHALE", NULL);
 
 				nvgFontSize(vg, 5.5f);
@@ -200,7 +205,15 @@ struct CyberlineLungsWidget : rack::app::ModuleWidget {
 			nvgLineTo(vg, cx - 2.3f, cy - 10.f);
 			nvgMoveTo(vg, cx + 2.3f, cy - 28.f);
 			nvgLineTo(vg, cx + 2.3f, cy - 10.f);
-			strokeNeon(vg, exhaling ? neonAmber : neonCyan, 1.0f, 2.6f, 40);
+			strokeNeon(vg, holding ? neonMint : (exhaling ? neonAmber : neonCyan), 1.0f, 2.6f, 40);
+
+			// Closed glottal/airway valve bar across top of trachea during Breath-Hold
+			if (holding) {
+				nvgBeginPath(vg);
+				nvgMoveTo(vg, cx - 4.2f, cy - 28.5f);
+				nvgLineTo(vg, cx + 4.2f, cy - 28.5f);
+				strokeNeon(vg, neonMint, 1.4f, 3.4f, 65);
+			}
 
 			// Tracheal cartilaginous C-ring ribs
 			nvgBeginPath(vg);
@@ -354,6 +367,43 @@ struct CyberlineLungsWidget : rack::app::ModuleWidget {
 		}
 	};
 
+	// 2-position snap switch for Inhale Pressure mode: 0 = GASP (-P suction), 1 = MUTE (0 V)
+	struct InhaleSwitch : rack::app::Knob {
+		InhaleSwitch() {
+			snap = true;
+			box.size = rack::Vec(16.f, 24.f);
+		}
+
+		float slotY(int i) const {
+			return 6.5f + i * (box.size.y - 13.f);
+		}
+
+		void draw(const DrawArgs& args) override {
+			float w = box.size.x, h = box.size.y;
+			nvgBeginPath(args.vg);
+			nvgRoundedRect(args.vg, w * 0.5f - 3.2f, 2.f, 6.4f, h - 4.f, 3.2f);
+			nvgFillColor(args.vg, nvgRGB(0x0d, 0x0f, 0x12));
+			nvgFill(args.vg);
+			nvgStrokeWidth(args.vg, 1.f);
+			nvgStrokeColor(args.vg, nvgRGB(0x2a, 0x2e, 0x35));
+			nvgStroke(args.vg);
+			for (int i = 0; i < 2; i++) {
+				nvgBeginPath(args.vg);
+				nvgCircle(args.vg, w * 0.5f, slotY(i), 1.1f);
+				nvgFillColor(args.vg, nvgRGB(0x44, 0x4c, 0x56));
+				nvgFill(args.vg);
+			}
+			float v = getParamQuantity() ? getParamQuantity()->getValue() : 0.f;
+			int pos = (int) std::round(rack::math::clamp(v, 0.f, 1.f));
+			nvgBeginPath(args.vg);
+			nvgRoundedRect(args.vg, 1.f, slotY(pos) - 4.5f, w - 2.f, 9.f, 3.5f);
+			nvgFillColor(args.vg, pos == 0
+				? nvgRGB(0x48, 0xd8, 0xf8)
+				: nvgRGB(0x64, 0x74, 0x84));
+			nvgFill(args.vg);
+		}
+	};
+
 	static void drawPanel(const rack::widget::Widget::DrawArgs& args, float panelW) {
 		NVGcontext* vg = args.vg;
 		NVGcolor bg = nvgRGB(0x13, 0x16, 0x19);
@@ -454,28 +504,39 @@ struct CyberlineLungsWidget : rack::app::ModuleWidget {
 			nvgText(args.vg, x, y, s, NULL);
 		};
 
-		// params (2 columns below the top lung gauge)
+		// params (2 columns below the top lung gauge; 3rd row has EFFORT, INH P switch, MODE, EXH)
+		float effX = 40.f, inhSwX = 88.f, modeX = 145.f, exhX = 183.f;
 		text(colL, 101, "RATE");
 		nvgFillColor(args.vg, nvgRGB(0x88, 0xc8, 0xf0));
 		text(colR, 101, "DEPTH");
 		nvgFillColor(args.vg, label);
 		text(colL, 155, "INHALE s"); text(colR, 155, "FLOW MAX");
-		text(colL, 204, "EFFORT");
+		text(effX, 204, "EFFORT");
+		nvgFillColor(args.vg, nvgRGB(0x7e, 0xd8, 0xf8));
+		text(inhSwX + 6.f, 204, "INH P");
 		nvgFillColor(args.vg, nvgRGB(0x80, 0xe0, 0xb0));
-		text(colR - 6.f, 204, "MODE");
-		text(colR + 30.f, 214, "EXH");
+		text(modeX, 204, "MODE");
+		text(exhX, 214, "EXH");
 		nvgFillColor(args.vg, label);
 
-		// 4-position MODE tick labels beside the ModeSwitch (at colR - 6, 224)
+		// 2-position INH P tick labels (GASP / MUTE) & 4-position MODE tick labels
 		if (font && font->handle >= 0) {
-			static const char* modeNames[4] = {"CYC", "TRG", "CLS", "PHS"};
 			nvgFontSize(args.vg, 5.5f);
 			nvgTextAlign(args.vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
 			nvgFillColor(args.vg, nvgRGB(0x7c, 0x8a, 0x98));
+
+			static const char* inhNames[2] = {"GASP", "MUTE"};
+			float inhTop = 224.f - 12.f;
+			for (int i = 0; i < 2; i++) {
+				float iy = inhTop + 6.5f + i * (24.f - 13.f);
+				nvgText(args.vg, inhSwX + 10.f, iy, inhNames[i], NULL);
+			}
+
+			static const char* modeNames[4] = {"CYC", "TRG", "CLS", "PHS"};
 			float swTop = 224.f - 17.f;
 			for (int i = 0; i < 4; i++) {
 				float sy = swTop + 8.f + i * (34.f - 16.f) / 3.f;
-				nvgText(args.vg, colR + 5.f, sy, modeNames[i], NULL);
+				nvgText(args.vg, modeX + 11.f, sy, modeNames[i], NULL);
 			}
 			nvgFontSize(args.vg, 8.f);
 			nvgTextAlign(args.vg, NVG_ALIGN_CENTER | NVG_ALIGN_BOTTOM);
@@ -530,12 +591,13 @@ struct CyberlineLungsWidget : rack::app::ModuleWidget {
 		addParam(rack::createParamCentered<RoundBlackKnob>(rack::Vec(colR, 122), module, CyberlineLungs::DEPTH_PARAM));
 		addParam(rack::createParamCentered<RoundSmallBlackKnob>(rack::Vec(colL, 173), module, CyberlineLungs::INHALE_PARAM));
 		addParam(rack::createParamCentered<RoundSmallBlackKnob>(rack::Vec(colR, 173), module, CyberlineLungs::MAXFLOW_PARAM));
-		addParam(rack::createParamCentered<RoundSmallBlackKnob>(rack::Vec(colL, 224), module, CyberlineLungs::EFFORT_PARAM));
-		addParam(rack::createParamCentered<ModeSwitch>(rack::Vec(colR - 6.f, 224), module, CyberlineLungs::MODE_PARAM));
+		addParam(rack::createParamCentered<RoundSmallBlackKnob>(rack::Vec(40.f, 224), module, CyberlineLungs::EFFORT_PARAM));
+		addParam(rack::createParamCentered<InhaleSwitch>(rack::Vec(88.f, 224), module, CyberlineLungs::INHMUTE_PARAM));
+		addParam(rack::createParamCentered<ModeSwitch>(rack::Vec(145.f, 224), module, CyberlineLungs::MODE_PARAM));
 
 		// Phase light beside the mode switch
 		addChild(rack::createLightCentered<rack::componentlibrary::SmallLight<rack::componentlibrary::GreenLight>>(
-			rack::Vec(colR + 30.f, 224), module, CyberlineLungs::PHASE_LIGHT));
+			rack::Vec(183.f, 224), module, CyberlineLungs::PHASE_LIGHT));
 
 		float row = 276.f;
 		addInput(rack::createInputCentered<PJ301MPort>(rack::Vec(PANEL_W * 0.25f, row), module, CyberlineLungs::TRIGGER_INPUT));
