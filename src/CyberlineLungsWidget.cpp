@@ -383,27 +383,66 @@ struct CyberlineLungsWidget : rack::app::ModuleWidget {
 
 		float cx = panelW * 0.5f;
 		float colL = 58.f, colR = 148.f;
+		float inY = 276.f;
 		float outY = 328.f;
 
-		// Hollow neon output jack wells
-		auto drawOutPad = [&](float x, float y, NVGcolor ringCol, bool glow) {
+		// Subtle chamfered wireframe divider between primary cycle params and effort/mode
+		nvgBeginPath(vg);
+		nvgMoveTo(vg, 22.f, 194.f);
+		nvgLineTo(vg, 26.f, 191.f);
+		nvgLineTo(vg, panelW - 26.f, 191.f);
+		nvgLineTo(vg, panelW - 22.f, 194.f);
+		nvgStrokeWidth(vg, 0.8f);
+		nvgStrokeColor(vg, nvgRGBA(0x48, 0xa8, 0xc8, 70));
+		nvgStroke(vg);
+
+		// Chamfered wireframe bus bracket framing the 3 CV/trigger inputs (TRIG, GATE, DEPTH CV)
+		float bx0 = 18.f, bx1 = panelW - 18.f;
+		float by0 = inY - 27.f, by1 = inY + 16.5f;
+		float bch = 4.5f;
+		nvgBeginPath(vg);
+		nvgMoveTo(vg, bx0 + bch, by0);
+		nvgLineTo(vg, bx1 - bch, by0);
+		nvgLineTo(vg, bx1, by0 + bch);
+		nvgLineTo(vg, bx1, by1 - bch);
+		nvgLineTo(vg, bx1 - bch, by1);
+		nvgLineTo(vg, bx0 + bch, by1);
+		nvgLineTo(vg, bx0, by1 - bch);
+		nvgLineTo(vg, bx0, by0 + bch);
+		nvgClosePath(vg);
+		nvgFillColor(vg, nvgRGBA(0x0c, 0x11, 0x16, 110));
+		nvgFill(vg);
+		nvgStrokeWidth(vg, 0.9f);
+		nvgStrokeColor(vg, nvgRGBA(0x48, 0xb8, 0xd8, 105));
+		nvgStroke(vg);
+
+		// Hollow neon port rings (inputs & outputs)
+		auto drawPortRing = [&](float x, float y, NVGcolor ringCol, bool isOutput) {
 			nvgBeginPath(vg);
-			nvgCircle(vg, x, y, 14.8f);
-			nvgFillColor(vg, nvgRGB(0x0b, 0x0d, 0x10));
-			nvgFill(vg);
-			if (glow) {
-				strokeNeon(vg, ringCol, 1.1f, 3.0f, 45);
+			nvgCircle(vg, x, y, isOutput ? 14.6f : 13.6f);
+			if (isOutput) {
+				nvgFillColor(vg, nvgRGB(0x09, 0x0c, 0x10));
+				nvgFill(vg);
+				strokeNeon(vg, ringCol, 1.05f, 2.8f, 42);
 			} else {
-				nvgStrokeWidth(vg, 1.1f);
-				nvgStrokeColor(vg, ringCol);
-				nvgStroke(vg);
+				strokeNeon(vg, ringCol, 0.9f, 2.4f, 30);
 			}
 		};
-		NVGcolor stdOutRing = nvgRGB(0x36, 0x48, 0x56);
-		drawOutPad(panelW * 0.15f, outY, accent, true); // PRESS (primary subglottal output to LARYNX)
-		drawOutPad(panelW * 0.38f, outY, stdOutRing, false);
-		drawOutPad(panelW * 0.62f, outY, stdOutRing, false);
-		drawOutPad(panelW * 0.85f, outY, stdOutRing, false);
+
+		NVGcolor trigCol  = nvgRGB(0x58, 0xd8, 0xa0); // mint-green (mode/phase control)
+		NVGcolor depthCol = nvgRGB(0x4c, 0xa8, 0xe8); // teal-blue (tidal volume / depth)
+		NVGcolor flowCol  = nvgRGB(0xf0, 0x90, 0x54); // warm amber (exhale airflow)
+
+		// Input rings inside the bus bracket
+		drawPortRing(panelW * 0.25f, inY, trigCol, false);  // TRIG
+		drawPortRing(cx,             inY, trigCol, false);  // GATE
+		drawPortRing(panelW * 0.75f, inY, depthCol, false); // DEPTH CV
+
+		// Output rings (color-coded by physiological signal)
+		drawPortRing(panelW * 0.15f, outY, accent, true);   // PRESS (bright cyan -> LARYNX/VOICE PRESS)
+		drawPortRing(panelW * 0.38f, outY, depthCol, true); // VOL (teal-blue tidal volume)
+		drawPortRing(panelW * 0.62f, outY, flowCol, true);  // FLOW +- (warm amber airflow)
+		drawPortRing(panelW * 0.85f, outY, trigCol, true);  // PHASE (mint-green cycle phase)
 
 		nvgFontSize(args.vg, 8);
 		auto font = getLabelFont();
@@ -416,10 +455,16 @@ struct CyberlineLungsWidget : rack::app::ModuleWidget {
 		};
 
 		// params (2 columns below the top lung gauge)
-		text(colL, 101, "RATE");     text(colR, 101, "DEPTH");
+		text(colL, 101, "RATE");
+		nvgFillColor(args.vg, nvgRGB(0x88, 0xc8, 0xf0));
+		text(colR, 101, "DEPTH");
+		nvgFillColor(args.vg, label);
 		text(colL, 155, "INHALE s"); text(colR, 155, "FLOW MAX");
-		text(colL, 204, "EFFORT");   text(colR - 6.f, 204, "MODE");
+		text(colL, 204, "EFFORT");
+		nvgFillColor(args.vg, nvgRGB(0x80, 0xe0, 0xb0));
+		text(colR - 6.f, 204, "MODE");
 		text(colR + 30.f, 214, "EXH");
+		nvgFillColor(args.vg, label);
 
 		// 4-position MODE tick labels beside the ModeSwitch (at colR - 6, 224)
 		if (font && font->handle >= 0) {
@@ -437,16 +482,21 @@ struct CyberlineLungsWidget : rack::app::ModuleWidget {
 			nvgFillColor(args.vg, label);
 		}
 
-		// inputs
+		// inputs (color-coded to match their target parameters)
+		nvgFillColor(args.vg, nvgRGB(0x80, 0xe0, 0xb0));
 		text(panelW * 0.25f, 258, "TRIG");
 		text(cx, 258, "GATE");
+		nvgFillColor(args.vg, nvgRGB(0x88, 0xc8, 0xf0));
 		text(panelW * 0.75f, 258, "DEPTH CV");
-		// outputs
-		nvgFillColor(args.vg, nvgRGB(0x7e, 0xd4, 0xe8));
+
+		// outputs (color-coded to match gauge & downstream modules)
+		nvgFillColor(args.vg, nvgRGB(0x7e, 0xd8, 0xf8));
 		text(panelW * 0.15f, 309, "PRESS");
-		nvgFillColor(args.vg, label);
+		nvgFillColor(args.vg, nvgRGB(0x88, 0xc8, 0xf0));
 		text(panelW * 0.38f, 309, "VOL");
+		nvgFillColor(args.vg, nvgRGB(0xf4, 0xa8, 0x74));
 		text(panelW * 0.62f, 309, "FLOW +-");
+		nvgFillColor(args.vg, nvgRGB(0x80, 0xe0, 0xb0));
 		text(panelW * 0.85f, 309, "PHASE");
 
 		drawPanelTitle(args, panelW, "BREATH");

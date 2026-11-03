@@ -242,6 +242,29 @@ struct CyberlineLarynxWidget : rack::app::ModuleWidget {
 		float c1 = panelW * 0.25f, c2 = panelW * 0.75f;
 		float r[7] = {98.f, 136.f, 171.f, 206.f, 246.f, 286.f, 330.f};
 
+		NVGcolor pitchCol = nvgRGB(0xe8, 0x54, 0xb8); // neon magenta (matches VOICE PITCH)
+		NVGcolor tensCol  = nvgRGB(0xf0, 0x64, 0x74); // neon coral-rose (matches TENSION)
+
+		// Chamfered wireframe input bus bracket around the 4 CV inputs (r[4]..r[5])
+		float bx0 = 16.f, bx1 = panelW - 16.f;
+		float by0 = r[4] - 25.f, by1 = r[5] + 16.5f;
+		float bch = 4.5f;
+		nvgBeginPath(vg);
+		nvgMoveTo(vg, bx0 + bch, by0);
+		nvgLineTo(vg, bx1 - bch, by0);
+		nvgLineTo(vg, bx1, by0 + bch);
+		nvgLineTo(vg, bx1, by1 - bch);
+		nvgLineTo(vg, bx1 - bch, by1);
+		nvgLineTo(vg, bx0 + bch, by1);
+		nvgLineTo(vg, bx0, by1 - bch);
+		nvgLineTo(vg, bx0, by0 + bch);
+		nvgClosePath(vg);
+		nvgFillColor(vg, nvgRGBA(0x0c, 0x0d, 0x13, 110));
+		nvgFill(vg);
+		nvgStrokeWidth(vg, 0.9f);
+		nvgStrokeColor(vg, nvgRGBA(0xa8, 0x58, 0x78, 95));
+		nvgStroke(vg);
+
 		// ---- Hollow Neon Port Rings & Smooth Curved Coupling Trace ----
 		auto drawHollowPortRing = [&](float x, float y, NVGcolor col, bool isOutput) {
 			if (isOutput) {
@@ -252,14 +275,16 @@ struct CyberlineLarynxWidget : rack::app::ModuleWidget {
 				strokeNeon(vg, col, 1.1f, 3.0f, 45);
 			} else {
 				nvgBeginPath(vg);
-				nvgCircle(vg, x, y, 14.0f);
-				strokeNeon(vg, col, 1.0f, 2.6f, 35);
+				nvgCircle(vg, x, y, 13.6f);
+				strokeNeon(vg, col, 0.95f, 2.5f, 32);
 			}
 		};
 
-		// PRESS input (c1, r[5]) — neon cyan to match BREATH's PRESS output
+		// Row r[4] inputs: PITCH (magenta) & TENS (coral-rose)
+		drawHollowPortRing(c1, r[4], pitchCol, false);
+		drawHollowPortRing(c2, r[4], tensCol, false);
+		// Row r[5] inputs: PRESS (cyan -> BREATH PRESS) & FB IN (amber -> TRACT PROBE)
 		drawHollowPortRing(c1, r[5], cyanCol, false);
-		// FB IN input (c2, r[5]) — neon amber to match TRACT's PROBE output
 		drawHollowPortRing(c2, r[5], fbCol, false);
 
 		// Smoothly curved coupling trace from FB IN (c2, r[5]) up to FB GAIN knob (c1, r[3])
@@ -270,14 +295,14 @@ struct CyberlineLarynxWidget : rack::app::ModuleWidget {
 		nvgLineTo(vg, panelW * 0.5f, r[3] + 7.f);
 		nvgQuadTo(vg, panelW * 0.5f, r[3], panelW * 0.5f - 7.f, r[3]);
 		nvgLineTo(vg, c1 + 16.f, r[3]);
-		strokeNeon(vg, nvgRGBA(0xf0, 0xa4, 0x48, 150), 1.0f, 2.5f, 30);
+		strokeNeon(vg, nvgRGBA(0xf0, 0xa4, 0x48, 160), 1.0f, 2.5f, 32);
 
 		nvgBeginPath(vg);
 		nvgMoveTo(vg, c1 + 14.5f, r[3]);
 		nvgLineTo(vg, c1 + 18.5f, r[3] - 2.3f);
 		nvgLineTo(vg, c1 + 18.5f, r[3] + 2.3f);
 		nvgClosePath(vg);
-		nvgFillColor(vg, nvgRGBA(0xf0, 0xa4, 0x48, 180));
+		nvgFillColor(vg, nvgRGBA(0xf0, 0xa4, 0x48, 190));
 		nvgFill(vg);
 
 		// VOICED output (crimson-coral -> TRACT SRC in) & N.MOD output (cyan -> TRACT INJECT in)
@@ -295,17 +320,27 @@ struct CyberlineLarynxWidget : rack::app::ModuleWidget {
 			nvgText(args.vg, x, y, s, NULL);
 		};
 
-		// params
-		text(c1, 81, "TENSION");   text(c2, 81, "PRESSURE");
-		text(c1, 122, "FOLD mm");  text(c2, 122, "OCT");
+		// params (color-coded primary glottal drive & feedback knobs)
+		nvgFillColor(args.vg, nvgRGB(0xf2, 0x88, 0x94));
+		text(c1, 81, "TENSION");
+		nvgFillColor(args.vg, nvgRGB(0x7e, 0xd4, 0xe8));
+		text(c2, 81, "PRESSURE");
+		nvgFillColor(args.vg, label);
+		text(c1, 122, "FOLD mm");
+		nvgFillColor(args.vg, nvgRGB(0xe8, 0x8c, 0xd0));
+		text(c2, 122, "OCT");
+		nvgFillColor(args.vg, label);
 		text(c1, 157, "DRIFT");    text(c2, 157, "VIB Hz");
 		nvgFillColor(args.vg, nvgRGB(0xec, 0xb0, 0x6a));
 		text(c1, 192, "FB GAIN");
 		nvgFillColor(args.vg, label);
 		text(c2, 192, "P-PITCH");
 
-		// inputs
-		text(c1, 230, "PITCH");    text(c2, 230, "TENS");
+		// inputs (color-coded inside the CV input bus bracket)
+		nvgFillColor(args.vg, nvgRGB(0xe8, 0x8c, 0xd0));
+		text(c1, 230, "PITCH");
+		nvgFillColor(args.vg, nvgRGB(0xf2, 0x88, 0x94));
+		text(c2, 230, "TENS");
 		nvgFillColor(args.vg, nvgRGB(0x7e, 0xd4, 0xe8));
 		text(c1, 270, "PRESS");
 		nvgFillColor(args.vg, nvgRGB(0xec, 0xb0, 0x6a));

@@ -27,8 +27,8 @@ venous return ──▶ [atrium] ──valve──▶ [ventricle] ──valve─
 
 | Output | What it is | Use it for |
 |---|---|---|
-| **VOLUME** | Ventricular volume. Slow fill, a held breath (isovolumetric contraction — volume frozen while pressure climbs), a fast decay, another freeze. | The signature asymmetric envelope: pad swells, plucked decays. Patch to a VCA or filter CV. |
-| **PRESSURE** | Ventricular pressure — the same beat seen from the force side: rises while VOLUME is frozen, falls during relaxation. | Inverted/complementary envelopes; duo with VOLUME for "two faces of one event" morphing. |
+| **FILL LVL** | Ventricular fill level (volume). Slow fill, a held breath (isovolumetric contraction — volume frozen while pressure climbs), a fast decay, another freeze. | The signature asymmetric envelope: pad swells, plucked decays. Patch to a VCA or filter CV. |
+| **PRESSURE** | Ventricular pressure — the same beat seen from the force side: rises while FILL LVL is frozen, falls during relaxation. | Inverted/complementary envelopes; duo with FILL LVL for "two faces of one event" morphing. |
 | **FLOW** | Signed CV: **+ while filling, − while ejecting** (the sign carries the physical direction — same convention as Breath's FLOW). | Bipolar modulation, sign-as-gate patching (rectify → fill/eject gate). |
 | **OUTFLOW** | Unipolar pulse per beat, tracking instantaneous aortic flow (its integral over the beat = stroke volume). | Sidechain-style pumps; **the series-link jack** (below). |
 | **ARTERIAL** | Pressure in the aorta: steps up during ejection, decays exponentially between beats. | A natural "sustain-then-decay" envelope; the pulse-pressure shape (rise width vs decay) is the afterload character. |
@@ -214,7 +214,7 @@ green = AV valve open (filling), red = aortic valve open (ejecting).
 |---|---|
 | 1 (anatomy) | MASS, RATE, AV DELAY, CONTRACT, COMPLIANCE, VALVE −/+, HRV |
 | 2 (drive) | IRRIT, FILL, DRIVE, AFTERLOAD, SOUND level, PHASE lights |
-| 3 (in → out) | PACING, FILL CV, DRIVE CV, AFT CV; VOLUME, PRESSURE, FLOW ± |
+| 3 (in → out) | PACING, FILL CV, DRIVE CV, AFT CV; FILL LVL, PRESSURE, FLOW ± |
 | 4 (out) | OUTFLOW, ARTERIAL, ECG, BEAT, ATRIA, SOUND |
 
 ## Notes & limits

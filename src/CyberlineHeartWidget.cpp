@@ -306,33 +306,94 @@ struct CyberlineHeartWidget : rack::app::ModuleWidget {
 		float c1 = 41.f, c2 = 123.f, c3 = 206.f, c4 = 288.f;
 		float r[7] = {112.f, 150.f, 188.f, 226.f, 264.f, 302.f, 340.f};
 
-		// ---- Hollow neon output jack rings ----
-		auto drawOutPad = [&](float x, float y, NVGcolor ringCol) {
+		// ---- 1. Chamfered Wireframe CV Input Bus Bracket (Col 3, rows 0..3) ----
+		// Separates the 4 CV inputs (PACING, FILL CV, DRIVE CV, AFT CV) from the
+		// 3 chamber outputs (FILL LVL, PRESSURE, FLOW +-) at the bottom of Column 3.
+		// Bottom edge opens around the FILL LVL label so the line never strikes text.
+		{
+			float bx0 = c3 - 26.f, bx1 = c3 + 26.f;
+			float by0 = r[0] - 24.5f, by1 = r[3] + 15.f;
+			float bch = 4.5f;
 			nvgBeginPath(args.vg);
-			nvgCircle(args.vg, x, y, 14.5f);
+			nvgMoveTo(args.vg, c3 - 19.f, by1);
+			nvgLineTo(args.vg, bx0 + bch, by1);
+			nvgLineTo(args.vg, bx0, by1 - bch);
+			nvgLineTo(args.vg, bx0, by0 + bch);
+			nvgLineTo(args.vg, bx0 + bch, by0);
+			nvgLineTo(args.vg, bx1 - bch, by0);
+			nvgLineTo(args.vg, bx1, by0 + bch);
+			nvgLineTo(args.vg, bx1, by1 - bch);
+			nvgLineTo(args.vg, bx1 - bch, by1);
+			nvgLineTo(args.vg, c3 + 19.f, by1);
+			nvgStrokeWidth(args.vg, 0.9f);
+			nvgStrokeColor(args.vg, nvgRGBA(0x48, 0x98, 0xb8, 105));
+			nvgStroke(args.vg);
+		}
+
+		// ---- 2. Color-Coded Hollow Neon Output & Input Jack Rings ----
+		auto drawOutPad = [&](float x, float y, NVGcolor ringCol, float glowA = 40.f) {
+			nvgBeginPath(args.vg);
+			nvgCircle(args.vg, x, y, 13.6f);
 			nvgFillColor(args.vg, nvgRGB(0x09, 0x0c, 0x10));
 			nvgFill(args.vg);
-			strokeNeon(args.vg, ringCol, 1.0f, 3.0f, 36);
+			strokeNeon(args.vg, ringCol, 1.0f, 2.7f, (uint8_t)glowA);
 		};
-		NVGcolor stdOutRing = nvgRGB(0x3a, 0x52, 0x68);
-		// Column 3 outputs (rows 4..6)
-		for (int i = 4; i <= 6; i++)
-			drawOutPad(c3, r[i], stdOutRing);
-		// Column 4 outputs (rows 0..5)
-		for (int i = 0; i <= 5; i++)
-			drawOutPad(c4, r[i], stdOutRing);
 
-		// ---- Circulation Series-Link Diagram: OUTFLOW -> FILL CV -> FILL ----
-		// Highlight rings on OUTFLOW (c4, r[0]) and FILL CV (c3, r[1])
-		NVGcolor outLinkCol = nvgRGB(0xff, 0x4c, 0x60);
-		NVGcolor fillLinkCol = nvgRGB(0x00, 0xd8, 0xf8);
-		drawOutPad(c4, r[0], outLinkCol);
+		NVGcolor outLinkCol = nvgRGB(0xff, 0x4c, 0x60); // bright neon coral (OUTFLOW)
+		NVGcolor artCol     = nvgRGB(0xe8, 0x64, 0x70); // arterial/pressure coral-rose
+		NVGcolor flowCol    = nvgRGB(0xf0, 0x98, 0x54); // warm amber (FLOW +-)
+		NVGcolor volCol     = nvgRGB(0x48, 0xc0, 0xe8); // venous/chamber cyan-blue (FILL LVL)
+		NVGcolor ecgCol     = nvgRGB(0x58, 0xd8, 0x98); // bio-electric mint-green (ECG, BEAT, ATRIA)
+		NVGcolor sndCol     = nvgRGB(0xb4, 0x7c, 0xf0); // neon violet (SOUND)
+		NVGcolor fillLinkCol = nvgRGB(0x00, 0xd8, 0xf8); // bright neon cyan (FILL CV)
 
-		nvgBeginPath(args.vg);
-		nvgCircle(args.vg, c3, r[1], 14.5f);
-		strokeNeon(args.vg, fillLinkCol, 1.1f, 3.2f, 45);
+		// Column 3 outputs (rows 4..6): FILL LVL, PRESSURE, FLOW +-
+		drawOutPad(c3, r[4], volCol);
+		drawOutPad(c3, r[5], artCol);
+		drawOutPad(c3, r[6], flowCol);
 
-		// Routed circulation trace from OUTFLOW (c4, r[0]) -> FILL CV (c3, r[1])
+		// Column 4 outputs (rows 0..5): OUTFLOW, ARTERIAL, ECG, BEAT, ATRIA, SOUND
+		drawOutPad(c4, r[0], outLinkCol, 52.f);
+		drawOutPad(c4, r[1], artCol);
+		drawOutPad(c4, r[2], ecgCol);
+		drawOutPad(c4, r[3], ecgCol);
+		drawOutPad(c4, r[4], ecgCol);
+		drawOutPad(c4, r[5], sndCol);
+
+		// ---- 3. CV Input Rings & 1-to-1 Coupling Lines (Col 3 -> Col 2 Knobs) ----
+		NVGcolor cvCols[4] = {
+			ecgCol,                         // r[0]: PACING -> IRRIT
+			fillLinkCol,                    // r[1]: FILL CV -> FILL
+			nvgRGB(0xe8, 0x74, 0x80),       // r[2]: DRIVE CV -> DRIVE
+			nvgRGB(0xd8, 0x90, 0x64)        // r[3]: AFT CV -> AFTERLOAD
+		};
+		for (int i = 0; i < 4; i++) {
+			nvgBeginPath(args.vg);
+			nvgCircle(args.vg, c3, r[i], 13.2f);
+			strokeNeon(args.vg, cvCols[i], (i == 1) ? 1.15f : 0.9f, (i == 1) ? 3.0f : 2.3f, (i == 1) ? 48 : 28);
+
+			// Horizontal coupling trace from CV jack (c3) left to paired knob (c2)
+			NVGcolor lc = cvCols[i];
+			lc.a = (i == 1) ? 0.50f : 0.32f;
+			nvgBeginPath(args.vg);
+			nvgMoveTo(args.vg, c3 - 15.f, r[i]);
+			nvgLineTo(args.vg, c2 + 16.f, r[i]);
+			nvgStrokeWidth(args.vg, (i == 1) ? 1.0f : 0.85f);
+			nvgStrokeColor(args.vg, lc);
+			nvgStroke(args.vg);
+
+			// Arrowhead pointing into the Col 2 knob
+			lc.a = (i == 1) ? 0.65f : 0.45f;
+			nvgBeginPath(args.vg);
+			nvgMoveTo(args.vg, c2 + 14.5f, r[i]);
+			nvgLineTo(args.vg, c2 + 18.2f, r[i] - 2.1f);
+			nvgLineTo(args.vg, c2 + 18.2f, r[i] + 2.1f);
+			nvgClosePath(args.vg);
+			nvgFillColor(args.vg, lc);
+			nvgFill(args.vg);
+		}
+
+		// ---- 4. Circulation Series-Link Diagram: OUTFLOW -> LOOP -> FILL CV ----
 		float midX = (c3 + c4) * 0.5f;
 		float midY = (r[0] + r[1]) * 0.5f;
 		NVGpaint traceGrad = nvgLinearGradient(args.vg,
@@ -352,27 +413,11 @@ struct CyberlineHeartWidget : rack::app::ModuleWidget {
 
 		// Arrowhead pointing into FILL CV (c3, r[1])
 		nvgBeginPath(args.vg);
-		nvgMoveTo(args.vg, c3 + 15.f, r[1]);
-		nvgLineTo(args.vg, c3 + 20.5f, r[1] - 3.2f);
-		nvgLineTo(args.vg, c3 + 20.5f, r[1] + 3.2f);
+		nvgMoveTo(args.vg, c3 + 14.5f, r[1]);
+		nvgLineTo(args.vg, c3 + 20.0f, r[1] - 3.2f);
+		nvgLineTo(args.vg, c3 + 20.0f, r[1] + 3.2f);
 		nvgClosePath(args.vg);
 		nvgFillColor(args.vg, fillLinkCol);
-		nvgFill(args.vg);
-
-		// Subtle coupling line & arrowhead from FILL CV (c3, r[1]) to FILL knob (c2, r[1])
-		nvgBeginPath(args.vg);
-		nvgMoveTo(args.vg, c3 - 15.f, r[1]);
-		nvgLineTo(args.vg, c2 + 16.f, r[1]);
-		nvgStrokeWidth(args.vg, 1.f);
-		nvgStrokeColor(args.vg, nvgRGBA(0x5a, 0xc8, 0xe0, 110));
-		nvgStroke(args.vg);
-
-		nvgBeginPath(args.vg);
-		nvgMoveTo(args.vg, c2 + 14.5f, r[1]);
-		nvgLineTo(args.vg, c2 + 18.5f, r[1] - 2.3f);
-		nvgLineTo(args.vg, c2 + 18.5f, r[1] + 2.3f);
-		nvgClosePath(args.vg);
-		nvgFillColor(args.vg, nvgRGBA(0x5a, 0xc8, 0xe0, 140));
 		nvgFill(args.vg);
 
 		nvgFontSize(args.vg, 8);
@@ -408,25 +453,48 @@ struct CyberlineHeartWidget : rack::app::ModuleWidget {
 		text(c1, 172, "AV DELAY");   text(c1, 210, "CONTRACT");
 		text(c1, 248, "COMPLIANCE"); text(c1, 286, "VALVE -+");
 		text(c1, 324, "HRV");
-		// column 2: drive knobs + phase lights
-		text(c2, 96, "IRRIT");       text(c2, 134, "FILL");
-		text(c2, 172, "DRIVE");      text(c2, 210, "AFTERLOAD");
-		text(c2, 248, "SOUND");      text(c2, 286, "PHASE");
-		// column 3: inputs, then outputs
-		text(c3, 96, "PACING");
+
+		// column 2: drive knobs + phase lights (color-matched to Col 3 CV bus)
+		nvgFillColor(args.vg, nvgRGB(0x88, 0xe0, 0xb4));
+		text(c2, 96, "IRRIT");
 		nvgFillColor(args.vg, nvgRGB(0x7e, 0xd4, 0xe8));
+		text(c2, 134, "FILL");
+		nvgFillColor(args.vg, nvgRGB(0xf0, 0x94, 0x9c));
+		text(c2, 172, "DRIVE");
+		nvgFillColor(args.vg, nvgRGB(0xe8, 0xb0, 0x88));
+		text(c2, 210, "AFTERLOAD");
+		nvgFillColor(args.vg, nvgRGB(0xc8, 0xa0, 0xf8));
+		text(c2, 248, "SOUND");
+		nvgFillColor(args.vg, label);
+		text(c2, 286, "PHASE");
+
+		// column 3: CV inputs (rows 0..3) + chamber outputs (rows 4..6)
+		nvgFillColor(args.vg, nvgRGB(0x88, 0xe0, 0xb4));
+		text(c3, 96, "PACING");
+		nvgFillColor(args.vg, nvgRGB(0x7e, 0xd8, 0xf8));
 		text(c3, 134, "FILL CV");
-		nvgFillColor(args.vg, label);
-		text(c3, 172, "DRIVE CV");   text(c3, 210, "AFT CV");
-		text(c3, 248, "VOLUME");     text(c3, 286, "PRESSURE");
+		nvgFillColor(args.vg, nvgRGB(0xf0, 0x94, 0x9c));
+		text(c3, 172, "DRIVE CV");
+		nvgFillColor(args.vg, nvgRGB(0xe8, 0xb0, 0x88));
+		text(c3, 210, "AFT CV");
+		nvgFillColor(args.vg, nvgRGB(0x7e, 0xd0, 0xf0));
+		text(c3, 248, "FILL LVL");
+		nvgFillColor(args.vg, nvgRGB(0xf0, 0x88, 0x8e));
+		text(c3, 286, "PRESSURE");
+		nvgFillColor(args.vg, nvgRGB(0xf4, 0xb0, 0x74));
 		text(c3, 324, "FLOW +-");
-		// column 4: outputs
-		nvgFillColor(args.vg, nvgRGB(0xf0, 0x88, 0x82));
+
+		// column 4: outputs (color-coded by physiological signal family)
+		nvgFillColor(args.vg, nvgRGB(0xff, 0x84, 0x8e));
 		text(c4, 96, "OUTFLOW");
-		nvgFillColor(args.vg, label);
+		nvgFillColor(args.vg, nvgRGB(0xf0, 0x88, 0x8e));
 		text(c4, 134, "ARTERIAL");
-		text(c4, 172, "ECG");        text(c4, 210, "BEAT");
-		text(c4, 248, "ATRIA");      text(c4, 286, "SOUND");
+		nvgFillColor(args.vg, nvgRGB(0x88, 0xe0, 0xb4));
+		text(c4, 172, "ECG");
+		text(c4, 210, "BEAT");
+		text(c4, 248, "ATRIA");
+		nvgFillColor(args.vg, nvgRGB(0xc8, 0xa0, 0xf8));
+		text(c4, 286, "SOUND");
 
 		drawPanelTitle(args, panelW, "HEART");
 	}

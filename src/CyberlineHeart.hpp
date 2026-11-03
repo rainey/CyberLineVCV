@@ -74,7 +74,7 @@ struct CyberlineHeart : rack::engine::Module {
 		configInput(FILLCV_INPUT, "Fill CV (0-10 V)");
 		configInput(DRIVECV_INPUT, "Drive CV (signed: -5..+5 V)");
 		configInput(AFTERLOADCV_INPUT, "Afterload CV (0-10 V)");
-		configOutput(VOLUME_OUTPUT, "Volume (ventricular, 0-10 V)");
+		configOutput(VOLUME_OUTPUT, "Fill level (ventricular volume, 0-10 V)");
 		configOutput(PRESSURE_OUTPUT, "Pressure (ventricular, 0-10 V)");
 		configOutput(FLOW_OUTPUT, "Flow (signed CV: + fill, - eject)");
 		configOutput(OUTFLOW_OUTPUT, "Outflow (aortic pulse, 0-5 V)");
