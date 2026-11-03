@@ -15,16 +15,21 @@
 
 RACK_DIR=/tmp/opencode/rack241/Rack2Free
 PLAY_DIR=/tmp/opencode/rackplay
-PLUGIN_SRC=$PLAY_DIR/plugin-src
 
 set -e
 
-# refresh plugin from the latest preview build if available
+# refresh plugin from the latest preview build if available.
+# NOTE: Rack scans plugins-lin-x64/<slug>/ (plugin-src/ is ignored), so
+# install directly into the scanned location.
 if [[ -f /tmp/opencode/rackuser-previews/plugin.so ]]; then
-	mkdir -p "$PLUGIN_SRC"
-	cp /tmp/opencode/rackuser-previews/plugin.so "$PLUGIN_SRC/"
+	PLUGIN_DIR=$PLAY_DIR/plugins-lin-x64/cyberline
+	mkdir -p "$PLUGIN_DIR"
+	cp /tmp/opencode/rackuser-previews/plugin.so "$PLUGIN_DIR/"
 	cp /storage/69/vcvprojects/cyberline/plugin.json \
-		/storage/69/vcvprojects/cyberline/LICENSE "$PLUGIN_SRC/"
+		/storage/69/vcvprojects/cyberline/LICENSE "$PLUGIN_DIR/"
+	# factory presets (right-click menu scans presets/<model slug>/)
+	rm -rf "$PLUGIN_DIR/presets"
+	cp -r /storage/69/vcvprojects/cyberline/presets "$PLUGIN_DIR/"
 fi
 
 # clear crash-flag state + off-screen window position

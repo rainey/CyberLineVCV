@@ -46,6 +46,9 @@ nice -n 10 g++ -o plugin.so build/src/*.cpp.o \
 PLUGIN_DIR=$USER_DIR/plugins-lin-x64/cyberline
 mkdir -p "$PLUGIN_DIR"
 cp plugin.json plugin.so LICENSE "$PLUGIN_DIR/"
+# factory presets (right-click menu scans presets/<model slug>/)
+rm -rf "$PLUGIN_DIR/presets"
+cp -r presets "$PLUGIN_DIR/"
 
 # 3. screenshot mode (renders every installed module).
 # `|| true`: a Rack crash/timeout must not abort before the epilogue reports

@@ -52,6 +52,16 @@
         "Synth voice",
         "Vocal"
       ]
+    },
+    {
+      "slug": "cyberline-heart",
+      "name": "Heart",
+      "description": "Time-varying elastance cardiac pump: SA-node clock with pacer input, Wiggers-cycle envelopes, ECG/beat clocks, phonocardiogram sound, and mass allometry from shrew to elephant",
+      "tags": [
+        "Physical modeling",
+        "Envelope generator",
+        "Clock generator"
+      ]
     }
   ]
 }

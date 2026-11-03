@@ -46,6 +46,7 @@ fixed filter banks.
 | `cyberline-oral-chamber` | `CyberlineOralChamber` | KL waveguide tract filter with tongue/velum/constriction/injection |
 | `cyberline-voice` | `CyberlineVoice` | Fused Larynx+Chamber, pre-patched internally, feedback knob live |
 | `cyberline-lungs` | `CyberlineLungs` | Breath-pressure reservoir; doubles as a physically-shaped envelope generator |
+| `cyberline-heart` | `CyberlineHeart` | Elastance cardiac pump: intrinsic clock, Wiggers envelopes, ECG/beats, phonocardiogram, mass allometry |
 
 ### Roadmap (not v1)
 
@@ -316,6 +317,104 @@ than from per-stage curve menus.
   interpolation). NaN guards per suite conventions.
 - Non-feature (deliberate): no per-stage linear/log curve menus; curve
   character is EFFORT/DEPTH physics.
+
+## 5c. `cyberline-heart` — Heart (status: IMPLEMENTED)
+
+Time-varying elastance cardiac pump (Suga–Sagawa family): atrium → ventricle
+→ arterial Windkessel. The Wiggers cycle, Frank–Starling law, S1/S2 sounds
+and murmurs are all emergent from four rules — no per-phase envelopes:
+
+1. `P = E(t)·V` per chamber; `E(t)` is a normalized two-exponential
+   contraction twitch (fast rise `r`, slow decay `d`, both ∝ beat period)
+   fired by the activation event.
+2. Valves are pressure comparisons: inflow open iff `P_atrium > P_ventricle`,
+   outflow open iff `P_ventricle > P_artery`. Valve-closure edges fire S1/S2.
+3. The artery is a Windkessel reservoir: fills during ejection, exponential
+   runoff toward the diastolic baseline between beats.
+4. Activation: the SA node free-runs at the intrinsic rate; an external
+   pacer overdrives it (each trigger resets the SA clock); when pacing
+   stops the intrinsic rhythm returns (escape beats). No mode switch.
+
+The heart is an intrinsic LFO — that is the physical justification for the
+module also being a musical clock/ENVELOPE source: the same beat that
+schedules the ECG shapes every other output.
+
+### Inputs
+
+| # | Name | Range | Notes |
+|---|---|---|---|
+| H1 | PACING | trigger | external pacer spike; overdrives the SA node; also the one-shot trigger |
+| H2 | FILL CV | 0–10 V | added to the FILL knob (venous return / preload) |
+| H3 | DRIVE CV | −5..+5 V | added to the DRIVE knob (autonomic tone) |
+| H4 | AFTERLOAD CV | 0–10 V | added to the AFTERLOAD knob |
+
+### Outputs
+
+| # | Name | Notes |
+|---|---|---|
+| O1 | VOLUME | 0–10 V, ventricular volume: slow fill → isovolumetric freeze → ejection decay → freeze (main envelope) |
+| O2 | PRESSURE | 0–10 V, ventricular pressure: climbs while volume is frozen (IVC) — the complementary envelope |
+| O3 | FLOW | signed ±5 V, suite FLOW convention: **+ filling, − ejection** (matches Lungs: inflow +, outflow −). ± glyph + sign LED rule applies |
+| O4 | OUTFLOW | 0–5 V unipolar aortic flow pulse; tracks instantaneous flow (integral over the beat = stroke volume). **The series-link jack**: Heart A OUTFLOW → Heart B FILL CV (optionally through a Lungs VOLUME as the pulmonary reservoir) closes the circulation loop — the two hearts self-balance over beats via Frank–Starling, no hidden rules |
+| O5 | ARTERIAL | 0–10 V Windkessel staircase: rises during ejection, exponential runoff — "sustain-then-decay" envelope |
+| O6 | ECG | bipolar ±5 V, stylized P-QRS-T (amplitude ratios R≈3·T≈6·P); generated **per sample** from event ages (control-rate interpolation would quantize the QRS at high rates). Widths scale with beat period. Stylized-human waveform by design; species ECG tables are a v2 idea |
+| O7 | BEAT | 5 V trigger pulse at ventricular activation (QRS) — the master clock |
+| O8 | ATRIA | 5 V trigger pulse at atrial activation (P wave) — BEAT's swing partner, offset by AV DELAY |
+| O9 | SOUND | ±5 V audio, phonocardiogram: S1 (AV valve closure, low), S2 (aortic closure, higher/shorter), S3 (rapid passive fill, compliant hearts), S4 (atrial kick into a stiff ventricle), plus murmur noise gated by \|flow\| (stenosis) or pressure-behind-a-leaking-valve (regurgitation). Thump pitch ∝ M^(−1/3) — mass knob = drum size, physically |
+
+### Parameters
+
+| Knob | Default | Range | Notes |
+|---|---|---|---|
+| HEART MASS | 0.74 (70 kg) | log 5 g–2000 kg | allometric master: rate ∝ M^−0.25 (mouse ~600 bpm, elephant ~30), stroke volume ∝ M, AV delay ∝ M^+0.25, S1/S2 pitch ∝ M^−1/3. Display in kg. Human = 70 kg reference; systemic pressure is size-invariant, so PRESSURE/ARTERIAL ranges do not rescale |
+| RATE | 72 | 30–220 bpm | intrinsic SA rate at human anatomy; mass/autonomy/HRV multiply it; final clamp 25–1000 bpm (32-sample physics block is the ~1000 bpm wall) |
+| AV DELAY | 0.15 s | 0.06–0.25 | PR interval — the built-in swing between ATRIA and BEAT; mass-scaled, auto-clamped ≤30% of the current cycle (sympathetic conduction speedup — protects the atrial kick at high rates) |
+| FILL | 0.5 | 0–1 | venous return (preload) — Frank–Starling: more fill → harder beat, emergent |
+| DRIVE | 0 | −1..+1 | autonomic tone: + sympathetic (rate + contractility up, τ ≈ 3 s lag), − vagal (rate down, fast τ ≈ 0.35 s). The asymmetry IS the physiology |
+| AFTERLOAD | 0.4 | 0–1 | arterial resistance: slows ejection, raises the arterial baseline |
+| CONTRACTILITY | 0.6 | 0–1 | twitch amplitude |
+| COMPLIANCE | 0.5 | 0–1 | ventricular wall stiffness inverse: low = stiff (small fills, S4), high = soft (big fills, S3) |
+| VALVE | 0 | −1..+1 | bipolar: − stenotic (tight valves, systolic/diastolic flow murmurs), + regurgitant (leaky closed valves, backflow volume loss — arterial diastolic pressure drops, audible) |
+| HRV | 0.15 | 0–1 | heart-rate variability: bounded per-beat rate wander (1/f-ish), recomputed each beat — perturbs the interval length only, nothing integrates; exactly periodic at 0 |
+| IRRITABILITY | 0 | 0–1 | off at 0; above 0, occasional premature ectopic beat (SA timer NOT reset; a refractory window blocks stacked ectopics and drops the too-early sinus impulse → compensatory pause emerges) with a stronger post-ectopic beat (extra filling → Starling accent, free musical accent) |
+| SOUND LEVEL | 0.7 | 0–1 | phonocardiogram output level |
+
+### DSP notes
+
+- State: three integrators (atrium, ventricle, artery) + valve states +
+  event ages `tA/tV`. State floor 0, no hidden constants. NaN guard:
+  reinitialize and continue (suite §2).
+- Physics at 32-sample cadence; VOLUME/PRESSURE/FLOW/OUTFLOW/ARTERIAL
+  interpolated per sample; ECG/phonocardiogram/triggers generated per
+  sample. Pacing edge detection is per sample (short triggers must not
+  fall between physics ticks).
+- Systole fraction ≈ 0.30 of the cycle and shrinks as rate rises (Bazett-like),
+  emergent from the twitch time-constants being ∝ period.
+- Rates near 1000 bpm (hummingbird) work but are the practical ceiling:
+  a 60 ms cycle is ~85 physics ticks — fine, documented as the wall.
+- Rate-units bug note (fixed during implementation): the rate clamp is in
+  bpm, not Hz — the harness catches it (a Hz-clamped heart beats at
+  16.7 bpm regardless of knobs).
+
+### States & presets
+
+Human states are DRIVE/FILL/CONTRACTILITY configurations (rate *emerges* —
+presets of the causes, not the effects), shipped as Rack context-menu
+presets: deep sleep (~50 bpm, strong vagal, high HRV), relaxed (~65),
+attentive (~85), light exercise (~110), heavy exercise (~170: strong
+sympathetic, FILL + CONTRACTILITY maxed, AFTERLOAD dropped). Presets
+configure organs; patches configure bodies — the two-heart loop and
+Heart↔Lungs cardiorespiratory coupling (Lungs FLOW → DRIVE: respiratory
+sinus arrhythmia, physically real) are documented cable recipes, not
+preset data.
+
+### Non-features (deliberate)
+
+- No per-phase envelope menus — the Wiggers shapes come from the physics.
+- No four-chamber split in v1: one generalized pump; the two-heart loop
+  patch stands in for the pulmonary/systemic split (see OUTFLOW).
+- Reptile shunt, insect dorsal vessel (peristaltic, separate module),
+  species ECG tables, named arrhythmias (AFib/PVC/heart-block): parked v2.
 
 ## 6. Panels
 

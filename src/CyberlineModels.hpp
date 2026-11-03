@@ -61,4 +61,5 @@ extern rack::plugin::Model* modelCyberlineLarynx;
 extern rack::plugin::Model* modelCyberlineLungs;
 extern rack::plugin::Model* modelCyberlineOralChamber;
 extern rack::plugin::Model* modelCyberlineVoice;
+extern rack::plugin::Model* modelCyberlineHeart;
 } // namespace cyberline

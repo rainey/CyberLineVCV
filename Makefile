@@ -21,7 +21,7 @@ LDFLAGS +=
 
 SOURCES += $(wildcard src/*.cpp)
 
-DISTRIBUTABLES += $(wildcard LICENSE*) res
+DISTRIBUTABLES += $(wildcard LICENSE*) res presets
 
 CXXFLAGS += $(DEP_INCS)
 

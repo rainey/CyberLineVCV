@@ -1,0 +1,56 @@
+{
+  "plugin": "cyberline",
+  "model": "cyberline-heart",
+  "version": "2.0.0",
+  "params": [
+    {
+      "id": 0,
+      "value": 81
+    },
+    {
+      "id": 1,
+      "value": 0.74
+    },
+    {
+      "id": 2,
+      "value": 0.13
+    },
+    {
+      "id": 3,
+      "value": 0.7
+    },
+    {
+      "id": 4,
+      "value": 0.65
+    },
+    {
+      "id": 5,
+      "value": 0.3
+    },
+    {
+      "id": 6,
+      "value": 0.8
+    },
+    {
+      "id": 7,
+      "value": 0.5
+    },
+    {
+      "id": 8,
+      "value": 0.0
+    },
+    {
+      "id": 9,
+      "value": 0.1
+    },
+    {
+      "id": 10,
+      "value": 0.0
+    },
+    {
+      "id": 11,
+      "value": 0.7
+    }
+  ],
+  "_note": "sympathetic: effective ~110 bpm, punchier stroke"
+}
