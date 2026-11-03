@@ -12,20 +12,32 @@ namespace cyberline {
 struct CyberlineHeartWidget : rack::app::ModuleWidget {
 	static constexpr float PANEL_W = 22 * 15.f;
 
-	// Heart gauge: an anatomical two-chambered heart silhouette — atrium
-	// tapering into the ventricle, aortic arch rising to the right, great
-	// vessels behind. Live state: chambers swell with volume, the muscle
-	// "beats" (brief squeeze on contraction), the AV valve flap swings
-	// with the inflow valve state, the arch tenses at high pressure.
-	// Color = phase (cyan filling / warm ejecting / dim at rest).
-	// Drawn from engine floats per spec §2.
+	// Heart gauge: an anatomical two-chambered heart cross-section inside a
+	// medical-telemetry header — vena cava inflow on the left, atrium with
+	// bi-leaflet AV valve opening into the thick-walled ventricular cone
+	// (apex pointing bottom-right in standard anterior view), pulmonary
+	// trunk behind, and three-branched aortic arch rising to the right.
+	// Live state: chambers swell with volume, myocardium squeezes on systole,
+	// AV and aortic valve leaflets swing with valve states, and blood color
+	// transitions from venous cyan (filling) to arterial coral (ejection).
+	// Helper: neon double-stroke (outer soft bloom + crisp inner vector core)
+	static void strokeNeon(NVGcontext* vg, NVGcolor col, float coreW = 1.2f, float glowW = 3.6f, int glowAlpha = 50) {
+		nvgStrokeWidth(vg, glowW);
+		nvgStrokeColor(vg, nvgRGBA(col.r * 255, col.g * 255, col.b * 255, glowAlpha));
+		nvgStroke(vg);
+		nvgStrokeWidth(vg, coreW);
+		nvgStrokeColor(vg, col);
+		nvgStroke(vg);
+	}
+
 	struct HeartGauge : rack::widget::Widget {
 		CyberlineHeart* module;
 		HeartGauge(CyberlineHeart* m) : module(m) {}
 
 		void draw(const DrawArgs& args) override {
-			float av = 0.6f, vv = 0.6f, ar = 0.4f;
-			bool filling = false, ejecting = false;
+			NVGcontext* vg = args.vg;
+			float av = 0.68f, vv = 0.72f, ar = 0.62f;
+			bool filling = true, ejecting = false;
 			if (module && std::isfinite(module->core.vvol)) {
 				av = rack::math::clamp(module->core.avol, 0.f, 1.f);
 				vv = rack::math::clamp(module->core.vvol, 0.f, 1.f);
@@ -34,138 +46,242 @@ struct CyberlineHeartWidget : rack::app::ModuleWidget {
 				ejecting = module->core.outflowOpen;
 			}
 			float w = box.size.x, h = box.size.y;
-			float rest = !filling && !ejecting;
-			NVGcolor fill = rest
-				? nvgRGB(0x3a, 0x40, 0x48)
-				: (ejecting
-					? nvgRGB(0xe0, 0x7a, 0x5a)
-					: nvgRGB(0x5a, 0xc8, 0xe0));
-			NVGcolor outline = nvgRGB(0x4a, 0x54, 0x60);
-			// great vessels warm/tense with arterial pressure
-			NVGcolor vessel = nvgRGB(
-				(uint8_t)(0x6a + 60.f * rack::math::clamp(ar, 0.f, 1.f)),
-				0x56, 0x60);
 
-			// contraction beat: brief squeeze while the aortic valve is
-			// open, decaying as ejection proceeds (breathing muscle feel)
-			float ejectPulse = (ejecting && module)
-				? rack::math::clamp(
-					1.f - module->core.tV / (0.22f * module->core.period),
-					0.f, 1.f)
-				: 0.f;
-			float cx = w * 0.46f;
-			float cy = h * 0.58f;
-			float beat = 1.f + 0.05f * ejectPulse;    // muscle squeeze
-			float vt = 0.85f + 0.15f * vv;            // ventricle fullness
-			float at = 0.85f + 0.15f * av;            // atrium fullness
+			NVGcolor neonCyan  = nvgRGB(0x40, 0xe0, 0xff);
+			NVGcolor neonCoral = nvgRGB(0xff, 0x58, 0x64);
 
-			nvgSave(args.vg);
-			nvgTranslate(args.vg, cx, cy);
-			nvgScale(args.vg, beat, beat);
-			nvgTranslate(args.vg, -cx, -cy);
+			// Hollow chamfered cyber-HUD bezel
+			float ch = 6.f;
+			nvgBeginPath(vg);
+			nvgMoveTo(vg, ch, 0.f);
+			nvgLineTo(vg, w - ch, 0.f);
+			nvgLineTo(vg, w, ch);
+			nvgLineTo(vg, w, h - ch);
+			nvgLineTo(vg, w - ch, h);
+			nvgLineTo(vg, ch, h);
+			nvgLineTo(vg, 0.f, h - ch);
+			nvgLineTo(vg, 0.f, ch);
+			nvgClosePath(vg);
+			nvgFillColor(vg, nvgRGB(0x0b, 0x0d, 0x11));
+			nvgFill(vg);
+			strokeNeon(vg, nvgRGBA(0xe8, 0x5c, 0x64, 185), 1.0f, 2.8f, 35);
 
-			// ---- great vessels (behind the muscle body) ----
-			// aortic arch: rises from the top of the atrial mass, curves
-			// over right, and continues down as the descending aorta
-			nvgBeginPath(args.vg);
-			nvgMoveTo(args.vg, cx + 1.f, cy - 20.f);
-			nvgBezierTo(args.vg, cx + 6.f, cy - 27.f, cx + 16.f, cy - 27.f,
-				cx + 19.f, cy - 21.f);
-			nvgBezierTo(args.vg, cx + 22.f, cy - 16.f, cx + 21.f, cy - 8.f,
-				cx + 19.f, cy - 2.f);
-			nvgStrokeWidth(args.vg, 4.5f);
-			nvgStrokeColor(args.vg, vessel);
-			nvgLineCap(args.vg, NVG_ROUND);
-			nvgStroke(args.vg);
-			// arch branch stubs (brachiocephalic ticks)
-			nvgBeginPath(args.vg);
-			nvgMoveTo(args.vg, cx + 8.f, cy - 25.f);
-			nvgLineTo(args.vg, cx + 8.f, cy - 30.f);
-			nvgMoveTo(args.vg, cx + 13.f, cy - 26.f);
-			nvgLineTo(args.vg, cx + 14.f, cy - 31.f);
-			nvgStrokeWidth(args.vg, 1.8f);
-			nvgStroke(args.vg);
-			// pulmonary/venous stub entering the atrium side
-			nvgBeginPath(args.vg);
-			nvgMoveTo(args.vg, cx - 15.f, cy - 17.f);
-			nvgLineTo(args.vg, cx - 11.f, cy - 13.f);
-			nvgStrokeWidth(args.vg, 3.f);
-			nvgStroke(args.vg);
+			// Corner HUD accent brackets (cyan on left/venous side, coral on right/arterial side)
+			nvgBeginPath(vg);
+			nvgMoveTo(vg, 0.f, ch + 8.f); nvgLineTo(vg, 0.f, ch); nvgLineTo(vg, ch, 0.f); nvgLineTo(vg, ch + 8.f, 0.f);
+			nvgMoveTo(vg, 0.f, h - ch - 8.f); nvgLineTo(vg, 0.f, h - ch); nvgLineTo(vg, ch, h); nvgLineTo(vg, ch + 8.f, h);
+			nvgStrokeWidth(vg, 1.4f);
+			nvgStrokeColor(vg, neonCyan);
+			nvgStroke(vg);
 
-			// ---- muscle body: atrium tapering into the ventricle ----
-			// One silhouette: rounded atrial mass up top, bulging
-			// ventricular cone below, notched AV groove between, apex
-			// pointing bottom-left (anatomical tilt).
-			nvgBeginPath(args.vg);
-			// start at the AV notch, right side
-			nvgMoveTo(args.vg, cx + 10.f, cy - 5.f);
-			// right ventricle wall, down toward the apex
-			nvgBezierTo(args.vg, cx + 16.f * vt, cy + 7.f,
-				cx + 10.f * vt, cy + 20.f * vt, cx - 1.f, cy + 26.f * vt);
-			// apex tip (bottom-left, pointed)
-			nvgBezierTo(args.vg, cx - 8.f, cy + 29.f * vt,
-				cx - 16.f, cy + 24.f * vt, cx - 17.f * vt, cy + 14.f);
-			// left ventricle wall, back up to the AV groove
-			nvgBezierTo(args.vg, cx - 18.f * vt, cy + 3.f,
-				cx - 15.f * vt, cy - 4.f, cx - 11.f, cy - 7.f);
-			// AV groove notch (deep indent)
-			nvgLineTo(args.vg, cx - 8.f, cy - 10.5f);
-			// atrial mass, up and over (rounded)
-			nvgBezierTo(args.vg, cx - 13.f, cy - 17.f * at,
-				cx - 8.f, cy - 23.f * at, cx - 1.f, cy - 23.f * at);
-			nvgBezierTo(args.vg, cx + 5.f, cy - 23.f * at,
-				cx + 10.f, cy - 19.f * at, cx + 10.f, cy - 11.f);
-			// down into the notch (atrial ear)
-			nvgBezierTo(args.vg, cx + 10.f, cy - 8.f,
-				cx + 10.f, cy - 7.f, cx + 10.f, cy - 5.f);
-			nvgClosePath(args.vg);
-			nvgStrokeWidth(args.vg, 1.2f);
-			nvgStrokeColor(args.vg, outline);
-			nvgStroke(args.vg);
-			nvgFillColor(args.vg, fill);
-			nvgFill(args.vg);
+			nvgBeginPath(vg);
+			nvgMoveTo(vg, w - ch - 8.f, 0.f); nvgLineTo(vg, w - ch, 0.f); nvgLineTo(vg, w, ch); nvgLineTo(vg, w, ch + 8.f);
+			nvgMoveTo(vg, w - ch - 8.f, h); nvgLineTo(vg, w - ch, h); nvgLineTo(vg, w, h - ch); nvgLineTo(vg, w, h - ch - 8.f);
+			nvgStrokeWidth(vg, 1.4f);
+			nvgStrokeColor(vg, neonCoral);
+			nvgStroke(vg);
 
-			// interventricular groove line: from the AV notch toward the
-			// apex (the "crease" that makes it read as a heart)
-			nvgBeginPath(args.vg);
-			nvgMoveTo(args.vg, cx + 4.f, cy - 7.f);
-			nvgBezierTo(args.vg, cx + 4.f, cy + 2.f, cx + 1.f, cy + 10.f,
-				cx - 4.f, cy + 17.f);
-			nvgStrokeWidth(args.vg, 1.f);
-			nvgStrokeColor(args.vg, nvgRGB(0x2a, 0x2e, 0x35));
-			nvgStroke(args.vg);
+			// Subtle medical-grid crosshairs in bezel background
+			nvgBeginPath(vg);
+			for (float gx = 22.f; gx < w - 10.f; gx += 22.f) {
+				nvgMoveTo(vg, gx, 3.f);
+				nvgLineTo(vg, gx, h - 3.f);
+			}
+			for (float gy = 18.f; gy < h - 6.f; gy += 18.f) {
+				nvgMoveTo(vg, 4.f, gy);
+				nvgLineTo(vg, w - 4.f, gy);
+			}
+			nvgStrokeWidth(vg, 0.5f);
+			nvgStrokeColor(vg, nvgRGBA(0x4a, 0x38, 0x48, 50));
+			nvgStroke(vg);
 
-			// ---- AV valve flap: the modeled valve, visible — swings
-			// down into the ventricle while filling, snaps flat when
-			// closed (S1 moment)
-			nvgBeginPath(args.vg);
-			float flapX = filling ? cx + 6.f : cx - 1.f;
-			nvgMoveTo(args.vg, cx - 8.f, cy - 9.f);
-			nvgLineTo(args.vg, flapX, cy - 1.5f);
-			nvgStrokeWidth(args.vg, 1.6f);
-			nvgStrokeColor(args.vg, nvgRGB(0xc8, 0xd2, 0xdc));
-			nvgLineCap(args.vg, NVG_ROUND);
-			nvgStroke(args.vg);
+			// Left wing: clean neon ECG lead trace (uncluttered)
+			nvgBeginPath(vg);
+			float ecgY = h * 0.56f;
+			nvgMoveTo(vg, 10.f, ecgY);
+			nvgLineTo(vg, 22.f, ecgY);
+			nvgQuadTo(vg, 25.5f, ecgY - 4.f, 29.f, ecgY);  // P wave
+			nvgLineTo(vg, 34.f, ecgY);
+			nvgLineTo(vg, 36.5f, ecgY + 3.f);              // Q
+			nvgLineTo(vg, 40.f, ecgY - 14.f);              // R peak
+			nvgLineTo(vg, 43.5f, ecgY + 5.5f);             // S
+			nvgLineTo(vg, 46.f, ecgY);
+			nvgLineTo(vg, 52.f, ecgY);
+			nvgQuadTo(vg, 56.5f, ecgY - 5.5f, 61.f, ecgY); // T wave
+			nvgLineTo(vg, 68.f, ecgY);
+			strokeNeon(vg, nvgRGBA(0x40, 0xe0, 0xff, 185), 1.0f, 2.6f, 35);
 
-			// aortic valve tick at the arch root (visible while ejecting)
-			if (ejecting) {
-				nvgBeginPath(args.vg);
-				nvgMoveTo(args.vg, cx + 8.5f, cy - 11.5f);
-				nvgLineTo(args.vg, cx + 10.5f, cy - 14.5f);
-				nvgStrokeWidth(args.vg, 1.4f);
-				nvgStrokeColor(args.vg, nvgRGB(0xc8, 0xd2, 0xdc));
-				nvgStroke(args.vg);
+			// Right wing: clean neon arterial pulse wave (dicrotic notch)
+			nvgBeginPath(vg);
+			nvgMoveTo(vg, w - 68.f, ecgY + 2.f);
+			nvgLineTo(vg, w - 58.f, ecgY + 2.f);
+			nvgBezierTo(vg, w - 53.f, ecgY - 13.f,
+				w - 47.f, ecgY - 13.f, w - 42.f, ecgY - 3.5f); // systolic peak
+			nvgLineTo(vg, w - 38.5f, ecgY - 6.5f);             // dicrotic notch
+			nvgQuadTo(vg, w - 31.f, ecgY + 1.f, w - 19.f, ecgY + 2.f);
+			nvgLineTo(vg, w - 10.f, ecgY + 2.f);
+			strokeNeon(vg, nvgRGBA(0xff, 0x58, 0x64, 195), 1.0f, 2.6f, 35);
+
+			// Monitor corner micro-labels
+			auto font = getLabelFont();
+			if (font && font->handle >= 0) {
+				nvgFontFaceId(vg, font->handle);
+				nvgFontSize(vg, 6.f);
+				nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_TOP);
+				nvgFillColor(vg, filling ? neonCyan : nvgRGB(0x58, 0x90, 0xa4));
+				nvgText(vg, 8.f, 7.f, "VENOUS / ECG", NULL);
+
+				nvgTextAlign(vg, NVG_ALIGN_RIGHT | NVG_ALIGN_TOP);
+				nvgFillColor(vg, ejecting ? neonCoral : nvgRGB(0xc8, 0x68, 0x70));
+				nvgText(vg, w - 8.f, 7.f, "ARTERIAL", NULL);
+
+				nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_BOTTOM);
+				nvgFillColor(vg, nvgRGBA(0x58, 0x98, 0xb0, 150));
+				nvgFontSize(vg, 5.5f);
+				nvgText(vg, 8.f, h - 5.f, "RA / RV", NULL);
+
+				nvgTextAlign(vg, NVG_ALIGN_RIGHT | NVG_ALIGN_BOTTOM);
+				nvgFillColor(vg, nvgRGBA(0xd8, 0x68, 0x74, 150));
+				nvgText(vg, w - 8.f, h - 5.f, "LA / LV", NULL);
 			}
 
-			nvgRestore(args.vg);
+			// Contraction beat: systolic squeeze
+			float ejectPulse = 0.f;
+			if (module && ejecting && module->core.period > 0.01f) {
+				ejectPulse = rack::math::clamp(
+					1.f - module->core.tV / (0.22f * module->core.period),
+					0.f, 1.f);
+			} else if (!module) {
+				ejectPulse = 0.35f;
+			}
+
+			float cx = w * 0.50f;
+			float cy = h * 0.53f;
+			float squeezeX = 1.f - 0.04f * ejectPulse;
+			float squeezeY = 1.f + 0.03f * ejectPulse;
+			float vt = 0.92f + 0.10f * vv;
+			float at = 0.92f + 0.10f * av;
+			float arClamped = rack::math::clamp(ar, 0.f, 1.f);
+
+			nvgSave(vg);
+			nvgTranslate(vg, cx, cy);
+			nvgScale(vg, squeezeX, squeezeY);
+			nvgTranslate(vg, -cx, -cy);
+
+			// ---- 1. Clean Great Vessels at the Crown (Vena Cava + Aortic Arch) ----
+			// Superior Vena Cava (left-top, cyan hollow tube entering Right Atrium)
+			NVGcolor venaCol = filling ? neonCyan : nvgRGB(0x38, 0x98, 0xb8);
+			nvgBeginPath(vg);
+			nvgMoveTo(vg, cx - 15.f, cy - 22.f);
+			nvgLineTo(vg, cx - 14.f, cy - 11.f);
+			nvgMoveTo(vg, cx - 10.5f, cy - 22.f);
+			nvgLineTo(vg, cx - 9.5f, cy - 12.f);
+			strokeNeon(vg, venaCol, 1.05f, 2.8f, 40);
+
+			// Anatomical Aortic Arch (emerging from center root, arching over with 3 short ostia)
+			NVGcolor aortaCol = nvgRGB(
+				(uint8_t)(0xe0 + 31.f * arClamped),
+				(uint8_t)(0x4c + 36.f * (ejecting ? 1.f : 0.35f * arClamped)),
+				(uint8_t)(0x5c + 20.f * arClamped));
+			nvgBeginPath(vg);
+			// Outer arch curve + 3 short arterial branch stubs
+			nvgMoveTo(vg, cx - 4.5f, cy - 11.5f);
+			nvgBezierTo(vg, cx - 6.f, cy - 20.5f,
+				cx + 1.f, cy - 23.5f, cx + 8.5f, cy - 19.5f);
+			nvgBezierTo(vg, cx + 11.5f, cy - 17.5f,
+				cx + 12.f, cy - 14.f, cx + 10.5f, cy - 11.f);
+			// Inner arch curve
+			nvgMoveTo(vg, cx + 0.f, cy - 11.5f);
+			nvgBezierTo(vg, cx - 0.5f, cy - 16.5f,
+				cx + 3.f, cy - 18.f, cx + 6.f, cy - 16.f);
+			nvgBezierTo(vg, cx + 7.5f, cy - 15.f,
+				cx + 7.5f, cy - 13.f, cx + 6.8f, cy - 11.5f);
+			// Three short branch stubs at crest of arch
+			nvgMoveTo(vg, cx - 1.f, cy - 20.5f); nvgLineTo(vg, cx - 2.f, cy - 24.5f);
+			nvgMoveTo(vg, cx + 2.8f, cy - 21.f); nvgLineTo(vg, cx + 2.8f, cy - 25.f);
+			nvgMoveTo(vg, cx + 6.5f, cy - 20.f); nvgLineTo(vg, cx + 7.8f, cy - 23.8f);
+			strokeNeon(vg, aortaCol, 1.1f, 2.8f, 45);
+
+			// ---- 2. Single-Wall Biological Heart Halves (Right Heart & Left Heart) ----
+			// Like the two lung lobes in BREATH, the Right Heart (venous, cyan) and
+			// Left Heart (arterial, coral) are drawn as two clean, biological halves
+			// separated by the interventricular septum — avoiding nested double outlines.
+
+			auto traceRightHeart = [&]() {
+				nvgBeginPath(vg);
+				// Right Atrium upper border & lateral wall -> AV groove indentation
+				nvgMoveTo(vg, cx - 4.f, cy - 11.5f);
+				nvgBezierTo(vg, cx - 14.f * at, cy - 14.5f * at,
+					cx - 22.f * at, cy - 8.5f * at, cx - 20.5f * at, cy - 0.5f);
+				nvgBezierTo(vg, cx - 19.5f * at, cy + 3.5f,
+					cx - 17.5f, cy + 5.5f, cx - 15.5f, cy + 6.5f);
+				// Right Ventricle acute margin sweeping down toward the apex
+				nvgBezierTo(vg, cx - 16.5f * vt, cy + 15.f * vt,
+					cx - 4.f * vt, cy + 22.5f * vt, cx + 8.f * vt, cy + 24.f * vt);
+				// Interventricular septum curving back up to the crux
+				nvgBezierTo(vg, cx + 3.5f, cy + 14.f * vt,
+					cx - 1.0f, cy + 2.f, cx - 4.f, cy - 11.5f);
+				nvgClosePath(vg);
+			};
+
+			auto traceLeftHeart = [&]() {
+				nvgBeginPath(vg);
+				// Interventricular septum -> down to the muscular left ventricular apex
+				nvgMoveTo(vg, cx - 0.5f, cy - 11.f);
+				nvgBezierTo(vg, cx + 2.f, cy + 2.f,
+					cx + 6.5f, cy + 14.f * vt, cx + 11.5f * vt, cy + 24.5f * vt);
+				// Left Ventricle apex & broad obtuse lateral margin curving up to AV groove
+				nvgBezierTo(vg, cx + 18.f * vt, cy + 24.5f * vt,
+					cx + 23.5f * vt, cy + 15.5f * vt, cx + 21.f * vt, cy + 4.f * vt);
+				nvgBezierTo(vg, cx + 20.f * vt, cy + 0.5f,
+					cx + 18.f, cy - 1.5f, cx + 16.f, cy - 2.5f);
+				// Left Atrium upper-right auricle curve back to base
+				nvgBezierTo(vg, cx + 19.f * at, cy - 6.5f * at,
+					cx + 16.f * at, cy - 13.5f * at, cx + 5.f, cy - 11.5f);
+				nvgLineTo(vg, cx - 0.5f, cy - 11.f);
+				nvgClosePath(vg);
+			};
+
+			// Translucent volume fills modulated by cardiac cycle (avol / vvol)
+			float rFillAlpha = 0.20f + 0.45f * (0.4f * av + 0.6f * vv);
+			float lFillAlpha = 0.22f + 0.50f * (0.35f * av + 0.65f * vv);
+
+			traceRightHeart();
+			nvgFillColor(vg, nvgRGBA(0x18, 0xa8, 0xd8, (uint8_t)(rFillAlpha * 110.f)));
+			nvgFill(vg);
+
+			traceLeftHeart();
+			nvgFillColor(vg, nvgRGBA(0xf0, 0x42, 0x58, (uint8_t)(lFillAlpha * 115.f)));
+			nvgFill(vg);
+
+			// Subtle internal atrioventricular (AV) sulcus lines dividing Atria from Ventricles
+			nvgBeginPath(vg);
+			nvgMoveTo(vg, cx - 15.5f, cy + 6.5f);
+			nvgQuadTo(vg, cx - 8.5f, cy + 5.f, cx - 2.2f, cy + 2.f);
+			strokeNeon(vg, nvgRGBA(0x40, 0xe0, 0xff, 150), 0.85f, 2.2f, 30);
+
+			nvgBeginPath(vg);
+			nvgMoveTo(vg, cx + 1.8f, cy - 0.5f);
+			nvgQuadTo(vg, cx + 9.f, cy + 0.5f, cx + 16.f, cy - 2.5f);
+			strokeNeon(vg, nvgRGBA(0xff, 0x58, 0x64, 155), 0.85f, 2.2f, 30);
+
+			// Crisp neon outer contours for Right Heart (cyan) and Left Heart (coral)
+			traceRightHeart();
+			strokeNeon(vg, venaCol, 1.2f, 3.4f, 55);
+
+			traceLeftHeart();
+			NVGcolor lvCol = ejecting ? nvgRGB(0xff, 0x68, 0x60) : neonCoral;
+			strokeNeon(vg, lvCol, 1.25f, 3.6f, 60);
+
+			nvgRestore(vg);
 		}
 	};
 
 	static void drawPanel(const rack::widget::Widget::DrawArgs& args, float panelW) {
-		NVGcolor bg = nvgRGB(0x16, 0x19, 0x1a);
-		NVGcolor edge = nvgRGB(0x2a, 0x2e, 0x35);
+		NVGcolor bg = nvgRGB(0x12, 0x15, 0x1a);
+		NVGcolor edge = nvgRGB(0x28, 0x30, 0x3a);
 		NVGcolor label = nvgRGB(0xb8, 0xc2, 0xcc);
-		NVGcolor accent = nvgRGB(0xd8, 0x6a, 0x6a);
+		NVGcolor accent = nvgRGB(0xf0, 0x4e, 0x62);
 
 		nvgBeginPath(args.vg);
 		nvgRect(args.vg, 0, 0, panelW, rack::app::RACK_GRID_HEIGHT);
@@ -175,22 +291,118 @@ struct CyberlineHeartWidget : rack::app::ModuleWidget {
 		nvgStrokeColor(args.vg, edge);
 		nvgStroke(args.vg);
 
+		// Top neon accent bar + sub-trace
 		nvgBeginPath(args.vg);
-		nvgRect(args.vg, 0, 0, panelW, 6);
+		nvgRect(args.vg, 0, 0, panelW, 5);
 		nvgFillColor(args.vg, accent);
+		nvgFill(args.vg);
+		nvgBeginPath(args.vg);
+		nvgMoveTo(args.vg, 0, 6.5f);
+		nvgLineTo(args.vg, panelW, 6.5f);
+		nvgStrokeWidth(args.vg, 0.8f);
+		nvgStrokeColor(args.vg, nvgRGBA(0xf0, 0x4e, 0x62, 120));
+		nvgStroke(args.vg);
+
+		float c1 = 41.f, c2 = 123.f, c3 = 206.f, c4 = 288.f;
+		float r[7] = {112.f, 150.f, 188.f, 226.f, 264.f, 302.f, 340.f};
+
+		// ---- Hollow neon output jack rings ----
+		auto drawOutPad = [&](float x, float y, NVGcolor ringCol) {
+			nvgBeginPath(args.vg);
+			nvgCircle(args.vg, x, y, 14.5f);
+			nvgFillColor(args.vg, nvgRGB(0x09, 0x0c, 0x10));
+			nvgFill(args.vg);
+			strokeNeon(args.vg, ringCol, 1.0f, 3.0f, 36);
+		};
+		NVGcolor stdOutRing = nvgRGB(0x3a, 0x52, 0x68);
+		// Column 3 outputs (rows 4..6)
+		for (int i = 4; i <= 6; i++)
+			drawOutPad(c3, r[i], stdOutRing);
+		// Column 4 outputs (rows 0..5)
+		for (int i = 0; i <= 5; i++)
+			drawOutPad(c4, r[i], stdOutRing);
+
+		// ---- Circulation Series-Link Diagram: OUTFLOW -> FILL CV -> FILL ----
+		// Highlight rings on OUTFLOW (c4, r[0]) and FILL CV (c3, r[1])
+		NVGcolor outLinkCol = nvgRGB(0xff, 0x4c, 0x60);
+		NVGcolor fillLinkCol = nvgRGB(0x00, 0xd8, 0xf8);
+		drawOutPad(c4, r[0], outLinkCol);
+
+		nvgBeginPath(args.vg);
+		nvgCircle(args.vg, c3, r[1], 14.5f);
+		strokeNeon(args.vg, fillLinkCol, 1.1f, 3.2f, 45);
+
+		// Routed circulation trace from OUTFLOW (c4, r[0]) -> FILL CV (c3, r[1])
+		float midX = (c3 + c4) * 0.5f;
+		float midY = (r[0] + r[1]) * 0.5f;
+		NVGpaint traceGrad = nvgLinearGradient(args.vg,
+			c4 - 15.f, r[0], c3 + 16.f, r[1],
+			nvgRGBA(0xe8, 0x74, 0x6e, 200),
+			nvgRGBA(0x5a, 0xc8, 0xe0, 200));
+		nvgBeginPath(args.vg);
+		nvgMoveTo(args.vg, c4 - 15.f, r[0]);
+		nvgLineTo(args.vg, midX + 5.f, r[0]);
+		nvgQuadTo(args.vg, midX, r[0], midX, r[0] + 5.f);
+		nvgLineTo(args.vg, midX, r[1] - 5.f);
+		nvgQuadTo(args.vg, midX, r[1], midX - 5.f, r[1]);
+		nvgLineTo(args.vg, c3 + 16.f, r[1]);
+		nvgStrokeWidth(args.vg, 1.4f);
+		nvgStrokePaint(args.vg, traceGrad);
+		nvgStroke(args.vg);
+
+		// Arrowhead pointing into FILL CV (c3, r[1])
+		nvgBeginPath(args.vg);
+		nvgMoveTo(args.vg, c3 + 15.f, r[1]);
+		nvgLineTo(args.vg, c3 + 20.5f, r[1] - 3.2f);
+		nvgLineTo(args.vg, c3 + 20.5f, r[1] + 3.2f);
+		nvgClosePath(args.vg);
+		nvgFillColor(args.vg, fillLinkCol);
+		nvgFill(args.vg);
+
+		// Subtle coupling line & arrowhead from FILL CV (c3, r[1]) to FILL knob (c2, r[1])
+		nvgBeginPath(args.vg);
+		nvgMoveTo(args.vg, c3 - 15.f, r[1]);
+		nvgLineTo(args.vg, c2 + 16.f, r[1]);
+		nvgStrokeWidth(args.vg, 1.f);
+		nvgStrokeColor(args.vg, nvgRGBA(0x5a, 0xc8, 0xe0, 110));
+		nvgStroke(args.vg);
+
+		nvgBeginPath(args.vg);
+		nvgMoveTo(args.vg, c2 + 14.5f, r[1]);
+		nvgLineTo(args.vg, c2 + 18.5f, r[1] - 2.3f);
+		nvgLineTo(args.vg, c2 + 18.5f, r[1] + 2.3f);
+		nvgClosePath(args.vg);
+		nvgFillColor(args.vg, nvgRGBA(0x5a, 0xc8, 0xe0, 140));
 		nvgFill(args.vg);
 
 		nvgFontSize(args.vg, 8);
 		auto font = getLabelFont();
 		if (font && font->handle >= 0)
 			nvgFontFaceId(args.vg, font->handle);
+
+		// Dark pill + micro-label on the OUTFLOW -> FILL CV trace so line doesn't strike text
+		if (font && font->handle >= 0) {
+			nvgBeginPath(args.vg);
+			nvgRoundedRect(args.vg, midX - 12.f, midY - 4.8f, 24.f, 9.6f, 3.f);
+			nvgFillColor(args.vg, bg);
+			nvgFill(args.vg);
+			nvgStrokeWidth(args.vg, 0.8f);
+			nvgStrokeColor(args.vg, nvgRGBA(0x46, 0x7c, 0x90, 140));
+			nvgStroke(args.vg);
+
+			nvgFontSize(args.vg, 5.8f);
+			nvgTextAlign(args.vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
+			nvgFillColor(args.vg, nvgRGB(0x7e, 0xd4, 0xe8));
+			nvgText(args.vg, midX, midY + 0.3f, "LOOP", NULL);
+			nvgFontSize(args.vg, 8.f);
+		}
 		nvgTextAlign(args.vg, NVG_ALIGN_CENTER | NVG_ALIGN_BOTTOM);
+
 		nvgFillColor(args.vg, label);
 		auto text = [&](float x, float y, const char* s) {
 			nvgText(args.vg, x, y, s, NULL);
 		};
 
-		float c1 = 41.f, c2 = 123.f, c3 = 206.f, c4 = 288.f;
 		// column 1: anatomy knobs
 		text(c1, 96, "MASS");        text(c1, 134, "RATE");
 		text(c1, 172, "AV DELAY");   text(c1, 210, "CONTRACT");
@@ -201,12 +413,18 @@ struct CyberlineHeartWidget : rack::app::ModuleWidget {
 		text(c2, 172, "DRIVE");      text(c2, 210, "AFTERLOAD");
 		text(c2, 248, "SOUND");      text(c2, 286, "PHASE");
 		// column 3: inputs, then outputs
-		text(c3, 96, "PACING");      text(c3, 134, "FILL CV");
+		text(c3, 96, "PACING");
+		nvgFillColor(args.vg, nvgRGB(0x7e, 0xd4, 0xe8));
+		text(c3, 134, "FILL CV");
+		nvgFillColor(args.vg, label);
 		text(c3, 172, "DRIVE CV");   text(c3, 210, "AFT CV");
 		text(c3, 248, "VOLUME");     text(c3, 286, "PRESSURE");
 		text(c3, 324, "FLOW +-");
 		// column 4: outputs
-		text(c4, 96, "OUTFLOW");     text(c4, 134, "ARTERIAL");
+		nvgFillColor(args.vg, nvgRGB(0xf0, 0x88, 0x82));
+		text(c4, 96, "OUTFLOW");
+		nvgFillColor(args.vg, label);
+		text(c4, 134, "ARTERIAL");
 		text(c4, 172, "ECG");        text(c4, 210, "BEAT");
 		text(c4, 248, "ATRIA");      text(c4, 286, "SOUND");
 
@@ -271,8 +489,8 @@ struct CyberlineHeartWidget : rack::app::ModuleWidget {
 		// clears the first label row's text top at ~88 px)
 		{
 			auto gauge = new HeartGauge(module);
-			gauge->box.pos = rack::Vec(128.f, 16.f);
-			gauge->box.size = rack::Vec(80.f, 64.f);
+			gauge->box.pos = rack::Vec(60.f, 11.f);
+			gauge->box.size = rack::Vec(210.f, 68.f);
 			addChild(gauge);
 		}
 	}

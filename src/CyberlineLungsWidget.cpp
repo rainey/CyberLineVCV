@@ -10,42 +10,304 @@ namespace cyberline {
 struct CyberlineLungsWidget : rack::app::ModuleWidget {
 	static constexpr float PANEL_W = 14 * 15.f;
 
-	// "Lung" gauge: a circle that inflates with the reservoir volume and
-	// color-codes the phase (cyan inhale / warm exhale / dim dot at rest).
-	// Makes the burst-then-rest CYCLE rhythm visible at a glance. Drawn
-	// from module state per the spec §2 visualization convention; reads
-	// engine floats from the GUI thread (benign for a meter).
+	// Helper: neon double-stroke (outer soft bloom + crisp inner vector core)
+	static void strokeNeon(NVGcontext* vg, NVGcolor col, float coreW = 1.2f, float glowW = 3.6f, int glowAlpha = 50) {
+		nvgStrokeWidth(vg, glowW);
+		nvgStrokeColor(vg, nvgRGBA(col.r * 255, col.g * 255, col.b * 255, glowAlpha));
+		nvgStroke(vg);
+		nvgStrokeWidth(vg, coreW);
+		nvgStrokeColor(vg, col);
+		nvgStroke(vg);
+	}
+
+	// "Lung" gauge: a bilateral human lung + bronchial tree hollow neon wireframe
+	// telemetry display in the top header. The lung lobes expand slightly with
+	// tidal volume and visibly fill up from base to apex on inhale (neon cyan)
+	// and drain down on exhale (neon amber-coral), with an animated diaphragm arc.
 	struct BreathGauge : rack::widget::Widget {
 		CyberlineLungs* module;
 		BreathGauge(CyberlineLungs* m) : module(m) {}
 
+		static void traceRightLung(NVGcontext* vg, float cx, float cy, float exp) {
+			// Viewer's left = anatomical Right Lung (3 lobes, broad base)
+			nvgMoveTo(vg, cx - 7.f, cy - 19.f);
+			// Apical dome
+			nvgBezierTo(vg, cx - 12.f * exp, cy - 23.f,
+				cx - 22.f * exp, cy - 18.f, cx - 26.f * exp, cy - 7.f);
+			// Costal lateral border
+			nvgBezierTo(vg, cx - 30.f * exp, cy + 4.f,
+				cx - 31.f * exp, cy + 15.f * exp, cx - 28.f * exp, cy + 21.f * exp);
+			// Diaphragmatic concave base
+			nvgBezierTo(vg, cx - 22.f * exp, cy + 19.f * exp,
+				cx - 12.f * exp, cy + 18.f * exp, cx - 6.f, cy + 19.f * exp);
+			// Mediastinal medial border back to hilum/apex
+			nvgBezierTo(vg, cx - 5.f, cy + 8.f,
+				cx - 5.f, cy - 8.f, cx - 7.f, cy - 19.f);
+			nvgClosePath(vg);
+		}
+
+		static void traceLeftLung(NVGcontext* vg, float cx, float cy, float exp) {
+			// Viewer's right = anatomical Left Lung (with medial cardiac notch)
+			nvgMoveTo(vg, cx + 7.f, cy - 19.f);
+			// Apical dome
+			nvgBezierTo(vg, cx + 12.f * exp, cy - 23.f,
+				cx + 22.f * exp, cy - 18.f, cx + 26.f * exp, cy - 7.f);
+			// Costal lateral border
+			nvgBezierTo(vg, cx + 30.f * exp, cy + 4.f,
+				cx + 31.f * exp, cy + 15.f * exp, cx + 28.f * exp, cy + 21.f * exp);
+			// Diaphragmatic base to lingula tip
+			nvgBezierTo(vg, cx + 22.f * exp, cy + 19.f * exp,
+				cx + 15.f * exp, cy + 18.5f * exp, cx + 11.f, cy + 18.f * exp);
+			// Cardiac notch (indented for the heart on the left medial border)
+			nvgBezierTo(vg, cx + 13.f, cy + 12.f,
+				cx + 11.f, cy + 5.f, cx + 6.f, cy + 2.f);
+			// Upper mediastinal border back to apex
+			nvgBezierTo(vg, cx + 5.f, cy - 6.f,
+				cx + 5.f, cy - 13.f, cx + 7.f, cy - 19.f);
+			nvgClosePath(vg);
+		}
+
+		static void traceBronchi(NVGcontext* vg, float cx, float cy, float exp) {
+			// Mainstem bronchi from carina (cx, cy - 10) into right & left lungs
+			nvgMoveTo(vg, cx, cy - 10.f);
+			nvgLineTo(vg, cx - 12.f * exp, cy - 2.f);
+			// Right lobar branches (superior, middle, inferior)
+			nvgMoveTo(vg, cx - 8.f * exp, cy - 5.f);
+			nvgLineTo(vg, cx - 15.f * exp, cy - 12.f);
+			nvgMoveTo(vg, cx - 12.f * exp, cy - 2.f);
+			nvgLineTo(vg, cx - 21.f * exp, cy + 3.f);
+			nvgMoveTo(vg, cx - 12.f * exp, cy - 2.f);
+			nvgLineTo(vg, cx - 17.f * exp, cy + 12.f * exp);
+			nvgMoveTo(vg, cx - 15.f * exp, cy + 6.f * exp);
+			nvgLineTo(vg, cx - 23.f * exp, cy + 13.f * exp);
+
+			// Left mainstem bronchus & lobar branches (superior, inferior)
+			nvgMoveTo(vg, cx, cy - 10.f);
+			nvgLineTo(vg, cx + 12.f * exp, cy - 1.f);
+			nvgMoveTo(vg, cx + 8.f * exp, cy - 4.f);
+			nvgLineTo(vg, cx + 16.f * exp, cy - 11.f);
+			nvgMoveTo(vg, cx + 12.f * exp, cy - 1.f);
+			nvgLineTo(vg, cx + 21.f * exp, cy + 4.f);
+			nvgMoveTo(vg, cx + 12.f * exp, cy - 1.f);
+			nvgLineTo(vg, cx + 18.f * exp, cy + 12.f * exp);
+			nvgMoveTo(vg, cx + 16.f * exp, cy + 6.f * exp);
+			nvgLineTo(vg, cx + 23.f * exp, cy + 13.f * exp);
+		}
+
 		void draw(const DrawArgs& args) override {
-			float vol = 0.f, phase = 0.f;
-			bool resting = true;
+			// Default to ~68% inhaled in module browser (when module == nullptr)
+			float vol = 0.68f, phase = 0.f;
+			bool exhaling = false, resting = false;
 			if (module && std::isfinite(module->volume)) {
 				vol = rack::math::clamp(module->volume, 0.f, 1.f);
 				phase = module->phase;
-				resting = !module->exhaling && vol <= 0.001f;
+				exhaling = module->exhaling || (phase > 0.5f);
+				resting = !exhaling && vol <= 0.005f && std::fabs(module->flow) < 0.005f;
 			}
-			float cx = box.size.x * 0.5f, cy = box.size.y * 0.5f;
+			float w = box.size.x, h = box.size.y;
+			float cx = w * 0.5f, cy = h * 0.52f;
+			NVGcontext* vg = args.vg;
 
-			// reservoir ring (fixed outer bound)
-			nvgBeginPath(args.vg);
-			nvgCircle(args.vg, cx, cy, 11.f);
-			nvgStrokeWidth(args.vg, 1.f);
-			nvgStrokeColor(args.vg, nvgRGB(0x2a, 0x2e, 0x35));
-			nvgStroke(args.vg);
+			NVGcolor neonCyan  = nvgRGB(0x40, 0xe0, 0xff);
+			NVGcolor neonAmber = nvgRGB(0xff, 0x88, 0x54);
 
-			// volume fill
-			NVGcolor fill = resting
-				? nvgRGB(0x3a, 0x40, 0x48)                 // at rest
-				: (phase > 0.5f
-					? nvgRGB(0xe0, 0x7a, 0x5a)             // exhaling (warm)
-					: nvgRGB(0x5a, 0xc8, 0xe0));           // inhaling (cyan)
-			nvgBeginPath(args.vg);
-			nvgCircle(args.vg, cx, cy, 1.5f + vol * 9.f);
-			nvgFillColor(args.vg, fill);
-			nvgFill(args.vg);
+			// Hollow chamfered cyber-HUD bezel
+			float ch = 6.f;
+			nvgBeginPath(vg);
+			nvgMoveTo(vg, ch, 0.f);
+			nvgLineTo(vg, w - ch, 0.f);
+			nvgLineTo(vg, w, ch);
+			nvgLineTo(vg, w, h - ch);
+			nvgLineTo(vg, w - ch, h);
+			nvgLineTo(vg, ch, h);
+			nvgLineTo(vg, 0.f, h - ch);
+			nvgLineTo(vg, 0.f, ch);
+			nvgClosePath(vg);
+			nvgFillColor(vg, nvgRGB(0x0b, 0x0e, 0x12));
+			nvgFill(vg);
+			strokeNeon(vg, nvgRGBA(0x40, 0xc8, 0xe8, 185), 1.0f, 2.8f, 35);
+
+			// Corner HUD accent brackets
+			nvgBeginPath(vg);
+			nvgMoveTo(vg, 0.f, ch + 8.f); nvgLineTo(vg, 0.f, ch); nvgLineTo(vg, ch, 0.f); nvgLineTo(vg, ch + 8.f, 0.f);
+			nvgMoveTo(vg, w - ch - 8.f, 0.f); nvgLineTo(vg, w - ch, 0.f); nvgLineTo(vg, w, ch); nvgLineTo(vg, w, ch + 8.f);
+			nvgMoveTo(vg, 0.f, h - ch - 8.f); nvgLineTo(vg, 0.f, h - ch); nvgLineTo(vg, ch, h); nvgLineTo(vg, ch + 8.f, h);
+			nvgMoveTo(vg, w - ch - 8.f, h); nvgLineTo(vg, w - ch, h); nvgLineTo(vg, w, h - ch); nvgLineTo(vg, w, h - ch - 8.f);
+			nvgStrokeWidth(vg, 1.4f);
+			nvgStrokeColor(vg, exhaling ? neonAmber : neonCyan);
+			nvgStroke(vg);
+
+			// Subtle vector grid lines
+			nvgBeginPath(vg);
+			for (float gx = 20.f; gx < w - 10.f; gx += 22.f) {
+				nvgMoveTo(vg, gx, 3.f);
+				nvgLineTo(vg, gx, h - 3.f);
+			}
+			for (float gy = 18.f; gy < h - 6.f; gy += 18.f) {
+				nvgMoveTo(vg, 4.f, gy);
+				nvgLineTo(vg, w - 4.f, gy);
+			}
+			nvgStrokeWidth(vg, 0.5f);
+			nvgStrokeColor(vg, nvgRGBA(0x32, 0x52, 0x64, 55));
+			nvgStroke(vg);
+
+			// Spirometry volume level gauge ticks on left & right inner margins
+			float topY = cy - 21.f;
+			float botY = cy + 20.f;
+			nvgBeginPath(vg);
+			for (int i = 0; i <= 4; i++) {
+				float ty = botY - (botY - topY) * (i * 0.25f);
+				float tickW = (i % 2 == 0) ? 5.f : 3.f;
+				nvgMoveTo(vg, 6.f, ty);
+				nvgLineTo(vg, 6.f + tickW, ty);
+				nvgMoveTo(vg, w - 6.f, ty);
+				nvgLineTo(vg, w - 6.f - tickW, ty);
+			}
+			nvgStrokeWidth(vg, 0.9f);
+			nvgStrokeColor(vg, nvgRGBA(0x58, 0x98, 0xb0, 130));
+			nvgStroke(vg);
+
+			// Micro-labels for phase & volume telemetry
+			auto font = getLabelFont();
+			if (font && font->handle >= 0) {
+				nvgFontFaceId(vg, font->handle);
+				nvgFontSize(vg, 6.f);
+				nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_TOP);
+				nvgFillColor(vg, (!resting && !exhaling)
+					? neonCyan : nvgRGB(0x4a, 0x62, 0x70));
+				nvgText(vg, 8.f, 5.f, "INHALE", NULL);
+
+				nvgTextAlign(vg, NVG_ALIGN_RIGHT | NVG_ALIGN_TOP);
+				nvgFillColor(vg, (!resting && exhaling)
+					? neonAmber : nvgRGB(0x6c, 0x54, 0x50));
+				nvgText(vg, w - 8.f, 5.f, "EXHALE", NULL);
+
+				nvgFontSize(vg, 5.5f);
+				nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_BOTTOM);
+				nvgFillColor(vg, nvgRGBA(0x68, 0xa8, 0xc0, 175));
+				nvgText(vg, 8.f, h - 4.f, "TIDAL VOL", NULL);
+
+				nvgTextAlign(vg, NVG_ALIGN_RIGHT | NVG_ALIGN_BOTTOM);
+				nvgText(vg, w - 8.f, h - 4.f, "SUBGLOTTAL", NULL);
+			}
+
+			// Thoracic expansion factor with volume
+			float exp = 0.92f + 0.12f * vol;
+
+			// ---- 1. Hollow Wireframe Trachea & Carina ----
+			nvgBeginPath(vg);
+			nvgMoveTo(vg, cx - 2.3f, cy - 28.f);
+			nvgLineTo(vg, cx - 2.3f, cy - 10.f);
+			nvgMoveTo(vg, cx + 2.3f, cy - 28.f);
+			nvgLineTo(vg, cx + 2.3f, cy - 10.f);
+			strokeNeon(vg, exhaling ? neonAmber : neonCyan, 1.0f, 2.6f, 40);
+
+			// Tracheal cartilaginous C-ring ribs
+			nvgBeginPath(vg);
+			for (float ry = cy - 25.f; ry <= cy - 13.f; ry += 3.5f) {
+				nvgMoveTo(vg, cx - 2.3f, ry);
+				nvgLineTo(vg, cx + 2.3f, ry);
+			}
+			nvgStrokeWidth(vg, 0.75f);
+			nvgStrokeColor(vg, nvgRGBA(0x90, 0xd8, 0xf0, 140));
+			nvgStroke(vg);
+
+			// ---- 2. Unfilled Hollow Wireframe Lung Cavities (Base Layer) ----
+			// Horizontal pleural wireframe ribs clipped inside the lungs
+			nvgSave(vg);
+			nvgBeginPath(vg);
+			traceRightLung(vg, cx, cy, exp);
+			traceLeftLung(vg, cx, cy, exp);
+			nvgFillColor(vg, nvgRGBA(0x10, 0x18, 0x20, 180));
+			nvgFill(vg);
+			nvgRestore(vg);
+
+			// Dim bronchial wireframe tree inside unfilled lungs
+			nvgBeginPath(vg);
+			traceBronchi(vg, cx, cy, exp);
+			nvgStrokeWidth(vg, 1.1f);
+			nvgStrokeColor(vg, nvgRGBA(0x38, 0x62, 0x78, 120));
+			nvgLineCap(vg, NVG_ROUND);
+			nvgStroke(vg);
+
+			// ---- 3. Rising / Draining Holographic Volume Fill Layer ----
+			float fillTop = cy - 22.f;
+			float fillBot = cy + 21.5f * exp;
+			float fillY = fillBot - vol * (fillBot - fillTop);
+
+			if (vol > 0.005f) {
+				NVGcolor topCol = exhaling
+					? nvgRGBA(0xff, 0x84, 0x50, 135)   // translucent neon amber-coral
+					: nvgRGBA(0x40, 0xe0, 0xff, 135);  // translucent neon cyan
+				NVGcolor botCol = exhaling
+					? nvgRGBA(0x98, 0x38, 0x24, 55)
+					: nvgRGBA(0x18, 0x58, 0x78, 55);
+				NVGpaint lungGrad = nvgLinearGradient(vg,
+					cx, fillY, cx, fillBot, topCol, botCol);
+
+				nvgSave(vg);
+				nvgIntersectScissor(vg, 0.f, fillY, w, fillBot - fillY + 4.f);
+
+				nvgBeginPath(vg);
+				traceRightLung(vg, cx, cy, exp);
+				traceLeftLung(vg, cx, cy, exp);
+				nvgFillPaint(vg, lungGrad);
+				nvgFill(vg);
+
+				// Bright neon bronchial tree inside the filled region
+				nvgBeginPath(vg);
+				traceBronchi(vg, cx, cy, exp);
+				nvgLineCap(vg, NVG_ROUND);
+				strokeNeon(vg, exhaling ? neonAmber : neonCyan, 1.15f, 3.0f, 55);
+
+				nvgRestore(vg);
+
+				// Glowing neon meniscus horizon clipped strictly inside each lung
+				if (vol < 0.97f) {
+					nvgSave(vg);
+					nvgIntersectScissor(vg, 0.f, fillY - 1.0f, w, 2.2f);
+					nvgBeginPath(vg);
+					traceRightLung(vg, cx, cy, exp);
+					traceLeftLung(vg, cx, cy, exp);
+					nvgFillColor(vg, exhaling
+						? nvgRGB(0xff, 0xc4, 0x98)
+						: nvgRGB(0xb4, 0xf6, 0xff));
+					nvgFill(vg);
+					nvgRestore(vg);
+				}
+			}
+
+			// ---- 4. Hollow Neon Pleural Outlines & Lobar Fissure Wireframe ----
+			nvgBeginPath(vg);
+			// Right horizontal fissure
+			nvgMoveTo(vg, cx - 6.f, cy - 1.f);
+			nvgQuadTo(vg, cx - 16.f * exp, cy - 1.5f, cx - 27.f * exp, cy + 1.f);
+			// Right oblique fissure
+			nvgMoveTo(vg, cx - 14.f * exp, cy - 1.f);
+			nvgQuadTo(vg, cx - 18.f * exp, cy + 9.f * exp, cx - 22.f * exp, cy + 19.f * exp);
+			// Left oblique fissure
+			nvgMoveTo(vg, cx + 7.f, cy - 3.f);
+			nvgQuadTo(vg, cx + 17.f * exp, cy + 6.f * exp, cx + 23.f * exp, cy + 19.f * exp);
+			nvgStrokeWidth(vg, 0.85f);
+			nvgStrokeColor(vg, exhaling
+				? nvgRGBA(0xff, 0x98, 0x70, 110)
+				: nvgRGBA(0x60, 0xd8, 0xf8, 110));
+			nvgStroke(vg);
+
+			nvgBeginPath(vg);
+			traceRightLung(vg, cx, cy, exp);
+			traceLeftLung(vg, cx, cy, exp);
+			strokeNeon(vg, resting ? nvgRGB(0x3c, 0x58, 0x6c) : (exhaling ? neonAmber : neonCyan), 1.2f, 3.4f, 55);
+
+			// ---- 5. Animated Neon Diaphragm Dome below Lungs ----
+			float diaphPeakY = cy + 18.f + 5.5f * vol;
+			float diaphEdgeY = cy + 25.f + 2.0f * vol;
+			nvgBeginPath(vg);
+			nvgMoveTo(vg, cx - 31.f * exp, diaphEdgeY);
+			nvgBezierTo(vg, cx - 18.f, diaphPeakY,
+				cx + 18.f, diaphPeakY, cx + 31.f * exp, diaphEdgeY);
+			nvgLineCap(vg, NVG_ROUND);
+			strokeNeon(vg, exhaling ? neonAmber : neonCyan, 1.2f, 3.2f, 45);
 		}
 	};
 
@@ -93,23 +355,55 @@ struct CyberlineLungsWidget : rack::app::ModuleWidget {
 	};
 
 	static void drawPanel(const rack::widget::Widget::DrawArgs& args, float panelW) {
-		NVGcolor bg = nvgRGB(0x16, 0x19, 0x1a);
+		NVGcontext* vg = args.vg;
+		NVGcolor bg = nvgRGB(0x13, 0x16, 0x19);
 		NVGcolor edge = nvgRGB(0x2a, 0x2e, 0x35);
 		NVGcolor label = nvgRGB(0xb8, 0xc2, 0xcc);
-		NVGcolor accent = nvgRGB(0x5a, 0xc8, 0xe0);
+		NVGcolor accent = nvgRGB(0x48, 0xd8, 0xf8);
 
-		nvgBeginPath(args.vg);
-		nvgRect(args.vg, 0, 0, panelW, rack::app::RACK_GRID_HEIGHT);
-		nvgFillColor(args.vg, bg);
-		nvgFill(args.vg);
-		nvgStrokeWidth(args.vg, 1.f);
-		nvgStrokeColor(args.vg, edge);
-		nvgStroke(args.vg);
+		nvgBeginPath(vg);
+		nvgRect(vg, 0, 0, panelW, rack::app::RACK_GRID_HEIGHT);
+		nvgFillColor(vg, bg);
+		nvgFill(vg);
+		nvgStrokeWidth(vg, 1.f);
+		nvgStrokeColor(vg, edge);
+		nvgStroke(vg);
 
-		nvgBeginPath(args.vg);
-		nvgRect(args.vg, 0, 0, panelW, 6);
-		nvgFillColor(args.vg, accent);
-		nvgFill(args.vg);
+		// Top neon bar + hollow cyberline sub-trace
+		nvgBeginPath(vg);
+		nvgRect(vg, 0, 0, panelW, 5);
+		nvgFillColor(vg, accent);
+		nvgFill(vg);
+		nvgBeginPath(vg);
+		nvgMoveTo(vg, 0, 7.5f);
+		nvgLineTo(vg, panelW, 7.5f);
+		nvgStrokeWidth(vg, 0.8f);
+		nvgStrokeColor(vg, nvgRGBA(0x48, 0xd8, 0xf8, 120));
+		nvgStroke(vg);
+
+		float cx = panelW * 0.5f;
+		float colL = 58.f, colR = 148.f;
+		float outY = 328.f;
+
+		// Hollow neon output jack wells
+		auto drawOutPad = [&](float x, float y, NVGcolor ringCol, bool glow) {
+			nvgBeginPath(vg);
+			nvgCircle(vg, x, y, 14.8f);
+			nvgFillColor(vg, nvgRGB(0x0b, 0x0d, 0x10));
+			nvgFill(vg);
+			if (glow) {
+				strokeNeon(vg, ringCol, 1.1f, 3.0f, 45);
+			} else {
+				nvgStrokeWidth(vg, 1.1f);
+				nvgStrokeColor(vg, ringCol);
+				nvgStroke(vg);
+			}
+		};
+		NVGcolor stdOutRing = nvgRGB(0x36, 0x48, 0x56);
+		drawOutPad(panelW * 0.15f, outY, accent, true); // PRESS (primary subglottal output to LARYNX)
+		drawOutPad(panelW * 0.38f, outY, stdOutRing, false);
+		drawOutPad(panelW * 0.62f, outY, stdOutRing, false);
+		drawOutPad(panelW * 0.85f, outY, stdOutRing, false);
 
 		nvgFontSize(args.vg, 8);
 		auto font = getLabelFont();
@@ -121,23 +415,39 @@ struct CyberlineLungsWidget : rack::app::ModuleWidget {
 			nvgText(args.vg, x, y, s, NULL);
 		};
 
-		float cx = panelW * 0.5f;
-		float colL = 60.f, colR = 150.f;
-		// params (2 columns; label baseline ~14 px above its widget top)
-		text(colL, 30, "RATE");      text(colR, 30, "DEPTH");
-		text(colL, 84, "INHALE s");  text(colR, 84, "FLOW MAX");
-		text(colL, 134, "EFFORT");   text(colR, 134, "MODE");
-		text(colR + 22, 146, "PHASE");
+		// params (2 columns below the top lung gauge)
+		text(colL, 101, "RATE");     text(colR, 101, "DEPTH");
+		text(colL, 155, "INHALE s"); text(colR, 155, "FLOW MAX");
+		text(colL, 204, "EFFORT");   text(colR - 6.f, 204, "MODE");
+		text(colR + 30.f, 214, "EXH");
+
+		// 4-position MODE tick labels beside the ModeSwitch (at colR - 6, 224)
+		if (font && font->handle >= 0) {
+			static const char* modeNames[4] = {"CYC", "TRG", "CLS", "PHS"};
+			nvgFontSize(args.vg, 5.5f);
+			nvgTextAlign(args.vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
+			nvgFillColor(args.vg, nvgRGB(0x7c, 0x8a, 0x98));
+			float swTop = 224.f - 17.f;
+			for (int i = 0; i < 4; i++) {
+				float sy = swTop + 8.f + i * (34.f - 16.f) / 3.f;
+				nvgText(args.vg, colR + 5.f, sy, modeNames[i], NULL);
+			}
+			nvgFontSize(args.vg, 8.f);
+			nvgTextAlign(args.vg, NVG_ALIGN_CENTER | NVG_ALIGN_BOTTOM);
+			nvgFillColor(args.vg, label);
+		}
 
 		// inputs
-		text(panelW * 0.25f, 196, "TRIG");
-		text(cx, 196, "GATE");
-		text(panelW * 0.75f, 196, "DEPTH CV");
+		text(panelW * 0.25f, 258, "TRIG");
+		text(cx, 258, "GATE");
+		text(panelW * 0.75f, 258, "DEPTH CV");
 		// outputs
-		text(panelW * 0.15f, 266, "PRESS");
-		text(panelW * 0.38f, 266, "VOL");
-		text(panelW * 0.62f, 266, "FLOW +-");
-		text(panelW * 0.85f, 266, "PHASE");
+		nvgFillColor(args.vg, nvgRGB(0x7e, 0xd4, 0xe8));
+		text(panelW * 0.15f, 309, "PRESS");
+		nvgFillColor(args.vg, label);
+		text(panelW * 0.38f, 309, "VOL");
+		text(panelW * 0.62f, 309, "FLOW +-");
+		text(panelW * 0.85f, 309, "PHASE");
 
 		drawPanelTitle(args, panelW, "BREATH");
 	}
@@ -156,33 +466,33 @@ struct CyberlineLungsWidget : rack::app::ModuleWidget {
 		using rack::componentlibrary::PJ301MPort;
 
 		float cx = PANEL_W * 0.5f;
-		float colL = 60.f, colR = 150.f;
+		float colL = 58.f, colR = 148.f;
 
-		addParam(rack::createParamCentered<RoundBlackKnob>(rack::Vec(colL, 56), module, CyberlineLungs::RATE_PARAM));
-		addParam(rack::createParamCentered<RoundBlackKnob>(rack::Vec(colR, 56), module, CyberlineLungs::DEPTH_PARAM));
-		addParam(rack::createParamCentered<RoundSmallBlackKnob>(rack::Vec(colL, 106), module, CyberlineLungs::INHALE_PARAM));
-		addParam(rack::createParamCentered<RoundSmallBlackKnob>(rack::Vec(colR, 106), module, CyberlineLungs::MAXFLOW_PARAM));
-		addParam(rack::createParamCentered<RoundSmallBlackKnob>(rack::Vec(colL, 156), module, CyberlineLungs::EFFORT_PARAM));
-		addParam(rack::createParamCentered<ModeSwitch>(rack::Vec(colR, 156), module, CyberlineLungs::MODE_PARAM));
-
-		// Phase light beside the mode switch
-		addChild(rack::createLightCentered<rack::componentlibrary::SmallLight<rack::componentlibrary::GreenLight>>(
-			rack::Vec(colR + 22, 156), module, CyberlineLungs::PHASE_LIGHT));
-
-		// Lung gauge, dead-center between the knob columns
+		// Top-center bilateral human lung & bronchial gauge
 		{
 			auto gauge = new BreathGauge(module);
-			gauge->box.pos = rack::Vec(93.f, 150.f);
-			gauge->box.size = rack::Vec(24.f, 24.f);
+			gauge->box.pos = rack::Vec(18.f, 15.f);
+			gauge->box.size = rack::Vec(174.f, 70.f);
 			addChild(gauge);
 		}
 
-		float row = 220.f;
+		addParam(rack::createParamCentered<RoundBlackKnob>(rack::Vec(colL, 122), module, CyberlineLungs::RATE_PARAM));
+		addParam(rack::createParamCentered<RoundBlackKnob>(rack::Vec(colR, 122), module, CyberlineLungs::DEPTH_PARAM));
+		addParam(rack::createParamCentered<RoundSmallBlackKnob>(rack::Vec(colL, 173), module, CyberlineLungs::INHALE_PARAM));
+		addParam(rack::createParamCentered<RoundSmallBlackKnob>(rack::Vec(colR, 173), module, CyberlineLungs::MAXFLOW_PARAM));
+		addParam(rack::createParamCentered<RoundSmallBlackKnob>(rack::Vec(colL, 224), module, CyberlineLungs::EFFORT_PARAM));
+		addParam(rack::createParamCentered<ModeSwitch>(rack::Vec(colR - 6.f, 224), module, CyberlineLungs::MODE_PARAM));
+
+		// Phase light beside the mode switch
+		addChild(rack::createLightCentered<rack::componentlibrary::SmallLight<rack::componentlibrary::GreenLight>>(
+			rack::Vec(colR + 30.f, 224), module, CyberlineLungs::PHASE_LIGHT));
+
+		float row = 276.f;
 		addInput(rack::createInputCentered<PJ301MPort>(rack::Vec(PANEL_W * 0.25f, row), module, CyberlineLungs::TRIGGER_INPUT));
 		addInput(rack::createInputCentered<PJ301MPort>(rack::Vec(cx, row), module, CyberlineLungs::GATE_INPUT));
 		addInput(rack::createInputCentered<PJ301MPort>(rack::Vec(PANEL_W * 0.75f, row), module, CyberlineLungs::DEPTHCV_INPUT));
 
-		float row2 = 290.f;
+		float row2 = 328.f;
 		addOutput(rack::createOutputCentered<PJ301MPort>(rack::Vec(PANEL_W * 0.15f, row2), module, CyberlineLungs::PRESSURE_OUTPUT));
 		addOutput(rack::createOutputCentered<PJ301MPort>(rack::Vec(PANEL_W * 0.38f, row2), module, CyberlineLungs::VOLUME_OUTPUT));
 		addOutput(rack::createOutputCentered<PJ301MPort>(rack::Vec(PANEL_W * 0.62f, row2), module, CyberlineLungs::FLOW_OUTPUT));

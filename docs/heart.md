@@ -103,6 +103,48 @@ compensation — the same self-balancing real hearts perform. Insert a
 **Breath** VOLUME between the two links to stand in for the pulmonary
 reservoir.
 
+### Three or more hearts in a ring (accessory / cephalopod / peristaltic loops)
+```
+heart 1 OUTFLOW ─▶ heart 2 FILL CV
+heart 2 OUTFLOW ─▶ heart 3 FILL CV
+heart 3 OUTFLOW ─▶ heart 1 FILL CV
+```
+Chaining 3+ hearts in a closed `OUTFLOW → FILL CV` ring models multi-pump
+circulatory systems found in comparative biology (such as cephalopods with
+two branchial hearts feeding a systemic heart, or hagfish with accessory
+portal/caudal booster hearts) as well as long cybernetic vascular trees:
+
+- **Traveling pressure waves (hydraulic delay ring):** Each heart's
+  Windkessel arterial reservoir acts as a 1-pole hydraulic capacitor and
+  its diastolic-to-systolic cycle introduces a 1-beat group delay. In a
+  3+ module ring, a bolus of blood (or a premature beat triggered by
+  `IRRIT` / `PACING` on Heart 1) takes 3+ cardiac cycles to travel around
+  the loop, creating slow, Mayer-wave-like traveling oscillations in
+  stroke volume and envelope amplitude across the modules.
+- **`FILL` knobs as loop gain (exsanguination vs. engorgement):** When
+  `FILL CV` is patched, `fill = FILL_PARAM × (FILL CV / 5 V)`. Setting
+  `FILL` around **0.55–0.65** across the ring maintains a self-sustaining
+  normovolemic equilibrium. Turning `FILL` down (`< 0.35`) causes the
+  ring to gradually **exsanguinate** — venous return decays from stage to
+  stage and the `SOUND` outputs thin into quiet hypovolemic clicks.
+  Turning `FILL` up (`> 0.75`) saturates seamlessly against each
+  ventricle's compliance ceiling (`vCap`), driving all chambers into full
+  diastolic distension with loud, booming Frank–Starling S1/S2 thumps
+  without numerical runaway.
+- **Polyrhythmic / asymmetric-mass chains:** Give each heart in the ring a
+  different **MASS** or **RATE** (e.g., a fast small "branchial" pump
+  feeding a slow, high-mass "systemic" pump). When the faster upstream
+  heart beats twice during the slower downstream heart's diastole, the
+  downstream heart receives a double preload boost and fires an accented
+  stroke volume and louder S1/S2 thump on its next beat (*pulsus
+  alternans* / Wenckebach-like preload rhythms).
+- **Phase-cascaded peristaltic clock:** Alongside the `OUTFLOW → FILL CV`
+  ring, patch `heart 1 ATRIA/BEAT ─▶ heart 2 PACING` and
+  `heart 2 ATRIA/BEAT ─▶ heart 3 PACING`. Each stage's **AV DELAY** acts
+  as a physiological phase shifter, creating a 3-phase peristaltic groove
+  (`lub-dub … lub-dub … lub-dub`) where each pump contracts just as the
+  upstream pressure wave arrives.
+
 ### Cardiorespiratory coupling (respiratory sinus arrhythmia)
 ```
 Breath FLOW ─▶ Heart DRIVE CV
@@ -158,11 +200,15 @@ presets**).
 
 ## Panel reference
 
-22 HP, four columns. Top: the **heart gauge** — atrium (top), ventricle
-(bottom), aortic bulb (right), each drawn at its live volume/pressure and
-colored by phase (cyan filling / warm ejecting / dim at rest). The two
-**PHASE** lights duplicate this as LEDs: green = AV valve open (filling),
-red = aortic valve open (ejecting).
+22 HP, four columns. Top: the **heart gauge** telemetry display — a
+4-chamber anatomical cross-section (venous-cyan right atrium & right
+ventricle on the left, interventricular septum, and arterial-coral left
+atrium, left ventricle & aortic arch on the right) inside a circulation
+loop schematic connecting **OUTFLOW** back to **FILL CV**. On the panel
+below, a matching coral-to-cyan **`LOOP`** silkscreen trace links
+**OUTFLOW** → **FILL CV** → **FILL** to indicate the standard series/loop
+circulation path. The two **PHASE** lights duplicate valve state as LEDs:
+green = AV valve open (filling), red = aortic valve open (ejecting).
 
 | Column | Contents |
 |---|---|
