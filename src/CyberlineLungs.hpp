@@ -52,8 +52,10 @@ struct CyberlineLungs : rack::engine::Module {
 	bool exhaling = false;
 	bool gateWasHigh = false;
 	bool trigWasHigh = false;
+	bool trigPending = false;
+	bool gateRisePending = false;
+	bool gateFallPending = false;
 	float cycleTimer = 0.f;  // s since current breath started (CYCLE period floor)
-	int inhaleHold = 0;      // control ticks remaining for inhale phase
 
 	// Output interpolation (per sample)
 	float outPressure = 0.f, outVolume = 0.f, outFlow = 0.f, outPhase = 0.f;
@@ -68,7 +70,7 @@ struct CyberlineLungs : rack::engine::Module {
 		configParam(RATE_PARAM, 4.f, 30.f, 12.f, "Breath rate", " /min");
 		configParam(DEPTH_PARAM, 0.f, 1.f, 0.7f, "Depth (tidal volume)");
 		configParam(INHALE_PARAM, 0.05f, 3.f, 0.4f, "Inhale time", " s");
-		configParam(MAXFLOW_PARAM, 0.f, 1.f, 0.5f, "Max flow (gasp-calm)");
+		configParam(MAXFLOW_PARAM, 0.f, 1.f, 0.5f, "Max flow (calm-gasp)");
 		configParam(EFFORT_PARAM, 0.f, 1.f, 0.5f, "Effort (recoil-plateau)");
 		configSwitch(MODE_PARAM, 0.f, 3.f, 0.f, "Mode",
 			{"Cycle", "Trigger", "Closed", "Phasor"});
@@ -85,10 +87,13 @@ struct CyberlineLungs : rack::engine::Module {
 
 	void reset() {
 		volume = 0.f; pressure = 0.f; flow = 0.f; phase = 0.f;
-		exhaling = false; inhaleHold = 0; cycleTimer = 0.f;
+		exhaling = false; cycleTimer = 0.f;
+		gateWasHigh = trigWasHigh = false;
+		trigPending = gateRisePending = gateFallPending = false;
 		lastPhasorVolume = 0.f;
 		outPressure = outVolume = outFlow = outPhase = 0.f;
 		tgtPressure = tgtVolume = tgtFlow = tgtPhase = 0.f;
+		physCounter = 0;
 	}
 
 	void onReset() override { reset(); }

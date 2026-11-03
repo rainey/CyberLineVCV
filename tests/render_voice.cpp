@@ -40,7 +40,8 @@ struct WavWriter {
 		return true;
 	}
 	void write(float x) {
-		if (x > 1.f) x = 1.f; if (x < -1.f) x = -1.f;
+		if (x > 1.f) x = 1.f;
+		if (x < -1.f) x = -1.f;
 		int16_t s = (int16_t)(x * 32767.f);
 		std::fwrite(&s, 2, 1, f); dataBytes += 2;
 	}
@@ -122,7 +123,7 @@ int main(int argc, char** argv) {
 	float allo = std::pow(10.f, 4.01f - 1.43f * std::log10(foldLen));
 	float fEff = (f0 > 0.f) ? f0 : allo;
 	fEff *= std::sqrt(std::fmax(tenseness, 0.01f) / 0.6f);
-	g.setTargets(fEff, tenseness, pressure);
+	g.setTargets(fEff, tenseness, pressure, foldLen);
 
 	render3::Rng rng;
 	render3::WavWriter w;
@@ -135,7 +136,6 @@ int main(int argc, char** argv) {
 	float* buf = new float[n];
 	float peak = 0.f;
 	const size_t warmup = (size_t)(0.25f * sr);
-	float fbSmooth = 0.f;
 	bool blewUp = false;
 
 	for (size_t i = 0; i < n + warmup; i++) {
@@ -143,15 +143,14 @@ int main(int argc, char** argv) {
 		tract.reshape(1.f / sr);
 		tract.calculateReflectionsPublic();
 
-		// semi-coupled loop: probe pressure -> glottis fb drive (smoothed)
-		float probeP = (tract.R[tract.n / 3] + tract.L[tract.n / 3]) * 0.1f;
+		// semi-coupled loop: probe pressure -> glottis fb drive (smoothed in glottis)
+		float probeP = (tract.R[tract.n / 3] + tract.L[tract.n / 3]) * fbGain;
 		if (!std::isfinite(probeP)) probeP = 0.f;
-		fbSmooth += (probeP * fbGain - fbSmooth) * 0.06f;
 
 		float noise = rng.uniform() * 2.f - 1.f;
-		float voiced = g.process(noise, fbSmooth, drift, vib);
+		float voiced = g.process(noise, probeP, drift, vib);
 
-		float exc = voiced * 0.5f;
+		float exc = voiced;
 		float lip = tract.step(exc, 0.f, 0.f, noise, 0.5f);
 		lip = tract.step(exc, 0.f, 0.f, noise, 1.0f);
 		float nose = tract.lastNoseOutput;

@@ -108,7 +108,7 @@ int main(int argc, char** argv) {
 	float allo = std::pow(10.f, 4.01f - 1.43f * std::log10(foldLen));
 	float base = (f0 > 0.f) ? f0 : allo;
 	float fEff = base * std::sqrt(std::fmax(tenseness, 0.01f) / 0.6f);
-	g.setTargets(fEff, tenseness, pressure);
+	g.setTargets(fEff, tenseness, pressure, foldLen);
 
 	render::Rng rng;
 	render::WavWriter w;

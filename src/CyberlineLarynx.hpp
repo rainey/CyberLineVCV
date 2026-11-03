@@ -36,6 +36,8 @@ struct CyberlineLarynx : rack::engine::Module {
 	};
 
 	CyberlineGlottis glottis;
+	float lastFoldLen = -1.f;
+	float cachedAllo = 235.f;
 
 	CyberlineLarynx() {
 		config(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS);
@@ -56,6 +58,10 @@ struct CyberlineLarynx : rack::engine::Module {
 	}
 
 	void process(const ProcessArgs& args) override;
+	void onReset() override {
+		glottis.reset();
+		lastFoldLen = -1.f;
+	}
 };
 
 } // namespace cyberline

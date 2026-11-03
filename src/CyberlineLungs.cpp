@@ -5,30 +5,39 @@
 namespace cyberline {
 
 void CyberlineLungs::process(const ProcessArgs& args) {
-	Mode mode = (Mode) std::round(params[MODE_PARAM].getValue());
-	if (mode < CYCLE) mode = CYCLE;
-	if (mode > PHASOR) mode = PHASOR;
-
-	float depth = rack::math::clamp(
-		params[DEPTH_PARAM].getValue()
-		+ inputs[DEPTHCV_INPUT].getVoltage() * 0.1f, 0.f, 1.f);
-	float effort = params[EFFORT_PARAM].getValue();
-	float inhaleTime = params[INHALE_PARAM].getValue();
-	float maxFlow = params[MAXFLOW_PARAM].getValue();
-
+	// Per-sample trigger/gate edge detection (short pulses must not fall
+	// between 32-sample physics ticks)
 	bool gate = inputs[GATE_INPUT].getVoltage() >= 1.f;
-	bool gateRising = gate && !gateWasHigh;
-	bool gateFalling = !gate && gateWasHigh;
+	if (gate && !gateWasHigh) gateRisePending = true;
+	if (!gate && gateWasHigh) gateFallPending = true;
 	gateWasHigh = gate;
 
 	bool trig = inputs[TRIGGER_INPUT].getVoltage() >= 1.f;
-	bool trigRising = trig && !trigWasHigh;
+	if (trig && !trigWasHigh) trigPending = true;
 	trigWasHigh = trig;
 
 	// ---- physics at control rate ----
 	if (++physCounter >= PHYS_INTERVAL) {
 		physCounter = 0;
 		float dt = PHYS_INTERVAL / args.sampleRate;
+
+		bool trigRising = trigPending;
+		bool gateRising = gateRisePending;
+		bool gateFalling = gateFallPending;
+		trigPending = false;
+		gateRisePending = false;
+		gateFallPending = false;
+
+		Mode mode = (Mode) std::round(params[MODE_PARAM].getValue());
+		if (mode < CYCLE) mode = CYCLE;
+		if (mode > PHASOR) mode = PHASOR;
+
+		float depth = rack::math::clamp(
+			params[DEPTH_PARAM].getValue()
+			+ inputs[DEPTHCV_INPUT].getVoltage() * 0.1f, 0.f, 1.f);
+		float effort = params[EFFORT_PARAM].getValue();
+		float inhaleTime = params[INHALE_PARAM].getValue();
+		float maxFlow = params[MAXFLOW_PARAM].getValue();
 
 			if (mode == PHASOR) {
 				// Phase-driven: the GATE input is the phase CV
@@ -166,7 +175,7 @@ void CyberlineLungs::process(const ProcessArgs& args) {
 	}
 
 	// ---- per-sample output interpolation ----
-	float a = 0.4f; // smoothing toward control-rate targets
+	float a = 0.08f; // smoothing across the 32-sample control block
 	outPressure += (tgtPressure - outPressure) * a;
 	outVolume   += (tgtVolume   - outVolume)   * a;
 	outFlow     += (tgtFlow     - outFlow)     * a;

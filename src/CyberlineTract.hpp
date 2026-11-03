@@ -36,6 +36,10 @@ struct CyberlineTransient {
 };
 
 struct CyberlineTract {
+	float sampleRate = 44100.f;
+	bool initialized = false;
+	bool transientsEnabled = true;
+
 	// Section counts (derived from VTL)
 	int n = 44;              // oral tract sections
 	int noseStart = 32;      // index where nasal branch joins
@@ -72,8 +76,8 @@ struct CyberlineTract {
 	// Coefficients
 	float reflection[TRACT_SECTIONS_MAX + 1];
 	float newReflection[TRACT_SECTIONS_MAX + 1];
-	float reflectionLeft, reflectionRight, reflectionNose;
-	float newReflectionLeft, newReflectionRight, newReflectionNose;
+	float reflectionLeft = 0.f, reflectionRight = 0.f, reflectionNose = 0.f;
+	float newReflectionLeft = 0.f, newReflectionRight = 0.f, newReflectionNose = 0.f;
 	float noseReflection[NOSE_SECTIONS_MAX + 1];
 
 	// Junction outputs (scratch)
@@ -107,20 +111,32 @@ struct CyberlineTract {
 		std::memset(L, 0, sizeof(L));
 		std::memset(Rn, 0, sizeof(Rn));
 		std::memset(Ln, 0, sizeof(Ln));
+		std::memset(reflection, 0, sizeof(reflection));
+		std::memset(newReflection, 0, sizeof(newReflection));
+		std::memset(noseReflection, 0, sizeof(noseReflection));
+		std::memset(jr, 0, sizeof(jr));
+		std::memset(jl, 0, sizeof(jl));
+		std::memset(jrn, 0, sizeof(jrn));
+		std::memset(jln, 0, sizeof(jln));
 		std::memset(amplitude, 0, sizeof(amplitude));
 		std::memset(noseAmplitude, 0, sizeof(noseAmplitude));
+		reflectionLeft = reflectionRight = reflectionNose = 0.f;
+		newReflectionLeft = newReflectionRight = newReflectionNose = 0.f;
 		for (int i = 0; i < TRACT_TRANSIENTS_MAX; i++) transients[i].living = false;
 		transientCount = 0;
 		lastObstruction = -1;
+		lastNoseOutput = 0.f;
+		initialized = false;
 		setTractLength(44);
 		setTongue(tongueIndex, tongueDiameter);
+		syncReflections();
 	}
 
 	// VTL in cm -> section count: n = VTL * 2 * SR / c. Call on sample-rate
-	// or VTL change. Preserves nothing (geometry re-derives); acceptable
-	// because VTL changes are rare and CV-sweeps cross section boundaries
-	// infrequently at audio rates.
-	void setGeometry(float vtlCm, float sampleRate) {
+	// or VTL change. Preserves per-section smoothed state when section count
+	// changes so VTL sweeps do not click.
+	void setGeometry(float vtlCm, float sr) {
+		if (sr >= 1000.f) sampleRate = sr;
 		float twoX = 2.f * sampleRate;
 		float c = 35000.f;                 // cm/s
 		int sections = (int) std::round(vtlCm * twoX / c);
@@ -130,6 +146,15 @@ struct CyberlineTract {
 	void setTractLength(int sections) {
 		if (sections < 8) sections = 8;
 		if (sections > 176) sections = 176;
+		if (initialized && sections == n) return;
+
+		int oldN = n;
+		int oldNoseLen = noseLength;
+		float oldDiam[TRACT_SECTIONS_MAX];
+		if (initialized) {
+			std::memcpy(oldDiam, diameter, sizeof(float) * oldN);
+		}
+
 		n = sections;
 		bladeStart = (int) std::floor(10.f * n / 44.f);
 		tipStart = (int) std::floor(32.f * n / 44.f);
@@ -147,7 +172,26 @@ struct CyberlineTract {
 			if (i < bladeStart) d = 0.6f;
 			else if (i < (int) std::floor(12.f * n / 44.f)) d = 1.1f;
 			else d = 1.5f;
-			diameter[i] = restDiameter[i] = targetDiameter[i] = d;
+			restDiameter[i] = targetDiameter[i] = d;
+			if (initialized && oldN > 1) {
+				// Resample previous smoothed diameter to preserve state
+				float src = (float) i * (float) (oldN - 1) / (float) (n - 1);
+				int s0 = (int) std::floor(src);
+				int s1 = (s0 + 1 < oldN) ? s0 + 1 : s0;
+				float frac = src - (float) s0;
+				diameter[i] = oldDiam[s0] * (1.f - frac) + oldDiam[s1] * frac;
+			} else {
+				diameter[i] = d;
+			}
+		}
+		if (initialized) {
+			for (int i = oldN; i < n; i++) {
+				R[i] = L[i] = amplitude[i] = 0.f;
+			}
+			for (int i = oldNoseLen; i < noseLength; i++) {
+				Rn[i] = Ln[i] = noseAmplitude[i] = 0.f;
+			}
+			tongueIndex = tongueIndex * (float) n / (float) oldN;
 		}
 		for (int i = 0; i < noseLength; i++) {
 			float d = 2.f * ((float) i / (float) noseLength);
@@ -156,13 +200,26 @@ struct CyberlineTract {
 			noseDiameter[i] = noseTargetDiameter[i] = dn;
 		}
 		noseDiameter[0] = velum;
-		calculateReflections();
+		if (initialized) {
+			setTongue(tongueIndex, tongueDiameter);
+		}
 		calculateNoseReflections();
+		calculateReflections();
+		syncReflections();
+		initialized = true;
 	}
 
 	void setTongue(float index, float diam) {
 		tongueIndex = index;
 		tongueDiameter = diam;
+		int pharynxEnd = (int) std::floor(12.f * n / 44.f);
+		for (int i = 0; i < n; i++) {
+			float d;
+			if (i < bladeStart) d = 0.6f;
+			else if (i < pharynxEnd) d = 1.1f;
+			else d = 1.5f;
+			restDiameter[i] = d;
+		}
 		for (int i = bladeStart; i < lipStart; i++) {
 			float t = 1.1f * (float) M_PI * (float) (tongueIndex - i)
 				/ (float) (tipStart - bladeStart);
@@ -171,7 +228,7 @@ struct CyberlineTract {
 			if (i == bladeStart - 2 || i == lipStart - 1) curve *= 0.8f;
 			if (i == bladeStart || i == lipStart - 2) curve *= 0.94f;
 			float d = 1.5f - curve;
-			if (d < 0.05f) d = 0.05f;       // CV safety clamp
+			if (d < 0.f) d = 0.f;           // 0 = full occlusion (stop consonant)
 			if (d > 5.f) d = 5.f;
 			restDiameter[i] = d;
 		}
@@ -235,17 +292,13 @@ struct CyberlineTract {
 			jl[i] = L[i] + w;
 		}
 
-		// three-way junction with nose
+		// three-way junction with nose (crossfaded old -> new)
 		int ns = noseStart;
-		float sum = area(ns) + area(ns + 1) + noseArea(0);
-		newReflectionLeft = (2.f * area(ns) - sum) / sum;
-		newReflectionRight = (2.f * area(ns + 1) - sum) / sum;
-		newReflectionNose = (2.f * noseArea(0) - sum) / sum;
-		float r = newReflectionLeft * (1.f - lambda) + reflectionLeft * lambda;
+		float r = reflectionLeft * (1.f - lambda) + newReflectionLeft * lambda;
 		jl[ns] = r * R[ns - 1] + (1.f + r) * (Ln[0] + L[ns]);
-		r = newReflectionRight * (1.f - lambda) + reflectionRight * lambda;
+		r = reflectionRight * (1.f - lambda) + newReflectionRight * lambda;
 		jr[ns] = r * L[ns] + (1.f + r) * (R[ns - 1] + Ln[0]);
-		r = newReflectionNose * (1.f - lambda) + reflectionNose * lambda;
+		r = reflectionNose * (1.f - lambda) + newReflectionNose * lambda;
 		jrn[0] = r * Ln[0] + (1.f + r) * (L[ns] + R[ns - 1]);
 
 		// mouth update with damping
@@ -296,15 +349,15 @@ struct CyberlineTract {
 
 	float lastNoseOutput = 0.f;
 
-	// Block-rate shape update (call per audio sample or per block).
-	// deltaTime in seconds. Moves diameters toward targets (muscle speed).
+	// Shape update (call once per audio sample before the 2x step pair, or per
+	// block). deltaTime in seconds. Moves diameters toward targets (muscle speed).
 	void reshape(float deltaTime) {
 		float amount = deltaTime * muscleSpeed * 2.f; // section-units per s
 		int newLastObstruction = -1;
 		for (int i = 0; i < n; i++) {
 			float d = diameter[i];
 			float td = targetDiameter[i];
-			if (d <= 0.f) newLastObstruction = i;
+			if (d <= 0.05f) newLastObstruction = i;
 			float slowReturn;
 			if (i < noseStart) slowReturn = 0.6f;
 			else if (i >= tipStart) slowReturn = 1.f;
@@ -316,7 +369,7 @@ struct CyberlineTract {
 			else d = std::fmax(d - stepDown, td);
 			diameter[i] = d;
 		}
-		if (lastObstruction > -1 && newLastObstruction == -1
+		if (transientsEnabled && lastObstruction > -1 && newLastObstruction == -1
 			&& noseArea(0) < 0.05f) {
 			addTransient(lastObstruction);
 		}
@@ -359,7 +412,7 @@ struct CyberlineTract {
 		}
 	}
 
-	// Block-rate coefficient refresh (call after reshape/applyConstriction).
+	// Coefficient refresh (call once per audio sample after reshape).
 	void calculateReflectionsPublic() { calculateReflections(); }
 
 private:
@@ -388,31 +441,64 @@ private:
 		return w * 0.3f;
 	}
 
-	void calculateReflections() {
-		for (int i = 1; i < n; i++) {
-			float a1 = area(i - 1), a2 = area(i);
-			if (a2 == 0.f) newReflection[i] = 0.999f;
-			else newReflection[i] = (a1 - a2) / (a1 + a2);
-		}
+	void syncReflections() {
+		for (int i = 1; i < n; i++) reflection[i] = newReflection[i];
 		reflectionLeft = newReflectionLeft;
 		reflectionRight = newReflectionRight;
 		reflectionNose = newReflectionNose;
 	}
 
+	void calculateReflections() {
+		for (int i = 1; i < n; i++) {
+			reflection[i] = newReflection[i];
+			float a1 = area(i - 1), a2 = area(i);
+			if (a1 + a2 == 0.f) newReflection[i] = 0.f;
+			else if (a2 == 0.f) newReflection[i] = 0.999f;
+			else if (a1 == 0.f) newReflection[i] = -0.999f;
+			else newReflection[i] = (a1 - a2) / (a1 + a2);
+		}
+		reflectionLeft = newReflectionLeft;
+		reflectionRight = newReflectionRight;
+		reflectionNose = newReflectionNose;
+
+		int ns = noseStart;
+		float sum = area(ns) + area(ns + 1) + noseArea(0);
+		if (sum > 0.f) {
+			newReflectionLeft = (2.f * area(ns) - sum) / sum;
+			newReflectionRight = (2.f * area(ns + 1) - sum) / sum;
+			newReflectionNose = (2.f * noseArea(0) - sum) / sum;
+		} else {
+			newReflectionLeft = newReflectionRight = newReflectionNose = 0.f;
+		}
+
+		// Update first nasal junction reflection as velum (noseDiameter[0]) moves
+		if (noseLength > 1) {
+			float na0 = noseArea(0), na1 = noseArea(1);
+			if (na0 + na1 > 0.f)
+				noseReflection[1] = (na0 - na1) / (na0 + na1);
+		}
+	}
+
 	void calculateNoseReflections() {
 		for (int i = 1; i < noseLength; i++) {
 			float a1 = noseArea(i - 1), a2 = noseArea(i);
-			noseReflection[i] = (a1 - a2) / (a1 + a2);
+			if (a1 + a2 == 0.f) noseReflection[i] = 0.f;
+			else noseReflection[i] = (a1 - a2) / (a1 + a2);
 		}
 	}
 
 	void addTurbulence(float noise, float index) {
+		if (index < 0.f || index >= (float) n) return;
 		int i = (int) std::floor(index);
 		float delta = index - (float) i;
-		R[i + 1] += noise * (1.f - delta) * 0.5f;
-		L[i + 1] += noise * (1.f - delta) * 0.5f;
-		R[i + 2] += noise * delta * 0.5f;
-		L[i + 2] += noise * delta * 0.5f;
+		if (i + 1 < n) {
+			R[i + 1] += noise * (1.f - delta) * 0.5f;
+			L[i + 1] += noise * (1.f - delta) * 0.5f;
+		}
+		if (i + 2 < n) {
+			R[i + 2] += noise * delta * 0.5f;
+			L[i + 2] += noise * delta * 0.5f;
+		}
 	}
 
 	void addTransient(int position) {
@@ -431,14 +517,23 @@ private:
 	}
 
 	void processTransients() {
+		if (transientCount <= 0) return;
+		float dt = 0.5f / sampleRate;
 		for (int i = 0; i < TRACT_TRANSIENTS_MAX; i++) {
 			CyberlineTransient* t = &transients[i];
 			if (!t->living) continue;
 			float amp = t->strength
-				* std::pow(2.f, -t->exponent * t->timeAlive);
-			R[t->position] += amp * 0.5f;
-			L[t->position] += amp * 0.5f;
-			t->timeAlive += 0.5f / 44100.f;   // fixed; caller may adjust
+				* std::exp(-0.69314718f * t->exponent * t->timeAlive);
+			int pos = t->position;
+			if (pos >= 0 && pos < n) {
+				R[pos] += amp * 0.5f;
+				L[pos] += amp * 0.5f;
+			}
+			t->timeAlive += dt;
+			if (t->timeAlive >= t->lifeTime) {
+				t->living = false;
+				transientCount--;
+			}
 		}
 	}
 };

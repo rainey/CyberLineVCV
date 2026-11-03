@@ -193,10 +193,12 @@ struct CyberlineHeartCore {
 		// phonocardiogram: decaying-sine thumps + murmur noise
 		float sound = 0.f;
 		for (int i = 0; i < NUM_THUMPS; i++) {
-			thumpAge[i] += sampleTime;
-			sound += thumpAmp[i]
-				* std::exp(-thumpAge[i] / thumpTau[i])
-				* std::sin(6.2831853f * thumpFreq[i] * thumpAge[i]);
+			if (thumpAmp[i] > 1e-4f && thumpAge[i] < 8.f * thumpTau[i]) {
+				thumpAge[i] += sampleTime;
+				sound += thumpAmp[i]
+					* std::exp(-thumpAge[i] / thumpTau[i])
+					* std::sin(6.2831853f * thumpFreq[i] * thumpAge[i]);
+			}
 		}
 		sound = sound * 3.5f + murmurGate * 0.8f * (uniform() * 2.f - 1.f);
 		o.sound = heart_clampf(sound, -1.f, 1.f) * in.soundLvl;
@@ -216,7 +218,7 @@ struct CyberlineHeartCore {
 		// ---- per-sample output interpolation (Lungs pattern) ----
 		// one-pole toward the control-rate targets: no stair-stepping on
 		// scopes, no zipper noise when the CVs drive audio-rate targets
-		float a = 0.4f;
+		float a = 0.08f;
 		outVolume   += (tgtVolume   - outVolume)   * a;
 		outPressure += (tgtPressure - outPressure) * a;
 		outFlow     += (tgtFlow     - outFlow)     * a;
@@ -303,16 +305,19 @@ struct CyberlineHeartCore {
 
 		// ---- elastance -> pressures ----
 		// ventricle: base stiffness (compliance) + contraction twitch
-		float Ebase = 0.10f / (0.35f + 0.65f * in.compliance);
-		float ampV = 2.2f * (0.35f + 0.65f * in.contract) * (1.f + 0.35f * symp);
+		// Sympathetic lusitropy slightly relaxes diastolic wall stiffness
+		// while positive inotropy boosts peak systolic elastance.
+		float Ebase = (0.10f / (0.35f + 0.65f * in.compliance)) * (1.f - 0.18f * symp);
+		float ampV = 2.2f * (0.35f + 0.65f * in.contract) * (1.f + 0.50f * symp);
 		float r = 0.05f * period, d = 0.17f * period;
 		float Ev = Ebase + ampV * normTw(tV, r, d);
 		vpres = Ev * vvol;
 
-		// atrium: venous pressure behind it (preload) plus a weaker twitch
-		// fired at the P wave — the "atrial kick" tops up passive filling
-		float venous = 0.05f + 0.09f * fill;
-		float ampA = 0.55f * (0.35f + 0.65f * in.contract);
+		// atrium: venous pressure behind it (preload + sympathetic
+		// venoconstriction) plus a weaker twitch fired at the P wave —
+		// the "atrial kick" tops up passive filling
+		float venous = (0.03f + 0.13f * fill) * (1.f + 0.55f * symp);
+		float ampA = 0.55f * (0.35f + 0.65f * in.contract) * (1.f + 0.25f * symp);
 		float ra = 0.025f * period, da = 0.07f * period;
 		float apres = venous + (0.06f + ampA * normTw(tA, ra, da)) * avol;
 
@@ -322,8 +327,8 @@ struct CyberlineHeartCore {
 
 		bool inflowWas = inflowOpen;
 		inflowOpen = apres > vpres + 0.004f;
-		float kIn = 14.f * (1.f - 0.55f * sten);
-		flowIn = inflowOpen ? fminf(kIn * (apres - vpres), 3.f) : 0.f;
+		float kIn = 14.f * (1.f + 1.1f * symp) * (1.f - 0.55f * sten);
+		flowIn = inflowOpen ? fminf(kIn * (apres - vpres), 5.f) : 0.f;
 		avol = heart_clampf(avol - flowIn * dt, 0.f, 1.f);
 		vvol = heart_clampf(vvol + flowIn * dt, 0.f, 1.f);
 		if (inflowWas && !inflowOpen && vvol > 0.05f) {
@@ -342,8 +347,8 @@ struct CyberlineHeartCore {
 
 		bool outflowWas = outflowOpen;
 		outflowOpen = vpres > apart + 0.004f;
-		float kOut = 8.f / (1.f + 2.2f * afterl) * (1.f - 0.45f * sten);
-		flowOut = outflowOpen ? fminf(kOut * (vpres - apart), 4.f) : 0.f;
+		float kOut = 8.f * (1.f + 0.60f * symp) / (1.f + 2.2f * afterl) * (1.f - 0.45f * sten);
+		flowOut = outflowOpen ? fminf(kOut * (vpres - apart), 6.f) : 0.f;
 		vvol = heart_clampf(vvol - flowOut * dt, 0.f, 1.f);
 		if (outflowWas && !outflowOpen) {
 			// S2: aortic valve closure, end of ejection
@@ -365,13 +370,17 @@ struct CyberlineHeartCore {
 		apart = heart_clampf(apart - leakAo * dt, 0.f, 1.f);
 
 		// ---- arterial Windkessel: ejection fills it, runoff drains it ----
-		float tauW = (0.22f + 0.35f * afterl) * period;
+		float tauW = (0.20f + 0.35f * afterl) / mRateF;
 		float dias = 0.30f + 0.18f * afterl;
 		apart += (dias - apart) * (dt / tauW) + flowOut * dt * 0.8f;
 		apart = heart_clampf(apart, 0.f, 1.2f);
 
-		// venous return refills the atrium
-		avol = heart_clampf(avol + fill * 0.9f * dt, 0.f, 1.f);
+		// venous return refills the atrium toward preload-dependent capacity,
+		// accelerated by sympathetic venoconstriction / muscle pump
+		float vCap = heart_clampf(0.28f + 0.72f * fill, 0.f, 1.f);
+		float vrRate = (0.25f + 1.15f * fill) * (1.f + 1.8f * symp);
+		if (avol < vCap)
+			avol = fminf(avol + vrRate * dt, vCap);
 
 		// murmur gate: stenosis -> turbulence where valves flow open;
 		// regurgitation -> turbulence where pressure builds behind a
@@ -430,9 +439,8 @@ struct CyberlineHeartCore {
 
 	// normalized two-exponential twitch: fast rise (r), slow decay (d)
 	static float normTw(float age, float r, float d) {
-		if (r <= 0.f || d <= 0.f) return 0.f;
-		float t = fmaxf(age, 0.f);
-		float f = (1.f - std::exp(-t / r)) * std::exp(-t / d);
+		if (age <= 0.f || r <= 0.f || d <= 0.f || age > 8.f * d) return 0.f;
+		float f = (1.f - std::exp(-age / r)) * std::exp(-age / d);
 		float ts = r * std::log(1.f + d / r);  // argmax
 		float fmax = (1.f - std::exp(-ts / r)) * std::exp(-ts / d);
 		return fmax > 1e-6f ? f / fmax : 0.f;
@@ -440,7 +448,9 @@ struct CyberlineHeartCore {
 
 	static float g(float x, float c, float s) {
 		float z = (x - c) / s;
-		return std::exp(-0.5f * z * z);
+		float z2 = z * z;
+		if (z2 > 16.f) return 0.f;
+		return std::exp(-0.5f * z2);
 	}
 };
 

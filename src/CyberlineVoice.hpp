@@ -54,6 +54,8 @@ struct CyberlineVoice : rack::engine::Module {
 	float lastSampleRate = 0.f;
 	float storedTension = 0.6f;
 	float storedPressure = 0.8f;
+	float lastFoldLen = -1.f;
+	float cachedAllo = 235.f;
 	int scanIndex = 0;
 
 	CyberlineVoice() {
@@ -85,6 +87,10 @@ struct CyberlineVoice : rack::engine::Module {
 	void onReset() override {
 		glottis.reset();
 		tract.reset();
+		vtlCm = 17.5f;
+		lastSampleRate = 0.f;
+		lastFoldLen = -1.f;
+		scanIndex = 0;
 	}
 };
 

@@ -42,7 +42,8 @@ struct WavWriter {
 		return true;
 	}
 	void write(float x) {
-		if (x > 1.f) x = 1.f; if (x < -1.f) x = -1.f;
+		if (x > 1.f) x = 1.f;
+		if (x < -1.f) x = -1.f;
 		int16_t s = (int16_t)(x * 32767.f);
 		std::fwrite(&s, 2, 1, f); dataBytes += 2;
 	}

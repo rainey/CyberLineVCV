@@ -12,7 +12,7 @@ void CyberlineVoice::process(const ProcessArgs& args) {
 	}
 
 	// ---- block-rate parameters (every 16 samples) ----
-	if ((scanIndex % 16) == 0) {
+	if ((scanIndex++ & 15) == 0) {
 		float tension = rack::math::clamp(
 			params[V_TENSION_PARAM].getValue() + inputs[V_TENSION_INPUT].getVoltage() * 0.1f,
 			0.f, 1.f);
@@ -21,6 +21,18 @@ void CyberlineVoice::process(const ProcessArgs& args) {
 			0.f, 1.f);
 		storedTension = tension;
 		storedPressure = pressure;
+
+		float foldLen = params[V_FOLDLEN_PARAM].getValue();
+		if (foldLen != lastFoldLen) {
+			lastFoldLen = foldLen;
+			cachedAllo = std::pow(10.f, 4.01f - 1.43f * std::log10(foldLen));
+		}
+		float v = inputs[V_PITCH_INPUT].getVoltage();
+		float oct = std::round(params[V_PITCHOCT_PARAM].getValue());
+		float f0 = cachedAllo * std::pow(2.f, v + oct)
+			* std::sqrt(std::fmax(storedTension, 0.01f) / 0.6f);
+		f0 += params[V_PCOUPLE_PARAM].getValue() * storedPressure * 30.f;
+		glottis.setTargets(f0, storedTension, storedPressure, foldLen);
 
 		float vtl = params[V_VTL_PARAM].getValue();
 		if (vtl != vtlCm) {
@@ -41,19 +53,9 @@ void CyberlineVoice::process(const ProcessArgs& args) {
 		tract.applyConstriction();
 	}
 
-	// ---- larynx: pitch + targets ----
-	float foldLen = params[V_FOLDLEN_PARAM].getValue();
-	float allo = std::pow(10.f, 4.01f - 1.43f * std::log10(foldLen));
-	float v = inputs[V_PITCH_INPUT].getVoltage();
-	float oct = std::round(params[V_PITCHOCT_PARAM].getValue());
-	float f0 = allo * std::pow(2.f, v + oct)
-		* std::sqrt(std::fmax(storedTension, 0.01f) / 0.6f);
-	f0 += params[V_PCOUPLE_PARAM].getValue() * storedPressure * 30.f;
-	glottis.setTargets(f0, storedTension, storedPressure);
-
 	// ---- semi-coupled loop: tract probe -> glottis feedback ----
 	float probeP = (tract.R[tract.n / 3] + tract.L[tract.n / 3])
-		* params[V_FB_PARAM].getValue() * 0.1f;
+		* params[V_FB_PARAM].getValue();
 	if (!std::isfinite(probeP)) probeP = 0.f;
 
 	float noise = rack::random::uniform() * 2.f - 1.f;
@@ -63,7 +65,7 @@ void CyberlineVoice::process(const ProcessArgs& args) {
 	// ---- tract ----
 	tract.reshape(args.sampleTime);
 	tract.calculateReflectionsPublic();
-	float exc = voiced * 0.5f;
+	float exc = voiced;
 	float lip = tract.step(exc, 0.f, 0.f, noise, 0.5f);
 	lip = tract.step(exc, 0.f, 0.f, noise, 1.0f);
 	float nose = tract.lastNoseOutput;
@@ -73,7 +75,6 @@ void CyberlineVoice::process(const ProcessArgs& args) {
 	outputs[V_NOSE_OUTPUT].setVoltage(rack::math::clamp(nose * 5.f, -5.f, 5.f));
 	lights[V_PHASE_LIGHT].setSmoothBrightness(
 		glottis.noiseModulator, args.sampleTime);
-	scanIndex++;
 }
 
 } // namespace cyberline

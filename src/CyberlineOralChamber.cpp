@@ -12,8 +12,7 @@ void CyberlineOralChamber::process(const ProcessArgs& args) {
 	}
 
 	// ---- block-rate parameter read (every 16 samples) ----
-	bool blockUpdate = (scanIndex % 16) == 0;
-	if (blockUpdate) {
+	if ((blockCounter++ & 15) == 0) {
 		float vtl = params[VTL_PARAM].getValue();
 		if (vtl != vtlCm) {
 			vtlCm = vtl;
@@ -24,7 +23,7 @@ void CyberlineOralChamber::process(const ProcessArgs& args) {
 		// (stop consonants), ~6 = neutral tract, top = wide open.
 		// setTongue maps tongue diameter dia to a tract minimum of
 		// d_min = 0.3 + (dia-2)/1.5, so this knob value inverts that:
-		// dia = 1.5 + ty*3.8  ->  d_min ~= 2.53*ty - 0.03 (clamped at 0.05),
+		// dia = 1.5 + ty*3.8  ->  d_min ~= 2.53*ty - 0.03 (clamped at 0),
 		// i.e. closed at 0, neutral (1.5) at ~6, wide (2.5) at 10.
 		float tx = rack::math::clamp(params[TONGUEX_PARAM].getValue()
 			+ inputs[TONGUEX_INPUT].getVoltage(), 0.f, 10.f) / 10.f;
@@ -65,10 +64,9 @@ void CyberlineOralChamber::process(const ProcessArgs& args) {
 
 	float source = inputs[SOURCE_INPUT].getVoltage() * 0.2f;
 	float inject = inputs[INJECT_INPUT].getVoltage() * 0.2f;
-	float injPos = params[INJPOS_PARAM].getValue() * 0.1f * (tract.n - 2);
-	if (inputs[INJPOS_INPUT].isConnected())
-		injPos = rack::math::clamp(inputs[INJPOS_INPUT].getVoltage() * 0.1f,
-			0.f, 1.f) * (tract.n - 2);
+	float injPos = rack::math::clamp(
+		params[INJPOS_PARAM].getValue() + inputs[INJPOS_INPUT].getVoltage(),
+		0.f, 10.f) * 0.1f * (tract.n - 2);
 	float noise = rack::random::uniform() * 2.f - 1.f;
 
 	// 2x oversample stepping
@@ -83,13 +81,12 @@ void CyberlineOralChamber::process(const ProcessArgs& args) {
 	if (scanIndex >= tract.n) scanIndex = 0;
 	outputs[SHAPE_OUTPUT].setVoltage(
 		rack::math::clamp(tract.amplitude[scanIndex] * 5.f, 0.f, 8.f));
+	scanIndex++;
 
 	// PROBE: pressure at ~mid oral section (R+L sum at probe index)
 	int probe = tract.n / 3;
 	float p = (tract.R[probe] + tract.L[probe]) * 5.f;
 	outputs[PROBE_OUTPUT].setVoltage(rack::math::clamp(p, -8.f, 8.f));
-
-	scanIndex++;
 }
 
 } // namespace cyberline

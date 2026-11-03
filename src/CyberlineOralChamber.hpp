@@ -50,6 +50,7 @@ struct CyberlineOralChamber : rack::engine::Module {
 
 	// SHAPE scan: one section amplitude per audio sample, cycling
 	int scanIndex = 0;
+	int blockCounter = 0;
 
 	CyberlineOralChamber() {
 		config(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS);
@@ -79,6 +80,13 @@ struct CyberlineOralChamber : rack::engine::Module {
 	}
 
 	void process(const ProcessArgs& args) override;
+	void onReset() override {
+		tract.reset();
+		vtlCm = 17.5f;
+		lastSampleRate = 0.f;
+		scanIndex = 0;
+		blockCounter = 0;
+	}
 };
 
 } // namespace cyberline

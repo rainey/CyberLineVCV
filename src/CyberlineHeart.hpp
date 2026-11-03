@@ -53,6 +53,7 @@ struct CyberlineHeart : rack::engine::Module {
 	};
 
 	CyberlineHeartCore core;
+	CyberlineHeartCore::Params cachedParams;
 
 	CyberlineHeart() {
 		config(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS);
@@ -90,25 +91,26 @@ struct CyberlineHeart : rack::engine::Module {
 		if (args.sampleRate != core.sampleRate)
 			core.setSampleRate(args.sampleRate);
 
-		CyberlineHeartCore::Params p;
-		p.mass = params[MASS_PARAM].getValue();
-		p.rate = params[RATE_PARAM].getValue();
-		p.avDelay = params[AVDELAY_PARAM].getValue();
-		p.fill = params[FILL_PARAM].getValue();
-		p.drive = params[DRIVE_PARAM].getValue();
-		p.afterload = params[AFTERLOAD_PARAM].getValue();
-		p.contract = params[CONTRACT_PARAM].getValue();
-		p.compliance = params[COMPLIANCE_PARAM].getValue();
-		p.valve = params[VALVE_PARAM].getValue();
-		p.hrv = params[HRV_PARAM].getValue();
-		p.irrit = params[IRRIT_PARAM].getValue();
-		p.soundLvl = params[SOUNDLVL_PARAM].getValue();
-		p.fillCv = inputs[FILLCV_INPUT].getVoltage();
-		p.driveCv = inputs[DRIVECV_INPUT].getVoltage();
-		p.afterloadCv = inputs[AFTERLOADCV_INPUT].getVoltage();
-		p.pacing = inputs[PACING_INPUT].getVoltage() >= 1.f;
+		if (core.physCounter + 1 >= CyberlineHeartCore::PHYS_INTERVAL) {
+			cachedParams.mass = params[MASS_PARAM].getValue();
+			cachedParams.rate = params[RATE_PARAM].getValue();
+			cachedParams.avDelay = params[AVDELAY_PARAM].getValue();
+			cachedParams.fill = params[FILL_PARAM].getValue();
+			cachedParams.drive = params[DRIVE_PARAM].getValue();
+			cachedParams.afterload = params[AFTERLOAD_PARAM].getValue();
+			cachedParams.contract = params[CONTRACT_PARAM].getValue();
+			cachedParams.compliance = params[COMPLIANCE_PARAM].getValue();
+			cachedParams.valve = params[VALVE_PARAM].getValue();
+			cachedParams.hrv = params[HRV_PARAM].getValue();
+			cachedParams.irrit = params[IRRIT_PARAM].getValue();
+			cachedParams.fillCv = inputs[FILLCV_INPUT].getVoltage();
+			cachedParams.driveCv = inputs[DRIVECV_INPUT].getVoltage();
+			cachedParams.afterloadCv = inputs[AFTERLOADCV_INPUT].getVoltage();
+		}
+		cachedParams.soundLvl = params[SOUNDLVL_PARAM].getValue();
+		cachedParams.pacing = inputs[PACING_INPUT].getVoltage() >= 1.f;
 
-		auto o = core.process(p);
+		auto o = core.process(cachedParams);
 
 		outputs[VOLUME_OUTPUT].setVoltage(
 			rack::math::clamp(o.volume * 10.f, 0.f, 10.f));
