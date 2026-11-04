@@ -61,7 +61,7 @@ struct CyberlineLungs : rack::engine::Module {
 	bool syncPending = false;
 	bool gateRisePending = false;
 	bool gateFallPending = false;
-	float cycleTimer = 0.f;  // s since current breath started (CYCLE period floor)
+	float cycleTimer = 999.f;  // s since current breath started (starts immediately in CYCLE)
 
 	// Output interpolation (per sample)
 	float outPressure = 0.f, outVolume = 0.f, outFlow = 0.f, outPhase = 0.f;
@@ -97,7 +97,7 @@ struct CyberlineLungs : rack::engine::Module {
 	void reset() {
 		volume = 0.f; pressure = 0.f; flow = 0.f; phase = 0.f;
 		inhaling = false; exhaling = false;
-		closedBurstTarget = 0.f; cycleTimer = 0.f;
+		closedBurstTarget = 0.f; cycleTimer = 999.f;
 		gateWasHigh = trigWasHigh = syncWasHigh = false;
 		trigPending = syncPending = gateRisePending = gateFallPending = false;
 		lastPhasorVolume = 0.f;

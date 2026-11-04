@@ -45,8 +45,21 @@ rack:
 	@./scripts/rackplay.sh
 
 # ---- harness quick-run ----
-#   make test     build + run the Heart anchors (bpm/stroke/ectopics/etc.)
+#   make test          build + run the Heart anchors (bpm/stroke/ectopics/etc.)
+#   make test-modules  build + run the full module-level integration tests (Lungs, Broca, Poly, etc.)
 .PHONY: test
 test:
 	@g++ -O2 -std=c++11 -o /tmp/opencode/render_heart tests/render_heart.cpp
 	@/tmp/opencode/render_heart /tmp/opencode/heart.wav
+
+.PHONY: test-modules
+test-modules:
+	@RACK=$${RACK_LIB_DIR:-/tmp/opencode/rack241/Rack2Free}; \
+	D=../JayBird/src/Rack/dep; \
+	nice -n 10 g++ -std=c++11 -O2 -march=nehalem -DARCH_X64 -DARCH_LIN \
+	  -I$$D/nanovg/src -I$$D/nanosvg/src -I$$D/glfw/include -I$$D/oui-blendish -I$$D/pffft \
+	  -I../JayBird/src/Rack/include -I$$D/include \
+	  -o /tmp/test_modules tests/test_modules.cpp \
+	  src/CyberlineLungs.cpp src/CyberlineBroca.cpp src/CyberlineOralChamber.cpp \
+	  src/CyberlineLarynx.cpp src/CyberlineVoice.cpp \
+	  -L$$RACK -lRack -Wl,-rpath,$$RACK && /tmp/test_modules

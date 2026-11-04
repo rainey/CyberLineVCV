@@ -120,7 +120,7 @@ reimplemented from the 1985 paper, plus guards and modular control).
 | # | Name | Range | Notes |
 |---|---|---|---|
 | L1 | F0 (V/OCT) | 1 V/oct | base pitch; knob is octave offset |
-| L2 | TENSION | 0–10 V → 0–1 | fold tension → `Rd`; register feel (chest↔falsetto) |
+| L2 | TENS / POLY | 0–10 V → 0–1 | fold tension → `Rd`; register feel (chest↔falsetto). Accepts 3-channel poly cable from Broca (Ch 0: Tension offset, Ch 1: Pressure scale when unpatched, Ch 2: Voicing) |
 | L3 | PRESSURE | 0–10 V → 0–1 | subglottal pressure; loudness + optional pitch coupling |
 | L4 | FEEDBACK | audio | tract loading; see FEEDBACK GAIN |
 | L5 | DRIFT CV | ±5 V | adds to internal drift noise |
@@ -173,13 +173,14 @@ branch, turbulence injection, transient pops, external-source injection.
 |---|---|---|---|
 | C1 | SOURCE | audio | the excitation (usually Larynx VOICED); injected at glottal end |
 | C2 | INJECT | audio | second source, injected at INJECT POS |
-| C3 | TONGUE X | 0–10 V → position | blade→tip index |
-| C4 | TONGUE Y | 0–10 V → diameter | constriction depth |
-| C5 | VEUM (VELUM) | 0–10 V → 0–1 | nasal branch opening |
+| C3 | TNGX / POLY | 0–10 V → position | blade→tip index. Accepts 6- to 9-channel poly cable from Broca (Ch 0: TNG X, Ch 1: TNG Y, Ch 2: VELUM, Ch 3: C.POS, Ch 4: C.WIDTH, Ch 5: FRIC) |
+| C4 | TONGUE Y | 0–10 V → diameter | constriction depth (quadratic curve: close, mid, open) |
+| C5 | VELUM | 0–10 V → 0–1 | nasal branch opening |
 | C6 | CONSTR POS | 0–10 V → position | explicit constriction (teeth/tongue-tip) |
-| C7 | CONSTR WIDTH | 0–10 V → width | |
+| C7 | CONSTR WIDTH | 0–10 V → width | constriction aperture width |
 | C8 | FRICATIVE | 0–10 V → amount | noise gain injected at constriction |
 | C9 | INJECT POS | 0–10 V → position | where C2 enters the tube |
+| C10 | VTL CV | 0–10 V | modulates vocal tract length (+5.4 cm/V) |
 
 ### Outputs
 
@@ -235,6 +236,22 @@ radiation outputs so it can still feed external effects. Effectively a
 mini-flagship; shares the exact DSP classes with the atoms (no duplicate
 implementations).
 
+### Polyphonic Integration
+- **TNGX / POLY:** When fed a 9-channel polyphonic cable from `cyberline-broca`'s
+  `TRACT POLY` output, Voice auto-maps all 9 parameters across both the tract
+  filter and glottal source:
+  - Ch 0: Tongue X offset (-5..+5 V)
+  - Ch 1: Tongue Y offset (-5..+5 V)
+  - Ch 2: Velum opening (0..10 V)
+  - Ch 3: Constriction Position (0..10 V)
+  - Ch 4: Constriction Width offset (-5..+5 V)
+  - Ch 5: Fricative turbulence (0..10 V)
+  - Ch 6: Vocal fold tension offset
+  - Ch 7: Glottal pressure envelope (0..10 V)
+  - Ch 8: Voicing amount (0..10 V: 10 V modal vibration, 0 V voiceless aspiration)
+- **TENS / POLY:** Accepts a 3-channel poly cable from Broca's `LARYNX POLY`
+  (Ch 0: Tension, Ch 1: Pressure, Ch 2: Voicing).
+
 Extra knob unique to Voice: none in v1 beyond convenience layout — keeps it
 honest. (Larynx height / integrated-coupling parameters belong to the v2
 flagship.)
@@ -253,12 +270,13 @@ than from per-stage curve menus.
 | G1 | TRIGGER | edge | starts one breath (one-shot envelope: inhale runs to DEPTH, exhale begins automatically — no sustained level needed); retrigger mid-exhale = catch-breath |
 | G2 | GATE | 0/1 | breath pedal (all modes except PHASOR): rising edge starts a breath; held high = inhale to DEPTH and HOLD (cuts an in-progress exhale); release = exhale from current volume. **In PHASOR mode this input is the phase CV** (0–10 V → 0–1) |
 | G3 | DEPTH CV | 0–10 V → 0–1 | modulates tidal volume |
+| G4 | SYNC | edge | hard cycle reset (trigger): zeroes volume and timer, restarts a fresh inhale immediately from 0 V |
 
 ### Outputs
 
 | # | Name | Notes |
 |---|---|---|
-| O1 | PRESSURE | 0–10 V; main output, patches directly into Larynx PRESSURE |
+| O1 | PRESSURE | 0–10 V (or -5..+10 V with suction); main output, patches directly into Larynx PRESSURE |
 | O2 | VOLUME | CV 0–1, current lung volume (the "fuel gauge") |
 | O3 | FLOW | signed CV: + during inhale, − during exhale; patchable (noise gates, filters, whistles) |
 | O4 | PHASE | gate, high during exhale (voiced air) |
@@ -268,11 +286,12 @@ than from per-stage curve menus.
 | Knob/switch | Default | Notes |
 |---|---|---|
 | MODE | CYCLE | CYCLE (free breathing), TRIG (one-shot envelope), CLOSED (air retained after exhale — whale-style recycling), PHASOR (phase-driven; see below) |
-| RATE | 12/min | breathing rate in CYCLE mode |
+| RATE | 12/min | breathing rate in CYCLE mode; scales the baseline expiratory phrase duration |
 | DEPTH | 0.7 | tidal volume; in TRIG/CLOSED also sets envelope sustain *duration* (energy-limited) |
-| INHALE | 0.4 s | time to fill |
-| MAX FLOW | — | inhale speed ceiling (calm ↔ gasp) |
-| EFFORT | 0.5 | 0 = pure elastic recoil decay (exponential), 1 = actively flattened plateau (speech-like sustain) until volume is spent |
+| INHALE | 0.4 s | time to fill (quick singer catch-breath to deep yawn) |
+| MAX FLOW | 0.4 | airway conductance ceiling; adjusts exhale venting from conserved sustain (0) to rapid puff (1) |
+| EFFORT | 0.65 | muscular regulation / appoggio (0 = pure exponential elastic recoil decay, 1 = regulated plateau sustain) |
+| INH MUTE | Mute | 2-position switch: Mute (0 V during inhale) vs Suction (-P / negative pressure during inhale gasp) |
 
 ### DSP notes
 
@@ -350,6 +369,7 @@ schedules the ECG shapes every other output.
 | H2 | FILL CV | 0–10 V | added to the FILL knob (venous return / preload) |
 | H3 | DRIVE CV | −5..+5 V | added to the DRIVE knob (autonomic tone) |
 | H4 | AFTERLOAD CV | 0–10 V | added to the AFTERLOAD knob |
+| H5 | SYNC | trigger | hard cycle reset (trigger): instantaneously resets the cardiac activation clock |
 
 ### Outputs
 
@@ -459,6 +479,111 @@ dynamics between two hearts:
   patch stands in for the pulmonary/systemic split (see OUTFLOW).
 - Reptile shunt, insect dorsal vessel (peristaltic, separate module),
   species ECG tables, named arrhythmias (AFib/PVC/heart-block): parked v2.
+
+## 5d. `cyberline-broca` — Broca (Broca-Brika Articulatory Cortex)
+
+Articulatory motor cortex & phoneme generator. Orchestrates anatomical targets
+for the vocal tract filter and glottal source by morphing between cardinal
+vowels and triggering consonant onsets across two polyphonic buses (`TRACT POLY`
+and `LARYNX POLY`).
+
+```
+           ┌────────────────────── cyberline-broca ───────────────────────┐
+           │                                                              │
+[TRIG]────▶│ Syllable Onset Generator                                     │
+[SYNC]────▶│ (Consonant closure ──▶ Plosive burst ──▶ Vowel release)      │
+           │                                                              │
+           │  • 12 Cardinal Vowels (A/B interpolation via V.MORPH)        │
+           │  • 21 Consonant Targets (Stops, Fricatives, Nasals, Glides)  │
+           │                                                              │
+           └──────┬────────────────────────┬─────────────┬────────────┬───┘
+                  │ 9-channel              │ 3-channel   │            │
+                  ▼                        ▼             ▼            ▼
+             [TRACT POLY]            [LARYNX POLY]    [CV.ENV]     [BURST]
+                  │                        │
+                  ├─▶ Oral Chamber         └─▶ Larynx
+                  │   (Ch 1-6 tract)           (Ch 1-3 source)
+                  ▼
+                Voice
+                (Ch 1-9 single cable)
+```
+
+### Parameters
+
+| Knob | Default | Range | Notes |
+|---|---|---|---|
+| VOWEL A | EE (/i/) | 0–11 | selects primary vowel target |
+| V.MORPH | 0.0 | 0–1 | smooth continuous crossfade from Vowel A to Vowel B |
+| VOWEL B | OO (/u/) | 0–11 | selects secondary vowel target |
+| CONSONANT | S (/s/) | 0–20 | selects consonant target across 4 manner classes |
+| C/V MORPH | 0.0 | 0–1 | consonant vs vowel mix (0 = vowel dominant, 1 = consonant held) |
+| ONSET | 0.08 s | 0.01–0.5 s | consonant attack / release transition duration |
+
+### Inputs
+
+| # | Name | Range | Notes |
+|---|---|---|---|
+| B1 | SYNC | trigger | hard cycle reset: resets syllable cycle and cyclical scan step to 0 |
+| B2 | TRIG | trigger | fires consonant onset → vowel release; when SYNC is patched and VOWEL CV unpatched, steps cyclically through vowel table |
+| B3 | VOWEL A CV | ±5 V / 0–10 V | CV scan through the 12 cardinal vowels |
+| B4 | V.MRPH CV | 0–10 V | CV modulation of VOWEL A/B morph position |
+| B5 | CONS CV | ±5 V / 0–10 V | CV scan through the 21 consonants |
+| B6 | C/V CV | 0–10 V | CV modulation of consonant/vowel balance |
+
+### Outputs
+
+| # | Name | Notes |
+|---|---|---|
+| O1 | TRACT POLY | 9-channel polyphonic bus: drives `cyberline-oral-chamber` (Ch 1–6) or `cyberline-voice` (Ch 1–9) |
+| O2 | LARYNX POLY | 3-channel polyphonic bus: drives `cyberline-larynx` (Ch 1–3) |
+| O3 | CV.ENV | mono 0–10 V CV envelope reflecting current consonant-to-vowel blend |
+| O4 | BURST | mono 0–10 V gate firing during plosive release and frication |
+
+### Polyphonic Bus Channel Layout
+
+#### `TRACT POLY` (9 Channels)
+- **Ch 0: Tongue X** (-5..+5 V offset relative to 5.0 neutral).
+- **Ch 1: Tongue Y** (-5..+5 V offset relative to 5.0 neutral).
+- **Ch 2: Velum** (0..10 V nasal port opening; 10 V on /m/, /n/, /ŋ/).
+- **Ch 3: Constriction Pos** (0..10 V; teeth, alveolar ridge, palate, velum).
+- **Ch 4: Constriction Width** (-5..+5 V offset relative to 5.0 neutral; narrows to -5 V for stop closure).
+- **Ch 5: Fricative** (0..10 V turbulence injection level).
+- **Ch 6: Tension** (0 V offset; preserves receiver's knob setting).
+- **Ch 7: Pressure** (0..10 V glottal driving pressure envelope).
+- **Ch 8: Voicing** (10 V voiced modal vibration, 0 V voiceless aspiration).
+
+#### `LARYNX POLY` (3 Channels)
+- **Ch 0: Tension** (0 V offset).
+- **Ch 1: Pressure** (0..10 V envelope).
+- **Ch 2: Voicing** (10 V voiced, 0 V voiceless).
+
+### Cardinal Vowel Table (12 Vowels)
+
+| Code | IPA | Tongue X | Tongue Y | Lip Width | Lip Pos | Description |
+|---|---|---|---|---|---|---|
+| EE | /i/ | 8.5 | 2.1 | 10.0 | 0.0 | Close front unrounded (fleece) |
+| IH | /ɪ/ | 7.5 | 3.5 | 10.0 | 0.0 | Near-close near-front (kit) |
+| EH | /ɛ/ | 6.8 | 5.0 | 10.0 | 0.0 | Open-mid front unrounded (dress) |
+| AE | /æ/ | 6.2 | 7.5 | 10.0 | 0.0 | Near-open front unrounded (trap) |
+| AH | /ɑ/ | 3.5 | 9.0 | 10.0 | 0.0 | Open back unrounded (palm / father) |
+| AW | /ɔ/ | 2.8 | 6.8 | 6.5 | 9.5 | Open-mid back rounded (thought) |
+| OH | /o/ | 2.5 | 4.5 | 6.0 | 9.5 | Close-mid back rounded (goat) |
+| OO | /u/ | 3.0 | 2.1 | 5.5 | 9.5 | Close back rounded (goose) |
+| UH | /ʊ/ | 4.2 | 3.8 | 7.0 | 9.5 | Near-close near-back rounded (foot) |
+| ER | /ɜːr/| 5.0 | 4.2 | 9.0 | 0.0 | Open-mid central rhotacized (nurse) |
+| OE | /œ/ | 6.5 | 5.2 | 6.5 | 9.5 | Open-mid front rounded (French 'peur') |
+| UE | /y/ | 8.2 | 2.2 | 5.8 | 9.5 | Close front rounded (German 'über') |
+
+### Consonant Targets & Manners (21 Consonants)
+
+- **Stops:** `/p/` (bilabial), `/b/` (voiced bilabial), `/t/` (alveolar), `/d/` (voiced alveolar), `/k/` (velar), `/g/` (voiced velar), `/ʔ/` (glottal stop).
+  - Feature: Complete constriction closure (`constrWidth = 0`), fast slew (~4 ms) into plosive release, plosive `BURST` gate active. Voiceless stops cut `voicing` to 0.
+- **Fricatives:** `/f/` (labiodental), `/v/` (voiced labiodental), `/θ/` (dental 'th'), `/s/` (alveolar), `/z/` (voiced alveolar), `/ʃ/` ('sh'), `/h/` (glottal fricative).
+  - Feature: Narrow constriction aperture, high `fricative` turbulence injection, plosive/frication `BURST` output active. Voiceless fricatives drop `voicing` to 0, sustaining modal breath turbulence without fold pulses.
+- **Nasals:** `/m/` (bilabial), `/n/` (alveolar), `/ŋ/` (velar 'ng').
+  - Feature: Oral closure combined with full `velum` port opening (1.0), radiating resonant sound through the nasal tract.
+- **Glides / Approximants:** `/w/` (labiovelar), `/l/` (lateral), `/r/` (retroflex), `/j/` (palatal 'y').
+  - Feature: Open constriction aperture, full modal voicing, smooth vocalic transitions.
 
 ## 6. Panels
 

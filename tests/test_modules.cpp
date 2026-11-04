@@ -170,6 +170,10 @@ static void test_broca_channels_and_vowels() {
 	args.sampleRate = 48000.f;
 	args.sampleTime = 1.f / 48000.f;
 
+	// In Rack's Port model, an output must have a connected cable before setChannels() takes effect
+	broca.outputs[CyberlineBroca::TRACT_POLY_OUTPUT].channels = 1;
+	broca.outputs[CyberlineBroca::LARYNX_POLY_OUTPUT].channels = 1;
+
 	// Process one frame to initialize
 	broca.process(args);
 
@@ -184,12 +188,12 @@ static void test_broca_channels_and_vowels() {
 	broca.params[CyberlineBroca::VOWELB_PARAM].setValue(4.f); // OO
 	broca.params[CyberlineBroca::VMORPH_PARAM].setValue(0.f); // Pure EE
 
-	// Run 200 samples to settle smoothing filters
-	for (int i = 0; i < 200; i++) broca.process(args);
+	// Run 0.1s to allow 14ms slew filter to fully settle
+	for (int i = 0; i < (int)(0.1f * args.sampleRate); i++) broca.process(args);
 	float eeTongueX = broca.outputs[CyberlineBroca::TRACT_POLY_OUTPUT].getVoltage(0);
 
 	broca.params[CyberlineBroca::VMORPH_PARAM].setValue(1.f); // Pure OO
-	for (int i = 0; i < 200; i++) broca.process(args);
+	for (int i = 0; i < (int)(0.1f * args.sampleRate); i++) broca.process(args);
 	float ooTongueX = broca.outputs[CyberlineBroca::TRACT_POLY_OUTPUT].getVoltage(0);
 
 	std::printf("  Vowel EE TongueX offset: %.3f V, Vowel OO TongueX offset: %.3f V\n",
@@ -209,6 +213,9 @@ static void test_broca_consonants_and_sync() {
 	rack::engine::Module::ProcessArgs args;
 	args.sampleRate = 48000.f;
 	args.sampleTime = 1.f / 48000.f;
+
+	broca.outputs[CyberlineBroca::TRACT_POLY_OUTPUT].channels = 1;
+	broca.outputs[CyberlineBroca::LARYNX_POLY_OUTPUT].channels = 1;
 
 	// Settle
 	for (int i = 0; i < 100; i++) broca.process(args);
@@ -295,14 +302,16 @@ static void test_poly_normalling_oral_chamber() {
 	args.sampleRate = 48000.f;
 	args.sampleTime = 1.f / 48000.f;
 
+	broca.outputs[CyberlineBroca::TRACT_POLY_OUTPUT].channels = 1;
+	broca.outputs[CyberlineBroca::LARYNX_POLY_OUTPUT].channels = 1;
+
 	// Initial step
 	broca.process(args);
 
 	// Patch Broca TRACT POLY to Oral Chamber TONGUEX_INPUT (TNGX/POLY)
-	// (Simulate Rack patch cable copying poly voltages)
 	auto patchTractBus = [&]() {
 		int n = broca.outputs[CyberlineBroca::TRACT_POLY_OUTPUT].getChannels();
-		chamber.inputs[CyberlineOralChamber::TONGUEX_INPUT].setChannels(n);
+		chamber.inputs[CyberlineOralChamber::TONGUEX_INPUT].channels = n;
 		for (int c = 0; c < n; c++) {
 			chamber.inputs[CyberlineOralChamber::TONGUEX_INPUT].setVoltage(
 				broca.outputs[CyberlineBroca::TRACT_POLY_OUTPUT].getVoltage(c), c);
@@ -311,15 +320,16 @@ static void test_poly_normalling_oral_chamber() {
 
 	// Test VTL CV modulation on Oral Chamber
 	chamber.params[CyberlineOralChamber::VTL_PARAM].setValue(17.5f);
+	chamber.inputs[CyberlineOralChamber::VTL_INPUT].channels = 1;
 	chamber.inputs[CyberlineOralChamber::VTL_INPUT].setVoltage(0.f);
-	chamber.process(args);
+	for (int i = 0; i < 32; i++) chamber.process(args);
 	CHECK(std::fabs(chamber.vtlCm - 17.5f) < 0.1f, "VTL default is 17.5 cm");
 
-	// Add 5V CV to VTL input (scaled +1.5 cm/V = +7.5 cm -> 25.0 cm)
-	chamber.inputs[CyberlineOralChamber::VTL_INPUT].setVoltage(5.0f);
-	chamber.process(args);
-	std::printf("  Oral Chamber VTL at 5V CV: %.2f cm\n", chamber.vtlCm);
-	CHECK(std::fabs(chamber.vtlCm - 25.0f) < 0.2f, "VTL CV modulates effective tract length to 25.0 cm");
+	// Add 1.0V CV to VTL input (scaled +5.4 cm/V -> 22.9 cm)
+	chamber.inputs[CyberlineOralChamber::VTL_INPUT].setVoltage(1.0f);
+	for (int i = 0; i < 32; i++) chamber.process(args);
+	std::printf("  Oral Chamber VTL at 1V CV: %.2f cm\n", chamber.vtlCm);
+	CHECK(std::fabs(chamber.vtlCm - 22.9f) < 0.2f, "VTL CV modulates effective tract length to 22.9 cm");
 	chamber.inputs[CyberlineOralChamber::VTL_INPUT].setVoltage(0.f);
 
 	// Set Broca to nasal /M/ and trigger
@@ -337,6 +347,7 @@ static void test_poly_normalling_oral_chamber() {
 
 	float maxNoseOut = 0.f;
 	// Feed a test excitation into Chamber's SOURCE_INPUT
+	chamber.inputs[CyberlineOralChamber::SOURCE_INPUT].channels = 1;
 	for (int i = 0; i < (int)(0.08f * args.sampleRate); i++) {
 		broca.process(args);
 		patchTractBus();
@@ -362,12 +373,15 @@ static void test_poly_normalling_larynx_and_voice() {
 	args.sampleRate = 48000.f;
 	args.sampleTime = 1.f / 48000.f;
 
+	broca.outputs[CyberlineBroca::TRACT_POLY_OUTPUT].channels = 1;
+	broca.outputs[CyberlineBroca::LARYNX_POLY_OUTPUT].channels = 1;
+
 	broca.process(args);
 
 	// Patch Broca LARYNX_POLY_OUTPUT to Larynx TENSION_INPUT (TENS/POLY)
 	auto patchLarynxBus = [&]() {
 		int n = broca.outputs[CyberlineBroca::LARYNX_POLY_OUTPUT].getChannels();
-		larynx.inputs[CyberlineLarynx::TENSION_INPUT].setChannels(n);
+		larynx.inputs[CyberlineLarynx::TENSION_INPUT].channels = n;
 		for (int c = 0; c < n; c++) {
 			larynx.inputs[CyberlineLarynx::TENSION_INPUT].setVoltage(
 				broca.outputs[CyberlineBroca::LARYNX_POLY_OUTPUT].getVoltage(c), c);
@@ -377,7 +391,7 @@ static void test_poly_normalling_larynx_and_voice() {
 	// Patch Broca TRACT_POLY_OUTPUT to Voice V_TONGUEX_INPUT (TNGX/POLY)
 	auto patchVoiceBus = [&]() {
 		int n = broca.outputs[CyberlineBroca::TRACT_POLY_OUTPUT].getChannels();
-		voice.inputs[CyberlineVoice::V_TONGUEX_INPUT].setChannels(n);
+		voice.inputs[CyberlineVoice::V_TONGUEX_INPUT].channels = n;
 		for (int c = 0; c < n; c++) {
 			voice.inputs[CyberlineVoice::V_TONGUEX_INPUT].setVoltage(
 				broca.outputs[CyberlineBroca::TRACT_POLY_OUTPUT].getVoltage(c), c);
