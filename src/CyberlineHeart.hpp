@@ -32,6 +32,7 @@ struct CyberlineHeart : rack::engine::Module {
 		FILLCV_INPUT,
 		DRIVECV_INPUT,
 		AFTERLOADCV_INPUT,
+		SYNC_INPUT,
 		NUM_INPUTS
 	};
 	enum OutputIds {
@@ -74,6 +75,7 @@ struct CyberlineHeart : rack::engine::Module {
 		configInput(FILLCV_INPUT, "Fill CV (0-10 V)");
 		configInput(DRIVECV_INPUT, "Drive CV (signed: -5..+5 V)");
 		configInput(AFTERLOADCV_INPUT, "Afterload CV (0-10 V)");
+		configInput(SYNC_INPUT, "Sync / Reset (trigger: hard-resets cardiac cycle)");
 		configOutput(VOLUME_OUTPUT, "Fill level (ventricular volume, 0-10 V)");
 		configOutput(PRESSURE_OUTPUT, "Pressure (ventricular, 0-10 V)");
 		configOutput(FLOW_OUTPUT, "Flow (signed CV: + fill, - eject)");
@@ -109,6 +111,7 @@ struct CyberlineHeart : rack::engine::Module {
 		}
 		cachedParams.soundLvl = params[SOUNDLVL_PARAM].getValue();
 		cachedParams.pacing = inputs[PACING_INPUT].getVoltage() >= 1.f;
+		cachedParams.sync = inputs[SYNC_INPUT].getVoltage() >= 1.f;
 
 		auto o = core.process(cachedParams);
 

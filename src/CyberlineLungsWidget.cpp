@@ -531,7 +531,6 @@ struct CyberlineLungsWidget : rack::app::ModuleWidget {
 		nvgStrokeColor(vg, nvgRGBA(0x48, 0xd8, 0xf8, 120));
 		nvgStroke(vg);
 
-		float cx = panelW * 0.5f;
 		float colL = 58.f, colR = 148.f;
 		float inY = 276.f;
 		float outY = 328.f;
@@ -583,10 +582,11 @@ struct CyberlineLungsWidget : rack::app::ModuleWidget {
 		NVGcolor depthCol = nvgRGB(0x4c, 0xa8, 0xe8); // teal-blue (tidal volume / depth)
 		NVGcolor flowCol  = nvgRGB(0xf0, 0x90, 0x54); // warm amber (exhale airflow)
 
-		// Input rings inside the bus bracket
-		drawPortRing(panelW * 0.25f, inY, trigCol, false);  // TRIG
-		drawPortRing(cx,             inY, trigCol, false);  // GATE
-		drawPortRing(panelW * 0.75f, inY, depthCol, false); // DEPTH CV
+		// Input rings inside the bus bracket (SYNC, TRIG, GATE, DEPTH CV)
+		drawPortRing(panelW * 0.15f, inY, trigCol, false);  // SYNC
+		drawPortRing(panelW * 0.38f, inY, trigCol, false);  // TRIG
+		drawPortRing(panelW * 0.62f, inY, trigCol, false);  // GATE
+		drawPortRing(panelW * 0.85f, inY, depthCol, false); // DEPTH CV
 
 		// Output rings (color-coded by physiological signal)
 		drawPortRing(panelW * 0.15f, outY, accent, true);   // PRESS (bright cyan -> LARYNX/VOICE PRESS)
@@ -645,10 +645,11 @@ struct CyberlineLungsWidget : rack::app::ModuleWidget {
 
 		// inputs (color-coded to match their target parameters)
 		nvgFillColor(args.vg, nvgRGB(0x80, 0xe0, 0xb0));
-		text(panelW * 0.25f, 258, "TRIG");
-		text(cx, 258, "GATE");
+		text(panelW * 0.15f, 258, "SYNC");
+		text(panelW * 0.38f, 258, "TRIG");
+		text(panelW * 0.62f, 258, "GATE");
 		nvgFillColor(args.vg, nvgRGB(0x88, 0xc8, 0xf0));
-		text(panelW * 0.75f, 258, "DEPTH CV");
+		text(panelW * 0.85f, 258, "DEPTH CV");
 
 		// outputs (color-coded to match gauge & downstream modules)
 		nvgFillColor(args.vg, nvgRGB(0x7e, 0xd8, 0xf8));
@@ -676,7 +677,6 @@ struct CyberlineLungsWidget : rack::app::ModuleWidget {
 		using rack::componentlibrary::RoundSmallBlackKnob;
 		using rack::componentlibrary::PJ301MPort;
 
-		float cx = PANEL_W * 0.5f;
 		float colL = 58.f, colR = 148.f;
 
 		// Top-center bilateral human lung & bronchial gauge
@@ -700,9 +700,10 @@ struct CyberlineLungsWidget : rack::app::ModuleWidget {
 			rack::Vec(183.f, 224), module, CyberlineLungs::PHASE_LIGHT));
 
 		float row = 276.f;
-		addInput(rack::createInputCentered<PJ301MPort>(rack::Vec(PANEL_W * 0.25f, row), module, CyberlineLungs::TRIGGER_INPUT));
-		addInput(rack::createInputCentered<PJ301MPort>(rack::Vec(cx, row), module, CyberlineLungs::GATE_INPUT));
-		addInput(rack::createInputCentered<PJ301MPort>(rack::Vec(PANEL_W * 0.75f, row), module, CyberlineLungs::DEPTHCV_INPUT));
+		addInput(rack::createInputCentered<PJ301MPort>(rack::Vec(PANEL_W * 0.15f, row), module, CyberlineLungs::SYNC_INPUT));
+		addInput(rack::createInputCentered<PJ301MPort>(rack::Vec(PANEL_W * 0.38f, row), module, CyberlineLungs::TRIGGER_INPUT));
+		addInput(rack::createInputCentered<PJ301MPort>(rack::Vec(PANEL_W * 0.62f, row), module, CyberlineLungs::GATE_INPUT));
+		addInput(rack::createInputCentered<PJ301MPort>(rack::Vec(PANEL_W * 0.85f, row), module, CyberlineLungs::DEPTHCV_INPUT));
 
 		float row2 = 328.f;
 		addOutput(rack::createOutputCentered<PJ301MPort>(rack::Vec(PANEL_W * 0.15f, row2), module, CyberlineLungs::PRESSURE_OUTPUT));

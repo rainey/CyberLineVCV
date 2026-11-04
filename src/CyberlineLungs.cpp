@@ -16,15 +16,21 @@ void CyberlineLungs::process(const ProcessArgs& args) {
 	if (trig && !trigWasHigh) trigPending = true;
 	trigWasHigh = trig;
 
+	bool sync = inputs[SYNC_INPUT].getVoltage() >= 1.f;
+	if (sync && !syncWasHigh) syncPending = true;
+	syncWasHigh = sync;
+
 	// ---- physics at control rate ----
 	if (++physCounter >= PHYS_INTERVAL) {
 		physCounter = 0;
 		float dt = PHYS_INTERVAL / args.sampleRate;
 
 		bool trigRising = trigPending;
+		bool syncRising = syncPending;
 		bool gateRising = gateRisePending;
 		bool gateFalling = gateFallPending;
 		trigPending = false;
+		syncPending = false;
 		gateRisePending = false;
 		gateFallPending = false;
 
@@ -32,6 +38,8 @@ void CyberlineLungs::process(const ProcessArgs& args) {
 		if (mode < CYCLE) mode = CYCLE;
 		if (mode > PHASOR) mode = PHASOR;
 
+		float rate = rack::math::clamp(params[RATE_PARAM].getValue(), 4.f, 30.f);
+		float cyclePeriod = 60.f / rate;
 		float depth = rack::math::clamp(
 			params[DEPTH_PARAM].getValue()
 			+ inputs[DEPTHCV_INPUT].getVoltage() * 0.1f, 0.f, 1.f);
@@ -39,6 +47,28 @@ void CyberlineLungs::process(const ProcessArgs& args) {
 		float inhaleTime = params[INHALE_PARAM].getValue();
 		float maxFlow = params[MAXFLOW_PARAM].getValue();
 		bool muteInhale = params[INHMUTE_PARAM].getValue() >= 0.5f;
+
+		// Expiratory drain rate (volume units per second at full depth = 0.7):
+		// - Scales with RATE so slow breathing rates naturally produce long phrases
+		// - FLOW MAX (0..1) adjusts airway conductance from conserved singer's breath
+		//   (0 -> 0.4x drain, long sustain) to rapid venting (1 -> 3.0x drain, short puff)
+		// - EFFORT (0..1) adds diaphragmatic braking (appoggio), extending plateau sustain
+		float availExhale = std::fmax(0.4f, cyclePeriod - std::fmin(inhaleTime, cyclePeriod * 0.45f));
+		float flowScale = 0.40f * std::pow(7.5f, maxFlow); // 0.40 at 0, ~1.10 at 0.5, 3.00 at 1.0
+		float effortBrake = 1.f / (0.75f + 0.55f * effort);
+		float baseExhaleDur = std::fmax(0.25f, (availExhale * 0.88f) / (flowScale * effortBrake));
+		// Drain rate for a reference depth of 0.7 (deeper breaths store more air and last longer)
+		float refDrainRate = 0.7f / baseExhaleDur;
+
+		if (syncRising && mode != PHASOR) {
+			// Hard cycle reset: zeroes lung volume & timer and begins a fresh inhale
+			volume = 0.f;
+			cycleTimer = 0.f;
+			inhaling = true;
+			exhaling = false;
+			phase = 0.f;
+			flow = std::fmax(depth / std::fmax(inhaleTime, 0.05f), 0.08f);
+		}
 
 		if (mode == PHASOR) {
 			// Phase-driven: the GATE input is the phase CV
@@ -88,8 +118,7 @@ void CyberlineLungs::process(const ProcessArgs& args) {
 				}
 				if (inhaling) {
 					float it = std::fmax(inhaleTime, 0.05f);
-					float f = std::fmax((depth - volume) / it, 0.08f);
-					flow = f * (0.3f + 0.7f * maxFlow);
+					flow = std::fmax(depth / it, 0.08f);
 					volume += flow * dt;
 					phase = 0.f;
 					if (volume >= depth) {
@@ -130,8 +159,7 @@ void CyberlineLungs::process(const ProcessArgs& args) {
 				}
 				if (inhaling) {
 					float it = std::fmax(inhaleTime, 0.05f);
-					float f = std::fmax((depth - volume) / it, 0.08f);
-					flow = f * (0.3f + 0.7f * maxFlow);
+					flow = std::fmax(depth / it, 0.08f);
 					volume += flow * dt;
 					phase = 0.f;
 					if (volume >= depth) {
@@ -144,12 +172,13 @@ void CyberlineLungs::process(const ProcessArgs& args) {
 			}
 
 			if (exhaling) {
-				float recoil = volume;
-				float drive = (1.f - effort) * recoil + effort * depth;
-				float k = 0.4f + 2.6f * (1.f - effort);
-				volume -= drive * k * dt;
+				float normVol = volume / std::fmax(depth, 0.1f);
+				// Recoil decays with remaining lung volume; effort holds constant metered flow
+				float shape = (1.f - effort) * (2.2f * normVol) + effort * 1.0f;
+				float dV = refDrainRate * std::fmax(shape, 0.08f);
+				volume -= dV * dt;
 				if (volume < 0.f) volume = 0.f;
-				flow = -drive;
+				flow = -rack::math::clamp(dV * 0.45f, 0.02f, 1.f);
 				phase = 1.f;
 				if (!gateConnected && volume <= closedBurstTarget) {
 					// End of rationed phrase burst -> mid-breath hold
@@ -167,17 +196,17 @@ void CyberlineLungs::process(const ProcessArgs& args) {
 			}
 		} else {
 			// CYCLE and TRIG modes:
-			// Start a breath cycle (CYCLE auto, TRIG on trigger, or GATE rising edge)
+			// Start a breath cycle (CYCLE auto, TRIG catch-breath, or GATE rising edge)
 			bool start = false;
 			if (mode == CYCLE) {
-				float rate = params[RATE_PARAM].getValue();
 				cycleTimer += dt;
-				if (!inhaling && !exhaling && cycleTimer >= 60.f / rate
+				if (!inhaling && !exhaling && cycleTimer >= cyclePeriod
 						&& volume < depth * 0.999f) {
 					start = true;
 				}
-				inhaleTime = std::fmin(inhaleTime, 60.f / rate * 0.5f);
-			} else if (trigRising) {
+				inhaleTime = std::fmin(inhaleTime, cyclePeriod * 0.45f);
+			}
+			if (trigRising) {
 				start = true;
 			}
 			if (gateRising) start = true;
@@ -186,9 +215,7 @@ void CyberlineLungs::process(const ProcessArgs& args) {
 				inhaling = true;
 				exhaling = false;
 				float it = std::fmax(inhaleTime, 0.05f);
-				float f = std::fmax((depth - volume) / it, 0.05f);
-				flow = f * (0.3f + 0.7f * maxFlow);
-				if (flow < 0.01f) flow = 0.01f;
+				flow = std::fmax((depth - volume) / it, 0.05f);
 				phase = 0.f;
 				cycleTimer = 0.f;
 			}
@@ -200,8 +227,8 @@ void CyberlineLungs::process(const ProcessArgs& args) {
 				phase = 0.f;
 				if (volume < depth) {
 					inhaling = true;
-					float f = std::fmax((depth - volume) / std::fmax(inhaleTime, 0.05f), 0.05f);
-					flow = f * (0.3f + 0.7f * maxFlow);
+					float it = std::fmax(inhaleTime, 0.05f);
+					flow = std::fmax(depth / it, 0.05f);
 				} else {
 					volume = depth;
 					inhaling = false;
@@ -230,19 +257,32 @@ void CyberlineLungs::process(const ProcessArgs& args) {
 					}
 				}
 			} else if (exhaling) {
-				float recoil = volume;
-				float drive = (1.f - effort) * recoil + effort * depth;
-				float k = 0.4f + 2.6f * (1.f - effort);
-				volume -= drive * k * dt;
-				if (volume < 0.f) volume = 0.f;
-				flow = -drive;
-				phase = 1.f;
-				if (volume <= 0.001f) {
-					volume = 0.f;
-					flow = 0.f;
-					phase = 0.f;
+				// In CYCLE mode, if cycleTimer reaches cyclePeriod while a slow conserved
+				// exhale is still finishing, smoothly catch the next breath right on beat
+				if (mode == CYCLE && cycleTimer >= cyclePeriod && depth > 0.01f) {
+					inhaling = true;
 					exhaling = false;
-					inhaling = false;
+					float it = std::fmax(inhaleTime, 0.05f);
+					flow = std::fmax((depth - volume) / it, 0.05f);
+					phase = 0.f;
+					cycleTimer = 0.f;
+				} else {
+					float normVol = volume / std::fmax(depth, 0.1f);
+					// At effort = 0 (sigh), drain is fast initially (2.2 * normVol) and decays exponentially;
+					// at effort = 1 (singer's appoggio), drain is metered at a steady constant rate (1.0).
+					float shape = (1.f - effort) * (2.2f * normVol) + effort * 1.0f;
+					float dV = refDrainRate * std::fmax(shape, 0.08f);
+					volume -= dV * dt;
+					if (volume < 0.f) volume = 0.f;
+					flow = -rack::math::clamp(dV * 0.45f, 0.02f, 1.f);
+					phase = 1.f;
+					if (volume <= 0.001f) {
+						volume = 0.f;
+						flow = 0.f;
+						phase = 0.f;
+						exhaling = false;
+						inhaling = false;
+					}
 				}
 			} else {
 				// Top Hold or Bottom Rest (!inhaling && !exhaling)
@@ -253,12 +293,15 @@ void CyberlineLungs::process(const ProcessArgs& args) {
 
 		// Subglottal pressure output:
 		// - Exhaling: positive outward phonation drive (recoil + effort, 0..+10 V)
+		//   With singer's effort (effort -> 1), pressure holds a steady plateau across
+		//   the entire breath and tapers smoothly only in the last 6% of reserve volume.
 		// - Inhaling (flow > 0): negative inspiratory suction (-5..0 V) in GASP
 		//   mode, or 0 V when Inhale Mute is active
 		// - Breath-Hold (Top, Mid, or Bottom, flow == 0): 0 V
 		if (exhaling && volume > 0.001f) {
 			float recoil = volume;
-			float regulated = effort * depth * (volume > 0.02f ? 1.f : volume / 0.02f);
+			float endTaper = (volume > 0.04f) ? 1.f : (volume / 0.04f);
+			float regulated = effort * depth * endTaper;
 			pressure = rack::math::clamp((1.f - effort) * recoil + regulated, 0.f, 1.f);
 		} else if (!exhaling && flow > 0.002f && !muteInhale) {
 			pressure = -rack::math::clamp(flow * 0.35f, 0.f, 0.5f);

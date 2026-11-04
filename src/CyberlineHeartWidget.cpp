@@ -360,6 +360,11 @@ struct CyberlineHeartWidget : rack::app::ModuleWidget {
 		drawOutPad(c4, r[4], ecgCol);
 		drawOutPad(c4, r[5], sndCol);
 
+		// Column 2 row 6: SYNC input ring (bio-electric mint-green)
+		nvgBeginPath(args.vg);
+		nvgCircle(args.vg, c2, r[6], 13.2f);
+		strokeNeon(args.vg, ecgCol, 0.95f, 2.5f, 32);
+
 		// ---- 3. CV Input Rings & 1-to-1 Coupling Lines (Col 3 -> Col 2 Knobs) ----
 		NVGcolor cvCols[4] = {
 			ecgCol,                         // r[0]: PACING -> IRRIT
@@ -467,6 +472,8 @@ struct CyberlineHeartWidget : rack::app::ModuleWidget {
 		text(c2, 248, "SOUND");
 		nvgFillColor(args.vg, label);
 		text(c2, 286, "PHASE");
+		nvgFillColor(args.vg, nvgRGB(0x88, 0xe0, 0xb4));
+		text(c2, 324, "SYNC");
 
 		// column 3: CV inputs (rows 0..3) + chamber outputs (rows 4..6)
 		nvgFillColor(args.vg, nvgRGB(0x88, 0xe0, 0xb4));
@@ -535,6 +542,7 @@ struct CyberlineHeartWidget : rack::app::ModuleWidget {
 			rack::Vec(c2 - 12.f, r[5]), module, CyberlineHeart::FILL_LIGHT));
 		addChild(rack::createLightCentered<rack::componentlibrary::SmallLight<rack::componentlibrary::RedLight>>(
 			rack::Vec(c2 + 12.f, r[5]), module, CyberlineHeart::EJECT_LIGHT));
+		addInput(rack::createInputCentered<PJ301MPort>(rack::Vec(c2, r[6]), module, CyberlineHeart::SYNC_INPUT));
 
 		// column 3: inputs + outputs
 		addInput(rack::createInputCentered<PJ301MPort>(rack::Vec(c3, r[0]), module, CyberlineHeart::PACING_INPUT));

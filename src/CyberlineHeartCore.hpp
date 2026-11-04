@@ -51,6 +51,7 @@ struct CyberlineHeartCore {
 		float afterloadCv = 0.f;  // 0-10 V
 		float driveCv = 0.f;      // -5..+5 V
 		bool pacing = false;      // external pacer level (edge detected here)
+		bool sync = false;        // external hard sync/reset trigger
 	};
 
 	struct Outputs {
@@ -94,6 +95,8 @@ struct CyberlineHeartCore {
 
 	bool pacingWas = false;
 	bool pacePending = false;  // pacing edge caught between physics ticks
+	bool syncWas = false;
+	bool syncPending = false;  // hard-sync edge caught between physics ticks
 
 	// ---- event ages (audio domain, seconds) ----
 	float tA = 10.f;  // since atrial activation (P wave)
@@ -154,6 +157,7 @@ struct CyberlineHeartCore {
 		period = ecgPeriod = 0.8f;
 		hrvWander = symp = vagal = 0.f;
 		pacingWas = pacePending = false;
+		syncWas = syncPending = false;
 		tA = tV = 10.f;
 		ejected = lastStroke = 0.f;
 		systolic = filling = 0.f;
@@ -174,6 +178,8 @@ struct CyberlineHeartCore {
 		// fall between physics ticks); consumed at the next tick
 		if (in.pacing && !pacingWas) pacePending = true;
 		pacingWas = in.pacing;
+		if (in.sync && !syncWas) syncPending = true;
+		syncWas = in.sync;
 
 		if (++physCounter >= PHYS_INTERVAL) {
 			physCounter = 0;
@@ -297,6 +303,16 @@ struct CyberlineHeartCore {
 		if (pacePending) {
 			pacePending = false;
 			saTimer = 0.f;
+			fireAtrial(in);
+		}
+
+		// external hard sync/reset: resets SA clock, clears refractory lockout,
+		// and immediately initiates a fresh cardiac cycle from P-wave onset
+		if (syncPending) {
+			syncPending = false;
+			saTimer = 0.f;
+			avCountdown = -1.f;
+			tV = period;
 			fireAtrial(in);
 		}
 
