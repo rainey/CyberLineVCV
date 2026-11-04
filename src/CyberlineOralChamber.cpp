@@ -85,8 +85,6 @@ void CyberlineOralChamber::process(const ProcessArgs& args) {
 	}
 
 	// ---- per-sample ----
-	tract.reshape(args.sampleTime);
-	tract.calculateReflectionsPublic();
 
 	float source = inputs[SOURCE_INPUT].getVoltage() * 0.2f;
 	float inject = inputs[INJECT_INPUT].getVoltage() * 0.2f;
@@ -95,9 +93,9 @@ void CyberlineOralChamber::process(const ProcessArgs& args) {
 		0.f, 10.f) * 0.1f * (tract.n - 2);
 	float noise = rack::random::uniform() * 2.f - 1.f;
 
-	// 2x oversample stepping
-	float lip = tract.step(source, inject, injPos, noise, 0.5f);
-	lip = tract.step(source, inject, injPos, noise, 1.0f);
+	// shape update + sample-rate-appropriate waveguide stepping (2x oversample
+	// at <= 51.2 kHz, 1x above, decimated + interpolated at very high rates)
+	float lip = tract.process(args.sampleTime, source, inject, injPos, noise);
 	float nose = tract.lastNoseOutput;
 
 	outputs[LIPS_OUTPUT].setVoltage(rack::math::clamp(lip * 5.f, -5.f, 5.f));

@@ -37,6 +37,15 @@ struct CyberlineTransient {
 
 struct CyberlineTract {
 	float sampleRate = 44100.f;
+	// Waveguide (internal) rate. Chosen from the host rate so it always lands in
+	// ~51-102 kHz regardless of host rate: the section count n = VTL * rate / c
+	// then stays well under the section cap and VTL stays physically correct
+	// (a fixed 2x host rate silently clamped VTL at >= 96 kHz).
+	float internalRate = 88200.f;
+	int oversample = 2;      // waveguide steps per host sample (2 or 1)
+	int decim = 1;           // host samples per waveguide step when host rate is very high
+	int decimCounter = 0;
+	float lipPrev = 0.f, lipCur = 0.f, nosePrev = 0.f, noseCur = 0.f;
 	bool initialized = false;
 	bool transientsEnabled = true;
 
@@ -104,6 +113,15 @@ struct CyberlineTract {
 	float noseDiameter[NOSE_SECTIONS_MAX];
 	float noseTargetDiameter[NOSE_SECTIONS_MAX];
 
+	// Per-section return-speed factor (depends only on geometry; rebuilt in
+	// setTractLength) and lazy-reflection bookkeeping.
+	float slowReturnTab[TRACT_SECTIONS_MAX];
+	// true if reshape() changed any oral diameter or the velum this sample
+	bool shapeMoved = true;
+	// true once reflection[] == newReflection[] for the current (unchanged)
+	// shape, i.e. further coefficient updates would be exact no-ops
+	bool reflectionsSettled = false;
+
 	CyberlineTract() { reset(); }
 
 	void reset() {
@@ -126,20 +144,31 @@ struct CyberlineTract {
 		transientCount = 0;
 		lastObstruction = -1;
 		lastNoseOutput = 0.f;
+		decimCounter = 0;
+		lipPrev = lipCur = nosePrev = noseCur = 0.f;
 		initialized = false;
 		setTractLength(44);
 		setTongue(tongueIndex, tongueDiameter);
 		syncReflections();
 	}
 
-	// VTL in cm -> section count: n = VTL * 2 * SR / c. Call on sample-rate
-	// or VTL change. Preserves per-section smoothed state when section count
-	// changes so VTL sweeps do not click.
+	// VTL in cm -> section count: n = VTL * internalRate / c. Call on
+	// sample-rate or VTL change. Preserves per-section smoothed state when
+	// section count changes so VTL sweeps do not click.
 	void setGeometry(float vtlCm, float sr) {
 		if (sr >= 1000.f) sampleRate = sr;
-		float twoX = 2.f * sampleRate;
+		// Pick the stepping so internalRate lands in (51.2k, 102.4k]:
+		//   host <= 51.2k : 2 steps per sample  (internal = 2x host, as before)
+		//   host <= 102.4k: 1 step per sample
+		//   above         : 1 step every 2^k samples (linear-interpolated output)
+		int halvings = 0;
+		while (2.f * sampleRate / (float) (1 << halvings) > 102400.f && halvings < 6)
+			halvings++;
+		oversample = (halvings == 0) ? 2 : 1;
+		decim = (halvings <= 1) ? 1 : (1 << (halvings - 1));
+		internalRate = 2.f * sampleRate / (float) (1 << halvings);
 		float c = 35000.f;                 // cm/s
-		int sections = (int) std::round(vtlCm * twoX / c);
+		int sections = (int) std::round(vtlCm * internalRate / c);
 		setTractLength(sections);
 	}
 
@@ -203,9 +232,17 @@ struct CyberlineTract {
 		if (initialized) {
 			setTongue(tongueIndex, tongueDiameter);
 		}
+		for (int i = 0; i < n; i++) {
+			if (i < noseStart) slowReturnTab[i] = 0.6f;
+			else if (i >= tipStart) slowReturnTab[i] = 1.f;
+			else slowReturnTab[i] = 0.6f + 0.4f * (float) (i - noseStart)
+				/ (float) (tipStart - noseStart);
+		}
 		calculateNoseReflections();
 		calculateReflections();
 		syncReflections();
+		shapeMoved = true;
+		reflectionsSettled = false;
 		initialized = true;
 	}
 
@@ -368,26 +405,59 @@ struct CyberlineTract {
 
 	float lastNoseOutput = 0.f;
 
+	// One host sample of tract processing: shape update, coefficient refresh and
+	// the sample-rate-appropriate number of waveguide steps. Returns the lip
+	// output; the nose output is left in lastNoseOutput.
+	float process(float deltaTime, float source, float inject, float injectPos,
+			float noise) {
+		reshape(deltaTime);
+		calculateReflectionsPublic();
+		if (oversample == 2) {
+			step(source, inject, injectPos, noise, 0.5f);
+			return step(source, inject, injectPos, noise, 1.0f);
+		}
+		if (decim == 1)
+			return step(source, inject, injectPos, noise, 1.0f);
+		// Very high host rate: step the waveguide once every `decim` samples and
+		// linearly interpolate between consecutive outputs.
+		if (decimCounter == 0) {
+			lipPrev = lipCur;
+			nosePrev = noseCur;
+			lipCur = step(source, inject, injectPos, noise, 1.0f);
+			noseCur = lastNoseOutput;
+		}
+		float f = (float) (decimCounter + 1) / (float) decim;
+		if (++decimCounter >= decim) decimCounter = 0;
+		lastNoseOutput = nosePrev + (noseCur - nosePrev) * f;
+		return lipPrev + (lipCur - lipPrev) * f;
+	}
+
 	// Shape update (call once per audio sample before the 2x step pair, or per
 	// block). deltaTime in seconds. Moves diameters toward targets (muscle speed).
 	void reshape(float deltaTime) {
 		float amount = deltaTime * muscleSpeed * 2.f; // section-units per s
+		float stepDown = 2.f * amount;
+		// Branch-free update (ternary min/max instead of std::fmin/fmax, which are
+		// libm calls without -ffinite-math-only) so the compiler can vectorize.
+		// Obstruction scan uses the diameters *before* this sample's update
+		// (exactly as the original single loop did), so stop-release transient
+		// timing is unchanged.
 		int newLastObstruction = -1;
+		for (int i = 0; i < n; i++) {
+			if (diameter[i] <= 0.05f) newLastObstruction = i;
+		}
+		float movedAcc = 0.f;
 		for (int i = 0; i < n; i++) {
 			float d = diameter[i];
 			float td = targetDiameter[i];
-			if (d <= 0.05f) newLastObstruction = i;
-			float slowReturn;
-			if (i < noseStart) slowReturn = 0.6f;
-			else if (i >= tipStart) slowReturn = 1.f;
-			else slowReturn = 0.6f + 0.4f * (float) (i - noseStart)
-				/ (float) (tipStart - noseStart);
-			float step = slowReturn * amount;
-			float stepDown = 2.f * amount;
-			if (d < td) d = std::fmin(d + step, td);
-			else d = std::fmax(d - stepDown, td);
-			diameter[i] = d;
+			float up = d + slowReturnTab[i] * amount;
+			float dn = d - stepDown;
+			float nd = (d < td) ? ((up < td) ? up : td)
+			                     : ((dn > td) ? dn : td);
+			movedAcc += (nd != d) ? 1.f : 0.f;
+			diameter[i] = nd;
 		}
+		bool moved = movedAcc > 0.f;
 		if (transientsEnabled && lastObstruction > -1 && newLastObstruction == -1
 			&& noseArea(0) < 0.05f) {
 			addTransient(lastObstruction);
@@ -398,9 +468,12 @@ struct CyberlineTract {
 		float vstep = amount * 0.25f;
 		float vdown = amount * 0.1f;
 		float v = noseDiameter[0];
-		if (v < velum) v = std::fmin(v + vstep, velum);
-		else v = std::fmax(v - vdown, velum);
-		noseDiameter[0] = v;
+		float nv;
+		if (v < velum) nv = std::fmin(v + vstep, velum);
+		else nv = std::fmax(v - vdown, velum);
+		if (nv != v) moved = true;
+		noseDiameter[0] = nv;
+		shapeMoved = moved;
 	}
 
 	// Apply constriction to target diameters (block-rate, from CV state).
@@ -432,7 +505,18 @@ struct CyberlineTract {
 	}
 
 	// Coefficient refresh (call once per audio sample after reshape).
-	void calculateReflectionsPublic() { calculateReflections(); }
+	// Lazy: while the shape is unchanged the old/new coefficients are equal
+	// after one more update, so further updates are exact no-ops and skipped
+	// (the O(n) divisions were ~2/3 of the per-sample tract cost at rest).
+	void calculateReflectionsPublic() {
+		if (shapeMoved) {
+			calculateReflections();
+			reflectionsSettled = false;
+		} else if (!reflectionsSettled) {
+			calculateReflections();      // reflection[] <- final newReflection[]
+			reflectionsSettled = true;
+		}
+	}
 
 private:
 	float area(int i) {
@@ -537,7 +621,7 @@ private:
 
 	void processTransients() {
 		if (transientCount <= 0) return;
-		float dt = 0.5f / sampleRate;
+		float dt = 1.f / internalRate;   // per waveguide step
 		for (int i = 0; i < TRACT_TRANSIENTS_MAX; i++) {
 			CyberlineTransient* t = &transients[i];
 			if (!t->living) continue;

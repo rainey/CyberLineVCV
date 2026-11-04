@@ -24,6 +24,12 @@ struct CyberlineGlottis {
 	float targetTenseness = 0.6f;  // 0..1 fold tension
 	float targetAmp = 0.8f;        // 0..1 subglottal pressure (loudness)
 	float targetFoldLen = 14.f;    // mm (vocal-fold length for Rd mass/timbre)
+	float targetVoicing = 1.f;     // 0..1 fold-vibration amount (0 = voiceless: breath noise only)
+
+	// Smoothed voicing (pulse gain). Aspiration is NOT scaled by this, so a
+	// voiceless sound keeps its glottal airflow noise while the pulse train
+	// fades out without touching F0 or tension.
+	float voicing = 1.f;
 
 	// Period-quantized parameters (crossfaded by lambda at period boundary)
 	float oldF0 = 110.f, newF0 = 110.f;
@@ -71,7 +77,8 @@ struct CyberlineGlottis {
 		fbAlpha = 1.f - std::exp(-1.f / (sampleRate * 0.0004f));
 	}
 
-	void setTargets(float f0, float tenseness, float amp, float foldLen = 14.f) {
+	void setTargets(float f0, float tenseness, float amp, float foldLen = 14.f,
+			float voicingAmt = 1.f) {
 		if (f0 < 20.f) f0 = 20.f;
 		if (f0 > 2000.f) f0 = 2000.f;
 		targetF0 = f0;
@@ -84,6 +91,9 @@ struct CyberlineGlottis {
 		if (foldLen < 2.f) foldLen = 2.f;
 		if (foldLen > 45.f) foldLen = 45.f;
 		targetFoldLen = foldLen;
+		if (!(voicingAmt >= 0.f)) voicingAmt = 0.f;   // also catches NaN
+		if (voicingAmt > 1.f) voicingAmt = 1.f;
+		targetVoicing = voicingAmt;
 	}
 
 	// Derive LF coefficients for the current period (normalized to time = 1,
@@ -140,6 +150,7 @@ struct CyberlineGlottis {
 		targetTenseness = oldTenseness = newTenseness = curTenseness = 0.6f;
 		targetAmp = 0.8f;
 		targetFoldLen = 14.f;
+		targetVoicing = voicing = 1.f;
 		intensity = 0.f;
 		timeInWaveform = 0.f;
 		totalTime = 0.f;
@@ -199,6 +210,7 @@ struct CyberlineGlottis {
 
 			// Amplitude: smooth chase toward pressure target (~5 ms)
 			intensity += (targetAmp - intensity) * intensityAlpha;
+			voicing += (targetVoicing - voicing) * intensityAlpha;
 		}
 
 		// Advance period; uptake period-quantized parameters at boundary,
@@ -244,11 +256,15 @@ struct CyberlineGlottis {
 			if (ampEff > 1.5f) ampEff = 1.5f;
 
 			float voicedGate = 0.1f + 0.2f * std::fmax(0.f, std::sin(2.f * (float) M_PI * t));
-			float ti = curTenseness * intensity;
+			float ti = curTenseness * intensity * voicing;
 			noiseModulator = ti * voicedGate + (1.f - ti) * 0.3f * (intensity > 1e-4f ? 1.f : 0.f);
-			float aspiration = intensity * oneMinusSqrtTenseness * noiseModulator * noise;
+			// Aspiration colour: breathy-voiced shape while voicing, blending
+			// to a fuller steady breath (/h/-like) as voicing fades to 0.
+			float aspShape = oneMinusSqrtTenseness * voicing + 0.6f * (1.f - voicing);
+			float aspiration = intensity * aspShape * noiseModulator * noise;
 
-			out = wave * ampEff + aspiration * 0.2f;
+			out = wave * ampEff * voicing
+				+ aspiration * 0.2f * (1.f + 4.f * (1.f - voicing));
 		} else {
 			// Ingressive (inhale / suction) mechanics:
 			// Downward suction against upward-pointing vocal folds requires a

@@ -22,28 +22,28 @@ const CyberlineVowelTarget CyberlineBroca::VOWELS[NUM_VOWELS] = {
 };
 
 const CyberlineConsonantTarget CyberlineBroca::CONSONANTS[NUM_CONSONANTS] = {
-	// code, ipa,   manner,           voiced, tngX, tngY, vel,   cPos, cWid, fric, tens, press
-	{"-",  "none", MANNER_NONE,      true,   5.0f, 5.0f, 0.01f, 0.0f, 5.0f, 0.00f, 0.60f, 0.80f}, // 0
-	{"M",  "/m/",  MANNER_NASAL,     true,   4.8f, 5.2f, 0.96f, 9.6f, 0.0f, 0.00f, 0.62f, 0.82f}, // 1: bilabial nasal
-	{"N",  "/n/",  MANNER_NASAL,     true,   7.4f, 3.6f, 0.96f, 7.6f, 0.0f, 0.00f, 0.62f, 0.82f}, // 2: alveolar nasal
-	{"NG", "/ŋ/",  MANNER_NASAL,     true,   2.4f, 0.0f, 0.96f, 3.4f, 0.0f, 0.00f, 0.62f, 0.82f}, // 3: velar nasal
-	{"W",  "/w/",  MANNER_GLIDE,     true,   2.2f, 2.3f, 0.01f, 9.6f, 5.3f, 0.05f, 0.60f, 0.80f}, // 4: labial-velar glide
-	{"Y",  "/j/",  MANNER_GLIDE,     true,   8.6f, 2.0f, 0.01f, 4.8f, 6.0f, 0.05f, 0.62f, 0.80f}, // 5: palatal glide
-	{"L",  "/l/",  MANNER_GLIDE,     true,   6.4f, 5.8f, 0.01f, 7.8f, 6.2f, 0.05f, 0.60f, 0.80f}, // 6: alveolar lateral
-	{"R",  "/ɹ/",  MANNER_GLIDE,     true,   5.4f, 4.4f, 0.01f, 6.0f, 6.0f, 0.05f, 0.60f, 0.80f}, // 7: postalv approximant
-	{"F",  "/f/",  MANNER_FRICATIVE, false,  5.0f, 5.2f, 0.01f, 9.2f, 4.8f, 0.80f, 0.08f, 0.68f}, // 8: voiceless labiodental
-	{"V",  "/v/",  MANNER_FRICATIVE, true,   5.0f, 5.2f, 0.01f, 9.2f, 4.9f, 0.68f, 0.58f, 0.82f}, // 9: voiced labiodental
-	{"TH", "/θ/",  MANNER_FRICATIVE, false,  6.8f, 4.6f, 0.01f, 8.4f, 4.9f, 0.74f, 0.08f, 0.68f}, // 10: voiceless dental
-	{"S",  "/s/",  MANNER_FRICATIVE, false,  7.6f, 3.4f, 0.01f, 7.6f, 4.7f, 0.95f, 0.06f, 0.72f}, // 11: voiceless alveolar
-	{"Z",  "/z/",  MANNER_FRICATIVE, true,   7.6f, 3.4f, 0.01f, 7.6f, 4.8f, 0.84f, 0.60f, 0.85f}, // 12: voiced alveolar
-	{"SH", "/ʃ/",  MANNER_FRICATIVE, false,  6.6f, 3.6f, 0.01f, 6.1f, 4.7f, 0.95f, 0.06f, 0.72f}, // 13: voiceless postalveolar
-	{"H",  "/h/",  MANNER_FRICATIVE, false,  4.8f, 5.6f, 0.01f, 1.4f, 4.9f, 0.76f, 0.12f, 0.75f}, // 14: glottal aspirate
-	{"P",  "/p/",  MANNER_STOP,      false,  4.8f, 5.2f, 0.01f, 9.6f, 0.0f, 0.78f, 0.08f, 0.68f}, // 15: voiceless bilabial stop
-	{"B",  "/b/",  MANNER_STOP,      true,   4.8f, 5.2f, 0.01f, 9.6f, 0.0f, 0.35f, 0.58f, 0.82f}, // 16: voiced bilabial stop
-	{"T",  "/t/",  MANNER_STOP,      false,  7.5f, 3.0f, 0.01f, 7.6f, 0.0f, 0.88f, 0.08f, 0.70f}, // 17: voiceless alveolar stop
-	{"D",  "/d/",  MANNER_STOP,      true,   7.5f, 3.0f, 0.01f, 7.6f, 0.0f, 0.40f, 0.60f, 0.82f}, // 18: voiced alveolar stop
-	{"K",  "/k/",  MANNER_STOP,      false,  2.6f, 0.0f, 0.01f, 3.5f, 0.0f, 0.82f, 0.08f, 0.70f}, // 19: voiceless velar stop
-	{"G",  "/g/",  MANNER_STOP,      true,   2.6f, 0.0f, 0.01f, 3.5f, 0.0f, 0.40f, 0.60f, 0.82f}  // 20: voiced velar stop
+	// code, ipa,   manner,           voiced, tngX, tngY, vel,   cPos, cWid, fric, voic, press
+	{"-",  "none", MANNER_NONE,      true,   5.0f, 5.0f, 0.01f, 0.0f, 5.0f, 0.00f, 1.00f, 0.80f}, // 0
+	{"M",  "/m/",  MANNER_NASAL,     true,   4.8f, 5.2f, 0.96f, 9.6f, 0.0f, 0.00f, 1.00f, 0.82f}, // 1: bilabial nasal
+	{"N",  "/n/",  MANNER_NASAL,     true,   7.4f, 3.6f, 0.96f, 7.6f, 0.0f, 0.00f, 1.00f, 0.82f}, // 2: alveolar nasal
+	{"NG", "/ŋ/",  MANNER_NASAL,     true,   2.4f, 0.0f, 0.96f, 3.4f, 0.0f, 0.00f, 1.00f, 0.82f}, // 3: velar nasal
+	{"W",  "/w/",  MANNER_GLIDE,     true,   2.2f, 2.3f, 0.01f, 9.6f, 5.3f, 0.05f, 1.00f, 0.80f}, // 4: labial-velar glide
+	{"Y",  "/j/",  MANNER_GLIDE,     true,   8.6f, 2.0f, 0.01f, 4.8f, 6.0f, 0.05f, 1.00f, 0.80f}, // 5: palatal glide
+	{"L",  "/l/",  MANNER_GLIDE,     true,   6.4f, 5.8f, 0.01f, 7.8f, 6.2f, 0.05f, 1.00f, 0.80f}, // 6: alveolar lateral
+	{"R",  "/ɹ/",  MANNER_GLIDE,     true,   5.4f, 4.4f, 0.01f, 6.0f, 6.0f, 0.05f, 1.00f, 0.80f}, // 7: postalv approximant
+	{"F",  "/f/",  MANNER_FRICATIVE, false,  5.0f, 5.2f, 0.01f, 9.2f, 4.8f, 0.80f, 0.00f, 0.68f}, // 8: voiceless labiodental
+	{"V",  "/v/",  MANNER_FRICATIVE, true,   5.0f, 5.2f, 0.01f, 9.2f, 4.9f, 0.68f, 1.00f, 0.82f}, // 9: voiced labiodental
+	{"TH", "/θ/",  MANNER_FRICATIVE, false,  6.8f, 4.6f, 0.01f, 8.4f, 4.9f, 0.74f, 0.00f, 0.68f}, // 10: voiceless dental
+	{"S",  "/s/",  MANNER_FRICATIVE, false,  7.6f, 3.4f, 0.01f, 7.6f, 4.7f, 0.95f, 0.00f, 0.72f}, // 11: voiceless alveolar
+	{"Z",  "/z/",  MANNER_FRICATIVE, true,   7.6f, 3.4f, 0.01f, 7.6f, 4.8f, 0.84f, 1.00f, 0.85f}, // 12: voiced alveolar
+	{"SH", "/ʃ/",  MANNER_FRICATIVE, false,  6.6f, 3.6f, 0.01f, 6.1f, 4.7f, 0.95f, 0.00f, 0.72f}, // 13: voiceless postalveolar
+	{"H",  "/h/",  MANNER_FRICATIVE, false,  4.8f, 5.6f, 0.01f, 1.4f, 4.9f, 0.76f, 0.00f, 0.75f}, // 14: glottal aspirate
+	{"P",  "/p/",  MANNER_STOP,      false,  4.8f, 5.2f, 0.01f, 9.6f, 0.0f, 0.78f, 0.00f, 0.68f}, // 15: voiceless bilabial stop
+	{"B",  "/b/",  MANNER_STOP,      true,   4.8f, 5.2f, 0.01f, 9.6f, 0.0f, 0.35f, 1.00f, 0.82f}, // 16: voiced bilabial stop
+	{"T",  "/t/",  MANNER_STOP,      false,  7.5f, 3.0f, 0.01f, 7.6f, 0.0f, 0.88f, 0.00f, 0.70f}, // 17: voiceless alveolar stop
+	{"D",  "/d/",  MANNER_STOP,      true,   7.5f, 3.0f, 0.01f, 7.6f, 0.0f, 0.40f, 1.00f, 0.82f}, // 18: voiced alveolar stop
+	{"K",  "/k/",  MANNER_STOP,      false,  2.6f, 0.0f, 0.01f, 3.5f, 0.0f, 0.82f, 0.00f, 0.70f}, // 19: voiceless velar stop
+	{"G",  "/g/",  MANNER_STOP,      true,   2.6f, 0.0f, 0.01f, 3.5f, 0.0f, 0.40f, 1.00f, 0.82f}  // 20: voiced velar stop
 };
 
 static inline float broca_lerpf(float a, float b, float t) {
@@ -92,7 +92,7 @@ void CyberlineBroca::process(const ProcessArgs& args) {
 	float vowCwid = broca_lerpf(vA.lipWidth, vB.lipWidth, vMorph);
 	float vowVel = 0.01f;
 	float vowFric = 0.0f;
-	float vowTens = 0.60f;
+	float vowVoic = 1.0f;     // vowels are fully voiced; tension stays modal so F0 never dips
 	float vowPress = 0.80f;
 
 	// ---- 2. Resolve Consonant Selection & Syllable Trigger Envelope ----
@@ -146,7 +146,7 @@ void CyberlineBroca::process(const ProcessArgs& args) {
 	float tgtCpos = vowCpos;
 	float tgtCwid = vowCwid;
 	float tgtFric = vowFric;
-	float tgtTens = vowTens;
+	float tgtVoic = vowVoic;
 	float tgtPress = vowPress;
 
 	if (cons.manner != MANNER_NONE && cvMix > 0.001f) {
@@ -178,27 +178,27 @@ void CyberlineBroca::process(const ProcessArgs& args) {
 				tgtCwid = 0.0f;
 				if (cons.tongueY < 0.5f) tgtTy = 0.0f; // velar stop occlusion
 				tgtFric = 0.0f;
-				// Voiceless stops (P, T, K) silence glottal buzz during closure;
-				// voiced stops (B, D, G) maintain voice-bar buzz
-				tgtTens = cons.voiced ? 0.56f : 0.04f;
+				// Voiceless stops (P, T, K) silence the folds during closure;
+				// voiced stops (B, D, G) keep a partial voice-bar
+				tgtVoic = cons.voiced ? 0.5f : 0.0f;
 				tgtPress = cons.voiced ? 0.65f : 0.15f;
 			} else if (inBurst) {
 				tgtCwid = 4.8f; // passes squarely through [0.3, 0.7] cm turbulence window
 				tgtFric = cons.fricative;
-				tgtTens = broca_lerpf(vowTens, cons.tension, 0.7f);
+				tgtVoic = cons.voicing;
 				tgtPress = cons.pressure;
 				burstGate = 1.f;
 			} else {
 				tgtCwid = broca_lerpf(vowCwid, 4.8f, cvMix);
 				tgtFric = cons.fricative * cvMix;
-				tgtTens = broca_lerpf(vowTens, cons.tension, cvMix);
+				tgtVoic = broca_lerpf(vowVoic, cons.voicing, cvMix);
 				tgtPress = broca_lerpf(vowPress, cons.pressure, cvMix);
 			}
 		} else {
 			// Nasals, Glides, and Fricatives morph smoothly between vowel and consonant targets
 			tgtCwid = broca_lerpf(vowCwid, cons.constrWidth, cvMix);
 			tgtFric = broca_lerpf(vowFric, cons.fricative, cvMix);
-			tgtTens = broca_lerpf(vowTens, cons.tension, cvMix);
+			tgtVoic = broca_lerpf(vowVoic, cons.voicing, cvMix);
 			tgtPress = broca_lerpf(vowPress, cons.pressure, cvMix);
 			if (cons.manner == MANNER_FRICATIVE && cvMix > 0.35f) {
 				burstGate = cvMix;
@@ -218,7 +218,7 @@ void CyberlineBroca::process(const ProcessArgs& args) {
 	curConstrPos   += (tgtCpos - curConstrPos) * alpha;
 	curConstrWidth += (tgtCwid - curConstrWidth) * alpha;
 	curFric        += (tgtFric - curFric) * alpha;
-	curTension     += (tgtTens - curTension) * alpha;
+	curVoicing     += (tgtVoic - curVoicing) * alpha;
 	curPressure    += (tgtPress - curPressure) * alpha;
 
 	// ---- 5. Output Voltages (Referenced to Sink Default Knob Positions) ----
@@ -226,17 +226,20 @@ void CyberlineBroca::process(const ProcessArgs& args) {
 	//   Oral Chamber / Voice: TNG X = 5.0, TNG Y = 5.0, VELUM = 0.01,
 	//                         C.POS = 0.0, C.WIDTH = 5.0, FRIC = 0.0
 	//   Larynx / Voice:       TENSION = 0.6, PRESSURE = 0.8 (multiplicative 0-10V)
+	// Tension is held at the receiver's own knob (0 V offset): voicing is carried by
+	// its own channel so voiceless sounds never drag F0 down through sqrt(tension).
 	float vTngX  = rack::math::clamp(curTongueX - 5.0f, -5.f, 5.f);
 	float vTngY  = rack::math::clamp(curTongueY - 5.0f, -5.f, 5.f);
 	float vVel   = rack::math::clamp((curVelum - 0.01f) * 10.f, 0.f, 10.f);
 	float vCpos  = rack::math::clamp(curConstrPos, 0.f, 10.f);
 	float vCwid  = rack::math::clamp(curConstrWidth - 5.0f, -5.f, 5.f);
 	float vFric  = rack::math::clamp(curFric * 10.f, 0.f, 10.f);
-	float vTens  = rack::math::clamp((curTension - 0.6f) * 10.f, -6.f, 4.f);
+	float vTens  = 0.f;
+	float vVoic  = rack::math::clamp(curVoicing * 10.f, 0.f, 10.f);
 	float vPress = rack::math::clamp((curPressure / 0.8f) * 10.f, 0.f, 10.f);
 
-	// 8-channel TRACT POLY bus (drives Oral Chamber Ch 1-6, and Voice Ch 1-8)
-	outputs[TRACT_POLY_OUTPUT].setChannels(8);
+	// 9-channel TRACT POLY bus (drives Oral Chamber Ch 1-6, and Voice Ch 1-9)
+	outputs[TRACT_POLY_OUTPUT].setChannels(9);
 	outputs[TRACT_POLY_OUTPUT].setVoltage(vTngX,  0);
 	outputs[TRACT_POLY_OUTPUT].setVoltage(vTngY,  1);
 	outputs[TRACT_POLY_OUTPUT].setVoltage(vVel,   2);
@@ -245,11 +248,13 @@ void CyberlineBroca::process(const ProcessArgs& args) {
 	outputs[TRACT_POLY_OUTPUT].setVoltage(vFric,  5);
 	outputs[TRACT_POLY_OUTPUT].setVoltage(vTens,  6);
 	outputs[TRACT_POLY_OUTPUT].setVoltage(vPress, 7);
+	outputs[TRACT_POLY_OUTPUT].setVoltage(vVoic,  8);
 
-	// 2-channel LARYNX POLY bus (Ch 1: TENSION offset, Ch 2: PRESSURE envelope)
-	outputs[LARYNX_POLY_OUTPUT].setChannels(2);
+	// 3-channel LARYNX POLY bus (Ch 1: TENSION offset, Ch 2: PRESSURE envelope, Ch 3: VOICING)
+	outputs[LARYNX_POLY_OUTPUT].setChannels(3);
 	outputs[LARYNX_POLY_OUTPUT].setVoltage(vTens,  0);
 	outputs[LARYNX_POLY_OUTPUT].setVoltage(vPress, 1);
+	outputs[LARYNX_POLY_OUTPUT].setVoltage(vVoic,  2);
 
 	// Mono envelope & burst outputs
 	outputs[CVENV_OUTPUT].setVoltage(rack::math::clamp(cvMix * 10.f, 0.f, 10.f));

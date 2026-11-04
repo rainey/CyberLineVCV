@@ -37,7 +37,7 @@ struct CyberlineConsonantTarget {
 	float constrPos;    // 0..10 (0 = off, 3.5 = velar, 6.0 = postalv, 7.6 = alv, 9.5 = labial)
 	float constrWidth;  // 0..10 (0 = stop/nasal closure, 4.8 = fricative window, 6.8 = glide)
 	float fricative;    // 0..1 turbulence injection level
-	float tension;      // 0..1 glottal fold tension target
+	float voicing;      // 0..1 steady-state fold vibration (1 = voiced, 0 = voiceless breath only)
 	float pressure;     // 0..1 glottal pressure / airflow scale
 };
 
@@ -61,8 +61,8 @@ struct CyberlineBroca : rack::engine::Module {
 		NUM_INPUTS
 	};
 	enum OutputIds {
-		TRACT_POLY_OUTPUT,   // 8-ch poly: TNGX, TNGY, VEL, CPOS, CWID, FRIC, TENS, PRESS
-		LARYNX_POLY_OUTPUT,  // 2-ch poly: TENS (ch 0), PRESS (ch 1)
+		TRACT_POLY_OUTPUT,   // 9-ch poly: TNGX, TNGY, VEL, CPOS, CWID, FRIC, TENS(0), PRESS, VOICING
+		LARYNX_POLY_OUTPUT,  // 3-ch poly: TENS (ch 0), PRESS (ch 1), VOICING (ch 2)
 		CVENV_OUTPUT,        // mono 0-10V: active Consonant-to-Vowel envelope
 		BURST_OUTPUT,        // mono 0-10V: frication / plosive release burst gate
 		NUM_OUTPUTS
@@ -91,7 +91,7 @@ struct CyberlineBroca : rack::engine::Module {
 	float curConstrPos = 0.0f;
 	float curConstrWidth = 5.0f;
 	float curFric = 0.0f;
-	float curTension = 0.6f;
+	float curVoicing = 1.0f;
 	float curPressure = 0.8f;
 
 	// Telemetry for the HUD widget
@@ -168,8 +168,8 @@ struct CyberlineBroca : rack::engine::Module {
 		configInput(CVMORPH_INPUT, "Consonant/Vowel mix CV (0-10 V)");
 		configInput(SYNC_INPUT, "Sync / Reset (trigger: resets syllable cycle & scan step to 0)");
 
-		configOutput(TRACT_POLY_OUTPUT, "Tract Poly Bus (Ch 1-6: TNGX, TNGY, VEL, CPOS, CWID, FRIC; Ch 7-8: TENS, PRESS)");
-		configOutput(LARYNX_POLY_OUTPUT, "Larynx Poly Bus (Ch 1: TENS, Ch 2: PRESS)");
+		configOutput(TRACT_POLY_OUTPUT, "Tract Poly Bus (Ch 1-6: TNGX, TNGY, VEL, CPOS, CWID, FRIC; Ch 7-9: TENS, PRESS, VOICING)");
+		configOutput(LARYNX_POLY_OUTPUT, "Larynx Poly Bus (Ch 1: TENS, Ch 2: PRESS, Ch 3: VOICING)");
 		configOutput(CVENV_OUTPUT, "Consonant onset envelope (0-10 V)");
 		configOutput(BURST_OUTPUT, "Fricative / plosive burst gate (0-10 V)");
 	}
@@ -188,7 +188,7 @@ struct CyberlineBroca : rack::engine::Module {
 		curConstrPos = 0.0f;
 		curConstrWidth = 5.0f;
 		curFric = 0.0f;
-		curTension = 0.6f;
+		curVoicing = 1.0f;
 		curPressure = 0.8f;
 		activeBurst = 0.f;
 	}

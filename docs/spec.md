@@ -411,6 +411,47 @@ Heart↔Lungs cardiorespiratory coupling (Lungs FLOW → DRIVE: respiratory
 sinus arrhythmia, physically real) are documented cable recipes, not
 preset data.
 
+### Dual-Heart Circulation Loop & Frank–Starling Synchronization
+
+The Frank–Starling law dictates that stroke volume increases with preload: when
+greater venous return fills the ventricle, the next systolic contraction is
+proportionately stronger and ejects more volume. In `cyberline-heart`, this law
+is fully emergent from the time-varying elastance physics ($P = E(t) \cdot V$).
+
+To model a complete closed circulatory loop (Right Heart / pulmonary circuit
+and Left Heart / systemic circuit) and observe self-balancing Frank–Starling
+dynamics between two hearts:
+
+```
+[Heart A: Right Ventricle]
+    OUTFLOW (O4) ────────────▶ FILL CV (H2) [Heart B: Left Ventricle]
+    FILL CV (H2) ◀──────────── OUTFLOW (O4)
+```
+
+1. **Patching the Loop:**
+   - Connect **Heart A `OUTFLOW`** to **Heart B `FILL CV`**.
+   - Connect **Heart B `OUTFLOW`** to **Heart A `FILL CV`**.
+   - *(Optional pulmonary bed buffering)*: Route one leg through `cyberline-lungs`
+     (`OUTFLOW` → `DEPTH CV`, `VOLUME` → `FILL CV`) to model thoracic pump
+     modulation of venous return during breathing.
+2. **Observing on Scope (`FILL LVL` / `OUTFLOW` / `PRESSURE`):**
+   - **Baseline:** Set both hearts to ~72 bpm, `FILL` ~0.3–0.4, and turn `HRV` to
+     0 so intrinsic rate wander does not mask the hemodynamic transients. The
+     two hearts alternate ejections and establish a stable reciprocal rhythm.
+   - **Preload Transient:** Increase Heart A's `FILL` knob. On the next beat,
+     Heart A's end-diastolic `FILL LVL` and systolic `OUTFLOW` swell. When that
+     enlarged bolus arrives at Heart B's `FILL CV`, Heart B's ventricle stretches,
+     triggering a compensatory increase in Heart B's next stroke volume. Within
+     1–3 beats, the circulating volume equilibrates across both pumps.
+   - **Afterload Resistance:** Increase Heart A's `AFTERLOAD`. Heart A ejects less
+     volume against the higher arterial pressure, starving Heart B's venous
+     return. Heart B's contractions naturally weaken until both sides settle into
+     a new throttled equilibrium.
+   - **Asynchronous Drift:** Setting mismatched rates (e.g. 70 vs 76 bpm) creates
+     rhythmic swelling and ebbing of stroke volumes (Starling accents) as ejection
+     pulses drift into and out of alignment with the opposing ventricle's filling
+     window.
+
 ### Non-features (deliberate)
 
 - No per-phase envelope menus — the Wiggers shapes come from the physics.

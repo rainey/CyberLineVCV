@@ -140,8 +140,6 @@ int main(int argc, char** argv) {
 
 	for (size_t i = 0; i < n + warmup; i++) {
 		tract.applyConstriction();
-		tract.reshape(1.f / sr);
-		tract.calculateReflectionsPublic();
 
 		// semi-coupled loop: probe pressure -> glottis fb drive (smoothed in glottis)
 		float probeP = (tract.R[tract.n / 3] + tract.L[tract.n / 3]) * fbGain;
@@ -151,8 +149,7 @@ int main(int argc, char** argv) {
 		float voiced = g.process(noise, probeP, drift, vib);
 
 		float exc = voiced;
-		float lip = tract.step(exc, 0.f, 0.f, noise, 0.5f);
-		lip = tract.step(exc, 0.f, 0.f, noise, 1.0f);
+		float lip = tract.process(1.f / sr, exc, 0.f, 0.f, noise);
 		float nose = tract.lastNoseOutput;
 
 		if (i >= warmup) {

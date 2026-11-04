@@ -170,16 +170,13 @@ int main(int argc, char** argv) {
 	const size_t warmup = (size_t)(0.2f * sr);
 	for (size_t i = 0; i < n + warmup; i++) {
 		tract.applyConstriction();
-		tract.reshape(1.f / sr);
-		tract.calculateReflectionsPublic();
 
 		float noise = rng.uniform() * 2.f - 1.f;
 		float exc = src.process() * 0.5f;
 		float inj = injAmt > 0.f ? noise * injAmt : 0.f;
 
-		// 2x oversample steps
-		float lip = tract.step(exc, inj, injectPos, noise, 0.5f);
-		lip = tract.step(exc, inj, injectPos, noise, 1.0f);
+		// shape update + rate-adaptive waveguide stepping
+		float lip = tract.process(1.f / sr, exc, inj, injectPos, noise);
 		float nose = tract.lastNoseOutput;
 
 		if (i >= warmup) {

@@ -100,7 +100,7 @@ struct CyberlineBrocaWidget : rack::app::ModuleWidget {
 			float curTy  = module ? module->curTongueY : 2.2f;
 			float curVel = module ? module->curVelum : 0.01f;
 			float curFric = module ? module->curFric : 0.f;
-			float curTens = module ? module->curTension : 0.6f;
+			float curVoic = module ? module->curVoicing : 1.0f;
 
 			// ---- 2. Left Pane: Hollow Wireframe IPA Vowel Trapezoid ----
 			float tx0 = 12.f, ty0 = 14.f, tw = 82.f, th = h - 22.f;
@@ -207,7 +207,7 @@ struct CyberlineBrocaWidget : rack::app::ModuleWidget {
 				// 3 Mini Horizontal Telemetry Bars: VOX (tension), VEL (nasal), FRC (fricative)
 				struct BarInfo { const char* name; float val; NVGcolor col; };
 				BarInfo bars[3] = {
-					{"VOX", rack::math::clamp(curTens, 0.f, 1.f), neonCoral},
+					{"VOX", rack::math::clamp(curVoic, 0.f, 1.f), neonCoral},
 					{"VEL", rack::math::clamp(curVel,  0.f, 1.f), neonMint},
 					{"FRC", rack::math::clamp(curFric, 0.f, 1.f), neonAmber}
 				};

@@ -12,7 +12,11 @@ void CyberlineLarynx::process(const ProcessArgs& args) {
 	if (glottis.smoothCounter + 1 >= CyberlineGlottis::SMOOTH_INTERVAL
 			|| lastFoldLen < 0.f) {
 		// CV + param mix, 0..10 V -> 0..1
-		// TENS/POLY (TENSION_INPUT): Ch 1 = Tension CV; Ch 2 = Pressure scale when PRESS is unpatched
+		// TENS/POLY (TENSION_INPUT): Ch 1 = Tension CV; Ch 2 = Pressure scale when PRESS is unpatched;
+		// Ch 3 = Voicing (0-10 V -> 0..1 fold vibration; absent = fully voiced)
+		float voicingAmt = (inputs[TENSION_INPUT].getChannels() >= 3)
+			? rack::math::clamp(inputs[TENSION_INPUT].getVoltage(2) * 0.1f, 0.f, 1.f)
+			: 1.f;
 		float tension = rack::math::clamp(
 			params[TENSION_PARAM].getValue()
 			+ inputs[TENSION_INPUT].getVoltage(0) * 0.1f, 0.f, 1.f);
@@ -44,7 +48,7 @@ void CyberlineLarynx::process(const ProcessArgs& args) {
 		// scaled: full pressure ~= +30 Hz at coupling max)
 		f0 += params[PCOUPLE_PARAM].getValue() * std::fabs(pressure) * 30.f;
 
-		glottis.setTargets(f0, tension, pressure, foldLen);
+		glottis.setTargets(f0, tension, pressure, foldLen, voicingAmt);
 	}
 
 	float noise = rack::random::uniform() * 2.f - 1.f;

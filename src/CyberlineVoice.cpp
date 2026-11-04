@@ -38,6 +38,14 @@ void CyberlineVoice::process(const ProcessArgs& args) {
 		storedTension = tension;
 		storedPressure = pressure;
 
+		// Voicing (0..1 fold vibration): Ch 3 of TENS/POLY, else Ch 9 of the
+		// 9-ch TRACT POLY on TNGX/POLY; absent = fully voiced.
+		float voicingAmt = 1.f;
+		if (tensPoly2 && inputs[V_TENSION_INPUT].getChannels() >= 3)
+			voicingAmt = rack::math::clamp(inputs[V_TENSION_INPUT].getVoltage(2) * 0.1f, 0.f, 1.f);
+		else if (inputs[V_TONGUEX_INPUT].getChannels() >= 9)
+			voicingAmt = rack::math::clamp(inputs[V_TONGUEX_INPUT].getVoltage(8) * 0.1f, 0.f, 1.f);
+
 		float foldLen = params[V_FOLDLEN_PARAM].getValue();
 		if (foldLen != lastFoldLen) {
 			lastFoldLen = foldLen;
@@ -48,7 +56,7 @@ void CyberlineVoice::process(const ProcessArgs& args) {
 		float f0 = cachedAllo * std::pow(2.f, v + oct)
 			* std::sqrt(std::fmax(storedTension, 0.01f) / 0.6f);
 		f0 += params[V_PCOUPLE_PARAM].getValue() * std::fabs(storedPressure) * 30.f;
-		glottis.setTargets(f0, storedTension, storedPressure, foldLen);
+		glottis.setTargets(f0, storedTension, storedPressure, foldLen, voicingAmt);
 
 		float vtl = params[V_VTL_PARAM].getValue();
 		if (vtl != vtlCm) {
@@ -101,11 +109,8 @@ void CyberlineVoice::process(const ProcessArgs& args) {
 		params[V_DRIFT_PARAM].getValue(), 6.f);
 
 	// ---- tract ----
-	tract.reshape(args.sampleTime);
-	tract.calculateReflectionsPublic();
 	float exc = voiced;
-	float lip = tract.step(exc, 0.f, 0.f, noise, 0.5f);
-	lip = tract.step(exc, 0.f, 0.f, noise, 1.0f);
+	float lip = tract.process(args.sampleTime, exc, 0.f, 0.f, noise);
 	float nose = tract.lastNoseOutput;
 
 	outputs[V_VOICED_OUTPUT].setVoltage(rack::math::clamp(voiced * 5.f, -5.f, 5.f));
