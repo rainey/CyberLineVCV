@@ -340,7 +340,7 @@ struct CyberlineLarynxWidget : rack::app::ModuleWidget {
 		nvgFillColor(args.vg, nvgRGB(0xe8, 0x8c, 0xd0));
 		text(c1, 230, "PITCH");
 		nvgFillColor(args.vg, nvgRGB(0xf2, 0x88, 0x94));
-		text(c2, 230, "TENS");
+		text(c2, 230, "TENS/POLY");
 		nvgFillColor(args.vg, nvgRGB(0x7e, 0xd4, 0xe8));
 		text(c1, 270, "PRESS");
 		nvgFillColor(args.vg, nvgRGB(0xec, 0xb0, 0x6a));

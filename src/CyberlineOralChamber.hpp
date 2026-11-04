@@ -67,7 +67,7 @@ struct CyberlineOralChamber : rack::engine::Module {
 		configParam(WALL_PARAM, 0.98f, 1.f, 0.999f, "Wall damping");
 		configInput(SOURCE_INPUT, "Source (audio)");
 		configInput(INJECT_INPUT, "Inject (audio)");
-		configInput(TONGUEX_INPUT, "Tongue X (0-10 V)");
+		configInput(TONGUEX_INPUT, "Tongue X (0-10 V) / 6-ch Tract Poly Bus (TNGX, TNGY, VEL, CPOS, CWID, FRIC)");
 		configInput(TONGUEY_INPUT, "Tongue Y (0-10 V)");
 		configInput(VELUM_INPUT, "Velum (0-10 V)");
 		configInput(CONSTRPOS_INPUT, "Constriction position (0-10 V)");

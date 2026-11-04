@@ -50,7 +50,7 @@ struct CyberlineLarynx : rack::engine::Module {
 		configParam(FBGAIN_PARAM, 0.f, 1.f, 0.f, "Feedback gain");
 		configParam(PCOUPLE_PARAM, 0.f, 1.f, 0.3f, "Pressure-pitch coupling");
 		configInput(PITCH_INPUT, "Pitch (1 V/oct)");
-		configInput(TENSION_INPUT, "Tension (0-10 V)");
+		configInput(TENSION_INPUT, "Tension (0-10 V) / 2-ch Larynx Poly Bus (Ch 1: TENS, Ch 2: PRESS)");
 		configInput(PRESSURE_INPUT, "Pressure (0-10 V)");
 		configInput(FEEDBACK_INPUT, "Tract feedback (audio)");
 		configOutput(VOICED_OUTPUT, "Voiced");

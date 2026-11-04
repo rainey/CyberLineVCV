@@ -12,13 +12,19 @@ void CyberlineLarynx::process(const ProcessArgs& args) {
 	if (glottis.smoothCounter + 1 >= CyberlineGlottis::SMOOTH_INTERVAL
 			|| lastFoldLen < 0.f) {
 		// CV + param mix, 0..10 V -> 0..1
+		// TENS/POLY (TENSION_INPUT): Ch 1 = Tension CV; Ch 2 = Pressure scale when PRESS is unpatched
 		float tension = rack::math::clamp(
 			params[TENSION_PARAM].getValue()
-			+ inputs[TENSION_INPUT].getVoltage() * 0.1f, 0.f, 1.f);
+			+ inputs[TENSION_INPUT].getVoltage(0) * 0.1f, 0.f, 1.f);
 		float pKnob = params[PRESSURE_PARAM].getValue();
-		float pressure = inputs[PRESSURE_INPUT].isConnected()
-			? rack::math::clamp(pKnob * inputs[PRESSURE_INPUT].getVoltage() * 0.1f, -1.f, 1.f)
-			: rack::math::clamp(pKnob, 0.f, 1.f);
+		float pressure;
+		if (inputs[PRESSURE_INPUT].isConnected()) {
+			pressure = rack::math::clamp(pKnob * inputs[PRESSURE_INPUT].getVoltage() * 0.1f, -1.f, 1.f);
+		} else if (inputs[TENSION_INPUT].getChannels() >= 2) {
+			pressure = rack::math::clamp(pKnob * inputs[TENSION_INPUT].getVoltage(1) * 0.1f, -1.f, 1.f);
+		} else {
+			pressure = rack::math::clamp(pKnob, 0.f, 1.f);
+		}
 
 		// Allometric base frequency from fold length (mm):
 		// log10(F0) = -1.43 * log10(L_mm) + 4.01   (mammal mean-F0 law)

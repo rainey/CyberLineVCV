@@ -86,13 +86,17 @@ struct CyberlineVoiceWidget : rack::app::ModuleWidget {
 				if (module->glottis.Te > 0.05f && module->glottis.Te < 0.98f)
 					te = module->glottis.Te;
 				velum = rack::math::clamp(module->tract.velum, 0.f, 1.f);
-				tngX = rack::math::clamp(module->params[CyberlineVoice::V_TONGUEX_PARAM].getValue() * 0.1f, 0.f, 1.f);
-				tngY = rack::math::clamp(module->params[CyberlineVoice::V_TONGUEY_PARAM].getValue() * 0.1f, 0.f, 1.f);
-				fb = rack::math::clamp(module->params[CyberlineVoice::V_FB_PARAM].getValue(), 0.f, 1.f);
 				if (module->tract.initialized && module->tract.n >= 12) {
 					n = module->tract.n;
 					noseStart = module->tract.noseStart;
+					float span = std::fmax(1.f, (float)(module->tract.tipStart - module->tract.bladeStart));
+					tngX = rack::math::clamp((module->tract.tongueIndex - module->tract.bladeStart) / span, 0.f, 1.f);
+					tngY = rack::math::clamp((module->tract.tongueDiameter - 1.5f) / 3.5f, 0.f, 1.f);
+				} else {
+					tngX = rack::math::clamp(module->params[CyberlineVoice::V_TONGUEX_PARAM].getValue() * 0.1f, 0.f, 1.f);
+					tngY = rack::math::clamp(module->params[CyberlineVoice::V_TONGUEY_PARAM].getValue() * 0.1f, 0.f, 1.f);
 				}
+				fb = rack::math::clamp(module->params[CyberlineVoice::V_FB_PARAM].getValue(), 0.f, 1.f);
 			}
 
 			// ---- 1. Left Side: Curved Hollow Wireframe Vocal Folds + LF Pulse ----
@@ -369,10 +373,12 @@ struct CyberlineVoiceWidget : rack::app::ModuleWidget {
 			}
 		};
 
-		// Row 4 Inputs: PITCH (magenta), PRESS (cyan -> matches BREATH PRESS), TENS (coral)
+		// Row 4 Inputs: PITCH (magenta), PRESS (cyan -> matches BREATH PRESS), TENS/POLY (coral)
 		drawHollowPortRing(c1, rIn1, neonMag, false);
 		drawHollowPortRing(c2, rIn1, neonCyan, false);
 		drawHollowPortRing(c3, rIn1, neonCoral, false);
+		// Row 5 TNGX/POLY bus entry ring (neon violet)
+		drawHollowPortRing(c1, rIn2, nvgRGB(0x9b, 0x6d, 0xff), false);
 
 		// Row 6 Outputs: LIPS (magenta), NOSE (cyan), SOURCE (coral)
 		drawHollowPortRing(c1, rOut, neonMag, true);
@@ -408,21 +414,21 @@ struct CyberlineVoiceWidget : rack::app::ModuleWidget {
 		nvgFillColor(vg, label);
 		text(k4[3], 185, "MUSCLE");
 
-		// Row 4 (Glottis CV Inputs): PITCH, PRESS, TENS (+ VOX LED at x=158)
+		// Row 4 (Glottis CV Inputs): PITCH, PRESS, TENS/POLY (+ VOX LED at x=158)
 		nvgFillColor(vg, nvgRGB(0xff, 0x88, 0xcc));
 		text(c1, 230, "PITCH");
 		nvgFillColor(vg, nvgRGB(0x88, 0xe4, 0xfc));
 		text(c2, 230, "PRESS");
 		nvgFillColor(vg, nvgRGB(0xf8, 0x82, 0x88));
-		text(c3, 230, "TENS");
+		text(c3, 230, "TENS/POLY");
 		nvgFontSize(vg, 6.f);
 		nvgFillColor(vg, nvgRGB(0xf8, 0x82, 0x88));
 		text(158.f, 240, "VOX");
 		nvgFontSize(vg, 8.f);
 
-		// Row 5 (Articulator CV Inputs): TNGX CV, TNGY CV, VELUM CV
+		// Row 5 (Articulator CV Inputs): TNGX/POLY, TNGY CV, VELUM CV
 		nvgFillColor(vg, nvgRGB(0xd8, 0xb8, 0xff));
-		text(c1, 276, "TNGX CV");
+		text(c1, 276, "TNGX/POLY");
 		text(c2, 276, "TNGY CV");
 		nvgFillColor(vg, nvgRGB(0x88, 0xe4, 0xfc));
 		text(c3, 276, "VELUM CV");

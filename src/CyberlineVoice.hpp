@@ -73,9 +73,9 @@ struct CyberlineVoice : rack::engine::Module {
 		configParam(V_VELUM_PARAM, 0.f, 1.f, 0.01f, "Velum");
 		configParam(V_SPEED_PARAM, 0.f, 1.f, 0.5f, "Muscle speed");
 		configInput(V_PITCH_INPUT, "Pitch (1 V/oct)");
-		configInput(V_TENSION_INPUT, "Tension (0-10 V)");
+		configInput(V_TENSION_INPUT, "Tension (0-10 V) / 2-ch Larynx Poly Bus (Ch 1: TENS, Ch 2: PRESS)");
 		configInput(V_PRESSURE_INPUT, "Pressure (0-10 V)");
-		configInput(V_TONGUEX_INPUT, "Tongue X (0-10 V)");
+		configInput(V_TONGUEX_INPUT, "Tongue X (0-10 V) / 8-ch Tract+Voice Poly Bus (Ch 1-6: Tract, Ch 7-8: Larynx)");
 		configInput(V_TONGUEY_INPUT, "Tongue Y (0-10 V)");
 		configInput(V_VELUM_INPUT, "Velum (0-10 V)");
 		configOutput(V_LIPS_OUTPUT, "Lips");

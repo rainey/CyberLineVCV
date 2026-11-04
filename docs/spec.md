@@ -47,8 +47,11 @@ fixed filter banks.
 | `cyberline-voice` | `CyberlineVoice` | Fused Larynx+Chamber, pre-patched internally, feedback knob live |
 | `cyberline-lungs` | `CyberlineLungs` | Breath-pressure reservoir; doubles as a physically-shaped envelope generator |
 | `cyberline-heart` | `CyberlineHeart` | Elastance cardiac pump: intrinsic clock, Wiggers envelopes, ECG/beats, phonocardiogram, mass allometry |
+| `cyberline-broca` | `CyberlineBroca` | "Broca" (Broca-Brika) articulatory cortex & phoneme generator: vowel A/B morphing, consonant onset/manner engine, and polyphonic Tract/Larynx buses |
 
 ### Roadmap (not v1)
+
+- `cyberline-broca-pad` / 2D IPA Vowel-Pad & Voder gesture controller — alternative playable 2D X/Y pad + phoneme bank surface (revisit after `cyberline-broca` vowel/consonant morph workflow).
 
 - `cyberline-formant-chamber` — **contingent** (see note): Klatt-style cascaded
   formant resonators with vowel *tables*. This is the one planned module that

@@ -62,6 +62,17 @@
         "Envelope generator",
         "Clock generator"
       ]
+    },
+    {
+      "slug": "cyberline-broca",
+      "name": "Broca",
+      "description": "Broca-Brika articulatory cortex and phoneme generator: vowel A/B morphing, 20 consonant manners (nasals, glides, fricatives, plosive stops), and polyphonic Tract/Larynx CV buses",
+      "tags": [
+        "Physical modeling",
+        "Controller",
+        "Vocal",
+        "Polyphonic"
+      ]
     }
   ]
 }

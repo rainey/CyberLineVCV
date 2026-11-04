@@ -13,13 +13,28 @@ void CyberlineVoice::process(const ProcessArgs& args) {
 
 	// ---- block-rate parameters (every 16 samples) ----
 	if ((scanIndex++ & 15) == 0) {
+		bool tractPoly6 = (inputs[V_TONGUEX_INPUT].getChannels() >= 6);
+		bool tractPoly8 = (inputs[V_TONGUEX_INPUT].getChannels() >= 8);
+		bool tensPoly2  = (inputs[V_TENSION_INPUT].getChannels() >= 2);
+
+		float tensCv = inputs[V_TENSION_INPUT].isConnected()
+			? inputs[V_TENSION_INPUT].getVoltage(0)
+			: (tractPoly8 ? inputs[V_TONGUEX_INPUT].getVoltage(6) : 0.f);
 		float tension = rack::math::clamp(
-			params[V_TENSION_PARAM].getValue() + inputs[V_TENSION_INPUT].getVoltage() * 0.1f,
+			params[V_TENSION_PARAM].getValue() + tensCv * 0.1f,
 			0.f, 1.f);
+
 		float pKnob = params[V_PRESSURE_PARAM].getValue();
-		float pressure = inputs[V_PRESSURE_INPUT].isConnected()
-			? rack::math::clamp(pKnob * inputs[V_PRESSURE_INPUT].getVoltage() * 0.1f, -1.f, 1.f)
-			: rack::math::clamp(pKnob, 0.f, 1.f);
+		float pressure;
+		if (inputs[V_PRESSURE_INPUT].isConnected()) {
+			pressure = rack::math::clamp(pKnob * inputs[V_PRESSURE_INPUT].getVoltage() * 0.1f, -1.f, 1.f);
+		} else if (tensPoly2) {
+			pressure = rack::math::clamp(pKnob * inputs[V_TENSION_INPUT].getVoltage(1) * 0.1f, -1.f, 1.f);
+		} else if (tractPoly8) {
+			pressure = rack::math::clamp(pKnob * inputs[V_TONGUEX_INPUT].getVoltage(7) * 0.1f, -1.f, 1.f);
+		} else {
+			pressure = rack::math::clamp(pKnob, 0.f, 1.f);
+		}
 		storedTension = tension;
 		storedPressure = pressure;
 
@@ -40,14 +55,38 @@ void CyberlineVoice::process(const ProcessArgs& args) {
 			vtlCm = vtl;
 			tract.setGeometry(vtlCm, args.sampleRate);
 		}
-		float tx = rack::math::clamp(params[V_TONGUEX_PARAM].getValue()
-			+ inputs[V_TONGUEX_INPUT].getVoltage(), 0.f, 10.f) / 10.f;
-		float ty = rack::math::clamp(params[V_TONGUEY_PARAM].getValue()
-			+ inputs[V_TONGUEY_INPUT].getVoltage(), 0.f, 10.f) / 10.f;
+
+		float txCv = inputs[V_TONGUEX_INPUT].getVoltage(0);
+		float tyCv = inputs[V_TONGUEY_INPUT].isConnected()
+			? inputs[V_TONGUEY_INPUT].getVoltage()
+			: (tractPoly6 ? inputs[V_TONGUEX_INPUT].getVoltage(1) : 0.f);
+		float velCv = inputs[V_VELUM_INPUT].isConnected()
+			? inputs[V_VELUM_INPUT].getVoltage()
+			: (tractPoly6 ? inputs[V_TONGUEX_INPUT].getVoltage(2) : 0.f);
+
+		float tx = rack::math::clamp(params[V_TONGUEX_PARAM].getValue() + txCv, 0.f, 10.f) / 10.f;
+		float ty = rack::math::clamp(params[V_TONGUEY_PARAM].getValue() + tyCv, 0.f, 10.f) / 10.f;
 		tract.setTongue(tract.bladeStart + tx * (tract.tipStart - tract.bladeStart),
 			CyberlineTract::mapTongueYDiameter(ty));
 		tract.setVelum(rack::math::clamp(params[V_VELUM_PARAM].getValue()
-			+ inputs[V_VELUM_INPUT].getVoltage() * 0.1f, 0.f, 1.f));
+			+ velCv * 0.1f, 0.f, 1.f));
+
+		// When a >= 6-channel Tract Poly cable is plugged into TNGX/POLY on Voice,
+		// channels 4-6 unlock consonant constriction & frication (CPOS, CWID, FRIC).
+		if (tractPoly6) {
+			float cp = inputs[V_TONGUEX_INPUT].getVoltage(3);
+			float cwNorm = rack::math::clamp(5.0f + inputs[V_TONGUEX_INPUT].getVoltage(4), 0.f, 10.f) * 0.1f;
+			float cw = CyberlineTract::mapConstrWidth(cwNorm);
+			float airDrive = rack::math::clamp(std::fabs(storedPressure) * 1.25f, 0.f, 1.f);
+			float fr = rack::math::clamp(inputs[V_TONGUEX_INPUT].getVoltage(5) * 0.1f, 0.f, 1.f) * airDrive;
+			float cpos = (cp <= 0.01f) ? -1.f
+				: tract.bladeStart + rack::math::clamp(cp, 0.f, 10.f) / 10.f
+					* (tract.n - tract.bladeStart);
+			tract.setConstriction(cpos, cw, fr);
+		} else {
+			tract.setConstriction(-1.f, 3.f, 0.f);
+		}
+
 		tract.muscleSpeed = 2.f + params[V_SPEED_PARAM].getValue() * 38.f;
 		tract.applyConstriction();
 	}

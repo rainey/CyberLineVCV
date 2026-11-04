@@ -87,8 +87,9 @@ struct CyberlineOralChamberWidget : rack::app::ModuleWidget {
 				n = module->tract.n;
 				noseStart = module->tract.noseStart;
 				velum = rack::math::clamp(module->tract.velum, 0.f, 1.f);
-				tngX = rack::math::clamp(module->params[CyberlineOralChamber::TONGUEX_PARAM].getValue() * 0.1f, 0.f, 1.f);
-				tngY = rack::math::clamp(module->params[CyberlineOralChamber::TONGUEY_PARAM].getValue() * 0.1f, 0.f, 1.f);
+				float span = std::fmax(1.f, (float)(module->tract.tipStart - module->tract.bladeStart));
+				tngX = rack::math::clamp((module->tract.tongueIndex - module->tract.bladeStart) / span, 0.f, 1.f);
+				tngY = rack::math::clamp((module->tract.tongueDiameter - 1.5f) / 3.5f, 0.f, 1.f);
 				injPos = rack::math::clamp(
 					module->params[CyberlineOralChamber::INJPOS_PARAM].getValue()
 					+ module->inputs[CyberlineOralChamber::INJPOS_INPUT].getVoltage(),
@@ -353,6 +354,8 @@ struct CyberlineOralChamberWidget : rack::app::ModuleWidget {
 		// INJPOS CV & INJECT inputs (neon cyan)
 		drawHollowPortRing(k4[2], rIn1, neonCyan, false);
 		drawHollowPortRing(k4[3], rIn1, neonCyan, false);
+		// TNGX/POLY bus entry input (neon violet ring inside the articulation CV bus)
+		drawHollowPortRing(cvX[0], rIn2, neonViolet, false);
 
 		// 4 Outputs: LIPS (violet), NOSE (cyan), SHAPE (magenta), PROBE (amber -> LARYNX FB IN)
 		drawHollowPortRing(k4[0], rOut, neonViolet, true);
@@ -395,10 +398,13 @@ struct CyberlineOralChamberWidget : rack::app::ModuleWidget {
 		text(k4[2], 230, "INJPOS CV");
 		text(k4[3], 230, "INJECT");
 
-		// Row 5 articulation CV inputs: TNGX, TNGY, VEL, CPOS, CWID, FRIC
+		// Row 5 articulation CV inputs: TNGX/POLY, TNGY, VEL, CPOS, CWID, FRIC
+		nvgFontSize(vg, 6.2f);
+		nvgFillColor(vg, nvgRGB(0xd8, 0xb8, 0xff));
+		text(cvX[0] + 1.f, 277, "TNGX/POLY");
 		nvgFontSize(vg, 7.2f);
 		nvgFillColor(vg, nvgRGB(0xc8, 0xb4, 0xec));
-		text(cvX[0], 277, "TNGX"); text(cvX[1], 277, "TNGY");
+		text(cvX[1], 277, "TNGY");
 		text(cvX[2], 277, "VEL");  text(cvX[3], 277, "CPOS");
 		text(cvX[4], 277, "CWID"); text(cvX[5], 277, "FRIC");
 		nvgFontSize(vg, 8.f);

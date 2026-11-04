@@ -30,16 +30,35 @@ void CyberlineOralChamber::process(const ProcessArgs& args) {
 		//   knob 5.0 -> d_min ~ 0.69 cm (mid vowels right at 12 o'clock default)
 		//   knob 7.7 -> d_min ~ 1.50 cm (neutral uniform tract)
 		//   knob 10  -> d_min ~ 2.30 cm (wide open /a/)
-		float tx = rack::math::clamp(params[TONGUEX_PARAM].getValue()
-			+ inputs[TONGUEX_INPUT].getVoltage(), 0.f, 10.f) / 10.f;
-		float ty = rack::math::clamp(params[TONGUEY_PARAM].getValue()
-			+ inputs[TONGUEY_INPUT].getVoltage(), 0.f, 10.f) / 10.f;
+		// Poly-bus normalling on TONGUEX_INPUT (TNGX/POLY):
+		// When a >= 6-channel cable (e.g. from BROCA's TRACT POLY) is plugged into
+		// TNGX/POLY, channels 1-6 normal to TNGX, TNGY, VEL, CPOS, CWID, FRIC unless
+		// overridden by a mono cable in that individual jack.
+		bool polyBus = (inputs[TONGUEX_INPUT].getChannels() >= 6);
+		float txCv = inputs[TONGUEX_INPUT].getVoltage(0);
+		float tyCv = inputs[TONGUEY_INPUT].isConnected()
+			? inputs[TONGUEY_INPUT].getVoltage()
+			: (polyBus ? inputs[TONGUEX_INPUT].getVoltage(1) : 0.f);
+		float velCv = inputs[VELUM_INPUT].isConnected()
+			? inputs[VELUM_INPUT].getVoltage()
+			: (polyBus ? inputs[TONGUEX_INPUT].getVoltage(2) : 0.f);
+		float cpCv = inputs[CONSTRPOS_INPUT].isConnected()
+			? inputs[CONSTRPOS_INPUT].getVoltage()
+			: (polyBus ? inputs[TONGUEX_INPUT].getVoltage(3) : 0.f);
+		float cwCv = inputs[CONSTRW_INPUT].isConnected()
+			? inputs[CONSTRW_INPUT].getVoltage()
+			: (polyBus ? inputs[TONGUEX_INPUT].getVoltage(4) : 0.f);
+		float frCv = inputs[FRIC_INPUT].isConnected()
+			? inputs[FRIC_INPUT].getVoltage()
+			: (polyBus ? inputs[TONGUEX_INPUT].getVoltage(5) : 0.f);
+
+		float tx = rack::math::clamp(params[TONGUEX_PARAM].getValue() + txCv, 0.f, 10.f) / 10.f;
+		float ty = rack::math::clamp(params[TONGUEY_PARAM].getValue() + tyCv, 0.f, 10.f) / 10.f;
 		float idx = tract.bladeStart + tx * (tract.tipStart - tract.bladeStart);
 		tract.setTongue(idx, CyberlineTract::mapTongueYDiameter(ty));
 
 		// Velum: 0..10 V -> 0..1
-		float vel = rack::math::clamp(params[VELUM_PARAM].getValue()
-			+ inputs[VELUM_INPUT].getVoltage() * 0.1f, 0.f, 1.f);
+		float vel = rack::math::clamp(params[VELUM_PARAM].getValue() + velCv * 0.1f, 0.f, 1.f);
 		tract.setVelum(vel);
 
 		// Constriction position/width/amount (position -1 = off when param+CV
@@ -49,13 +68,10 @@ void CyberlineOralChamber::process(const ProcessArgs& args) {
 		// the 1.5 cm neutral oral diameter, and the default 12 o'clock position
 		// (5.0 -> d = 0.42 cm) sits right in the peak of the [0.30, 0.70] cm
 		// fricative turbulence window.
-		float cp = params[CONSTRPOS_PARAM].getValue()
-			+ inputs[CONSTRPOS_INPUT].getVoltage();
-		float cwNorm = rack::math::clamp(params[CONSTRW_PARAM].getValue()
-			+ inputs[CONSTRW_INPUT].getVoltage(), 0.f, 10.f) * 0.1f;
+		float cp = params[CONSTRPOS_PARAM].getValue() + cpCv;
+		float cwNorm = rack::math::clamp(params[CONSTRW_PARAM].getValue() + cwCv, 0.f, 10.f) * 0.1f;
 		float cw = CyberlineTract::mapConstrWidth(cwNorm);
-		float fr = rack::math::clamp(params[FRIC_PARAM].getValue()
-			+ inputs[FRIC_INPUT].getVoltage() * 0.1f, 0.f, 1.f);
+		float fr = rack::math::clamp(params[FRIC_PARAM].getValue() + frCv * 0.1f, 0.f, 1.f);
 		float cpos = (cp <= 0.01f) ? -1.f
 			: tract.bladeStart + rack::math::clamp(cp, 0.f, 10.f) / 10.f
 				* (tract.n - tract.bladeStart);
