@@ -31,6 +31,7 @@ struct CyberlineOralChamber : rack::engine::Module {
 		CONSTRW_INPUT,
 		FRIC_INPUT,
 		INJPOS_INPUT,
+		VTL_INPUT,
 		NUM_INPUTS
 	};
 	enum OutputIds {
@@ -73,6 +74,7 @@ struct CyberlineOralChamber : rack::engine::Module {
 		configInput(CONSTRW_INPUT, "Constriction width (0-10 V)");
 		configInput(FRIC_INPUT, "Fricative (0-10 V)");
 		configInput(INJPOS_INPUT, "Injection position CV");
+		configInput(VTL_INPUT, "Tract length CV (5.4 cm/V, ±10 V)");
 		configOutput(LIPS_OUTPUT, "Lips");
 		configOutput(NOSE_OUTPUT, "Nose");
 		configOutput(SHAPE_OUTPUT, "Shape scan (CV)");

@@ -114,6 +114,10 @@ struct CyberlineHeartCore {
 	float thumpFreq[NUM_THUMPS] = {58.f, 90.f, 45.f, 38.f};
 	float thumpTau[NUM_THUMPS] = {0.09f, 0.055f, 0.10f, 0.12f};
 	float murmurGate = 0.f;
+	float murmurLp = 0.f;
+	bool s1Fired = false;
+	bool s2Fired = false;
+	bool s3Fired = false;
 
 	// ---- trigger pulses ----
 	float beatPulse = 0.f;   // countdown, s
@@ -157,6 +161,8 @@ struct CyberlineHeartCore {
 			thumpAge[i] = 10.f; thumpAmp[i] = 0.f;
 		}
 		murmurGate = 0.f;
+		murmurLp = 0.f;
+		s1Fired = s2Fired = s3Fired = false;
 		beatPulse = atriaPulse = 0.f;
 		outVolume = outPressure = outFlow = outOutflow = outArterial = 0.f;
 		tgtVolume = tgtPressure = tgtFlow = tgtOutflow = tgtArterial = 0.f;
@@ -190,18 +196,22 @@ struct CyberlineHeartCore {
 			+ 1.00f * g(tV, 0.300f * P, 0.070f * P);       // T
 		o.ecg = heart_clampf(ecg * 0.32f, -1.f, 1.f);
 
-		// phonocardiogram: decaying-sine thumps + murmur noise
+		// phonocardiogram: smooth attack-decay thumps + low-passed murmur noise
 		float sound = 0.f;
 		for (int i = 0; i < NUM_THUMPS; i++) {
 			if (thumpAmp[i] > 1e-4f && thumpAge[i] < 8.f * thumpTau[i]) {
 				thumpAge[i] += sampleTime;
-				sound += thumpAmp[i]
-					* std::exp(-thumpAge[i] / thumpTau[i])
+				// 3.5 ms soft onset ramp prevents derivative clicks at t = 0
+				float attack = 1.f - std::exp(-thumpAge[i] / 0.0035f);
+				float decay = std::exp(-thumpAge[i] / thumpTau[i]);
+				sound += thumpAmp[i] * 1.15f * attack * decay
 					* std::sin(6.2831853f * thumpFreq[i] * thumpAge[i]);
 			}
 		}
-		sound = sound * 3.5f + murmurGate * 0.8f * (uniform() * 2.f - 1.f);
-		o.sound = heart_clampf(sound, -1.f, 1.f) * in.soundLvl;
+		float rawNoise = uniform() * 2.f - 1.f;
+		murmurLp += (rawNoise - murmurLp) * 0.14f;
+		sound = sound * 1.15f + murmurGate * 0.55f * murmurLp;
+		o.sound = std::tanh(sound * in.soundLvl * 1.25f);
 
 		// trigger pulses
 		beatPulse = fmaxf(0.f, beatPulse - sampleTime);
@@ -307,9 +317,11 @@ struct CyberlineHeartCore {
 		// ventricle: base stiffness (compliance) + contraction twitch
 		// Sympathetic lusitropy slightly relaxes diastolic wall stiffness
 		// while positive inotropy boosts peak systolic elastance.
+		// Use ecgPeriod (snapshotted at fireVentricular) so HRV updates at
+		// fireAtrial do not discontinuously jump Ev mid-diastole.
 		float Ebase = (0.10f / (0.35f + 0.65f * in.compliance)) * (1.f - 0.18f * symp);
 		float ampV = 2.2f * (0.35f + 0.65f * in.contract) * (1.f + 0.50f * symp);
-		float r = 0.05f * period, d = 0.17f * period;
+		float r = 0.05f * ecgPeriod, d = 0.17f * ecgPeriod;
 		float Ev = Ebase + ampV * normTw(tV, r, d);
 		vpres = Ev * vvol;
 
@@ -331,14 +343,18 @@ struct CyberlineHeartCore {
 		flowIn = inflowOpen ? fminf(kIn * (apres - vpres), 5.f) : 0.f;
 		avol = heart_clampf(avol - flowIn * dt, 0.f, 1.f);
 		vvol = heart_clampf(vvol + flowIn * dt, 0.f, 1.f);
-		if (inflowWas && !inflowOpen && vvol > 0.05f) {
-			// S1: AV valve slams shut at the start of systole
+		if (!s1Fired && inflowWas && !inflowOpen && tV < 0.08f * ecgPeriod && vvol > 0.05f) {
+			// S1: AV valve slams shut once at the onset of ventricular systole
+			// (diastolic pressure equilibration / diastasis on long HRV beats
+			// gently floats the leaflets closed without slamming S1)
+			s1Fired = true;
 			thumpAmp[S1] = 0.55f + 0.45f * in.contract;
 			thumpAge[S1] = 0.f;
 			thumpFreq[S1] = 58.f * mPitchF;
 		}
-		if (!inflowWas && inflowOpen) {
-			// S3: rapid passive filling thump (soft, compliant hearts)
+		if (!s3Fired && s2Fired && !inflowWas && inflowOpen) {
+			// S3: rapid early-diastolic passive filling thump (once per beat after S2)
+			s3Fired = true;
 			thumpAmp[S3] = 0.30f * in.compliance
 				* heart_clampf((apres - vpres) * 6.f, 0.f, 1.f);
 			thumpAge[S3] = 0.f;
@@ -350,8 +366,9 @@ struct CyberlineHeartCore {
 		float kOut = 8.f * (1.f + 0.60f * symp) / (1.f + 2.2f * afterl) * (1.f - 0.45f * sten);
 		flowOut = outflowOpen ? fminf(kOut * (vpres - apart), 6.f) : 0.f;
 		vvol = heart_clampf(vvol - flowOut * dt, 0.f, 1.f);
-		if (outflowWas && !outflowOpen) {
-			// S2: aortic valve closure, end of ejection
+		if (!s2Fired && outflowWas && !outflowOpen) {
+			// S2: aortic valve closure, end of ejection (once per beat)
+			s2Fired = true;
 			lastStroke = ejected;
 			ejected = 0.f;
 			thumpAmp[S2] = 0.45f + 0.35f * in.contract;
@@ -435,6 +452,9 @@ struct CyberlineHeartCore {
 		tV = 0.f;
 		ecgPeriod = period;
 		beatPulse = 0.012f;
+		s1Fired = false;
+		s2Fired = false;
+		s3Fired = false;
 	}
 
 	// normalized two-exponential twitch: fast rise (r), slow decay (d)

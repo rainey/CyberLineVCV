@@ -13,7 +13,9 @@ void CyberlineOralChamber::process(const ProcessArgs& args) {
 
 	// ---- block-rate parameter read (every 16 samples) ----
 	if ((blockCounter++ & 15) == 0) {
-		float vtl = params[VTL_PARAM].getValue();
+		float vtl = rack::math::clamp(
+			params[VTL_PARAM].getValue() + inputs[VTL_INPUT].getVoltage() * 5.4f,
+			6.f, 60.f);
 		if (vtl != vtlCm) {
 			vtlCm = vtl;
 			tract.setGeometry(vtlCm, args.sampleRate);

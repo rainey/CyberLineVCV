@@ -324,17 +324,118 @@ struct CyberlineLungsWidget : rack::app::ModuleWidget {
 		}
 	};
 
-	// 4-position snap switch (Cycle/Trigger/Closed/Phasor). Stock
-	// componentlibrary tops out at 3 positions (CKSSThree), so this is a
-	// Knob subclass: snap = true gives integer values, wheel, double-click
-	// reset and undo for free; draw() renders a vertical 4-slot track.
-	struct ModeSwitch : rack::app::Knob {
+	// Base vertical multi-position snap switch with natural top-to-bottom drag
+	// direction (dragging down moves the handle down; dragging up moves it up)
+	// and click-to-select / click-to-toggle behavior.
+	template <int NumSlots>
+	struct VerticalSnapSwitch : rack::app::ParamWidget {
+		float pressY = 0.f;
+		float oldValue = 0.f;
+		float dragDeltaY = 0.f;
+		bool dragged = false;
+
+		virtual float slotY(int i) const = 0;
+
+		void initParamQuantity() override {
+			ParamWidget::initParamQuantity();
+			if (auto* pq = getParamQuantity()) {
+				pq->snapEnabled = true;
+				pq->smoothEnabled = false;
+			}
+		}
+
+		void onButton(const rack::event::Button& e) override {
+			if (e.action == GLFW_PRESS && e.button == GLFW_MOUSE_BUTTON_LEFT) {
+				pressY = e.pos.y;
+			}
+			ParamWidget::onButton(e);
+		}
+
+		void onDragStart(const rack::event::DragStart& e) override {
+			ParamWidget::onDragStart(e);
+			if (e.button != GLFW_MOUSE_BUTTON_LEFT)
+				return;
+			if (auto* pq = getParamQuantity()) {
+				oldValue = std::round(pq->getValue());
+			}
+			dragDeltaY = 0.f;
+			dragged = false;
+		}
+
+		void onDragMove(const rack::event::DragMove& e) override {
+			ParamWidget::onDragMove(e);
+			if (e.button != GLFW_MOUSE_BUTTON_LEFT)
+				return;
+			auto* pq = getParamQuantity();
+			if (!pq)
+				return;
+
+			// Positive mouseDelta.y is downward on screen; slot 0 is at the top
+			// and slot (NumSlots - 1) is at the bottom.
+			dragDeltaY += e.mouseDelta.y;
+			if (std::fabs(dragDeltaY) >= 2.5f) {
+				dragged = true;
+			}
+			if (dragged) {
+				float span = std::max(8.f, slotY(NumSlots - 1) - slotY(0));
+				float stepPx = std::max(6.f, span / (float) std::max(1, NumSlots - 1));
+				float target = std::round(oldValue + dragDeltaY / stepPx);
+				pq->setValue(rack::math::clamp(target, pq->getMinValue(), pq->getMaxValue()));
+			}
+		}
+
+		void onDragEnd(const rack::event::DragEnd& e) override {
+			ParamWidget::onDragEnd(e);
+			if (e.button != GLFW_MOUSE_BUTTON_LEFT)
+				return;
+			auto* pq = getParamQuantity();
+			if (!pq)
+				return;
+
+			if (!dragged) {
+				int curSlot = (int) std::round(oldValue);
+				if (NumSlots <= 2) {
+					// 2-position switch: clicking anywhere toggles between 0 and 1
+					pq->setValue(curSlot == 0 ? 1.f : 0.f);
+				} else {
+					// Multi-position switch: clicking toward another slot selects it;
+					// clicking the active handle steps to the next slot.
+					int nearest = 0;
+					float bestDist = std::fabs(pressY - slotY(0));
+					for (int i = 1; i < NumSlots; i++) {
+						float d = std::fabs(pressY - slotY(i));
+						if (d < bestDist) {
+							bestDist = d;
+							nearest = i;
+						}
+					}
+					int nextSlot = (nearest != curSlot)
+						? nearest
+						: ((curSlot + 1) % NumSlots);
+					pq->setValue((float) nextSlot);
+				}
+			}
+
+			float newValue = std::round(pq->getValue());
+			if (module && oldValue != newValue) {
+				auto* h = new rack::history::ParamChange;
+				h->name = "move switch";
+				h->moduleId = module->id;
+				h->paramId = paramId;
+				h->oldValue = oldValue;
+				h->newValue = newValue;
+				APP->history->push(h);
+			}
+		}
+	};
+
+	// 4-position snap switch (Cycle/Trigger/Closed/Phasor).
+	struct ModeSwitch : VerticalSnapSwitch<4> {
 		ModeSwitch() {
-			snap = true;
 			box.size = rack::Vec(18.f, 34.f);
 		}
 
-		float slotY(int i) const {
+		float slotY(int i) const override {
 			// 4 slots evenly spread, inset to keep the handle inside
 			return 8.f + i * (box.size.y - 16.f) / 3.f;
 		}
@@ -368,13 +469,12 @@ struct CyberlineLungsWidget : rack::app::ModuleWidget {
 	};
 
 	// 2-position snap switch for Inhale Pressure mode: 0 = GASP (-P suction), 1 = MUTE (0 V)
-	struct InhaleSwitch : rack::app::Knob {
+	struct InhaleSwitch : VerticalSnapSwitch<2> {
 		InhaleSwitch() {
-			snap = true;
 			box.size = rack::Vec(16.f, 24.f);
 		}
 
-		float slotY(int i) const {
+		float slotY(int i) const override {
 			return 6.5f + i * (box.size.y - 13.f);
 		}
 
