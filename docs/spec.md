@@ -749,10 +749,10 @@ manifest.
 
 ## 9. Bioacoustics & Animal Vocalisation
 
-Because `cyberline-larynx` models vocal fold physics with mammal allometric scaling (`FOLDLEN`: 2–45 mm, $\log_{10}(F_0) = -1.43 \cdot \log_{10}(L) + 4.01$) and `cyberline-oral-chamber` models acoustic wave propagation with scalable tube geometry (`VTL`: 6–60 cm), the suite naturally synthesizes non-human animal vocalisations:
-- **Cats:** 20–28 Hz laryngeal tremor (purring) modulated across inhale/exhale, downward pitch/tongue glide (meow), dental hissing.
-- **Elephants:** 15–25 Hz infrasonic rumbles (large folds, 58 cm VTL, nasal shunt through trunk), high-pressure resonant brass trumpets.
-- **Primates:** Fast cyclic pant-hoots, high F0 alarm screeches, and LFO-driven jaw/lip chattering.
+Because `cyberline-larynx` models vocal fold physics with mammal allometric scaling (`FOLDLEN`: 2–45 mm, $\log_{10}(F_0) = -1.43 \cdot \log_{10}(L) + 4.01$) and `cyberline-oral-chamber` models acoustic wave propagation with scalable tube geometry (`VTL`: 6–60 cm), the suite naturally synthesizes a wide taxonomy of bioacoustic vocalisations:
+- **Terrestrial Mammals:** Cat 24–28 Hz purring tremor and vowel glides (meow); elephant 15–25 Hz infrasonic rumbles (nasal trunk radiation) and high-pressure trumpets; primate cyclic pant-hoots and jaw chattering.
+- **Avian / Bird Calls:** Songbird agile chirps and trills (2–5 kHz downward sweeps); dove/owl wooden coos (closed beak, elongated tracheal resonance, 6 Hz tremolo); crow/gull raucous squawks (feedback back-pressure chaos).
+- **Marine Mammals:** Humpback whale wandering frequency-modulated glides (massive laryngeal sac resonance); dolphin high-frequency signature whistles (3–8 kHz FM sweeps); California sea lion staccato guttural barks (2.5 Hz cadence with husky throat growl).
 
 See [`docs/animal_vocalisations.md`](animal_vocalisations.md) for full patch diagrams, parameter charts, and modulation guides.
 
