@@ -323,6 +323,7 @@ struct CyberlineLarynxWidget : rack::app::ModuleWidget {
 		// params (color-coded primary glottal drive & feedback knobs)
 		nvgFillColor(args.vg, nvgRGB(0xf2, 0x88, 0x94));
 		text(c1, 81, "TENSION");
+		text(PANEL_W * 0.5f, 81, "CV");
 		nvgFillColor(args.vg, nvgRGB(0x7e, 0xd4, 0xe8));
 		text(c2, 81, "PRESSURE");
 		nvgFillColor(args.vg, label);
@@ -339,8 +340,6 @@ struct CyberlineLarynxWidget : rack::app::ModuleWidget {
 		// inputs (color-coded inside the CV input bus bracket)
 		nvgFillColor(args.vg, nvgRGB(0xe8, 0x8c, 0xd0));
 		text(c1, 230, "PITCH");
-		nvgFillColor(args.vg, label);
-		text(96, 230, "CV");
 		nvgFillColor(args.vg, nvgRGB(0xf2, 0x88, 0x94));
 		text(c2, 230, "TENS/POLY");
 		nvgFillColor(args.vg, nvgRGB(0x7e, 0xd4, 0xe8));
@@ -390,7 +389,7 @@ struct CyberlineLarynxWidget : rack::app::ModuleWidget {
 		addParam(rack::createParamCentered<RoundSmallBlackKnob>(rack::Vec(c2, r[2]), module, CyberlineLarynx::VIBRATE_PARAM));
 		addParam(rack::createParamCentered<RoundSmallBlackKnob>(rack::Vec(c1, r[3]), module, CyberlineLarynx::FBGAIN_PARAM));
 		addParam(rack::createParamCentered<RoundSmallBlackKnob>(rack::Vec(c2, r[3]), module, CyberlineLarynx::PCOUPLE_PARAM));
-		addParam(rack::createParamCentered<Trimpot>(rack::Vec(96.f, r[4]), module, CyberlineLarynx::TENSIONCV_PARAM));
+		addParam(rack::createParamCentered<Trimpot>(rack::Vec(PANEL_W * 0.5f, r[0]), module, CyberlineLarynx::TENSIONCV_PARAM));
 
 		addInput(rack::createInputCentered<PJ301MPort>(rack::Vec(c1, r[4]), module, CyberlineLarynx::PITCH_INPUT));
 		addInput(rack::createInputCentered<PJ301MPort>(rack::Vec(c2, r[4]), module, CyberlineLarynx::TENSION_INPUT));
