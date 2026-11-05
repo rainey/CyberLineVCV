@@ -76,6 +76,15 @@
         "Vocal",
         "Polyphonic"
       ]
+    },
+    {
+      "slug": "cyberline-visual1",
+      "name": "Visual1",
+      "description": "Audio-to-image visualizer: FFT band envelopes drive 8x8 DCT coefficients of a rendered image (mosaic/phase modes) or perturb a loaded JPEG's coefficients (perturb mode)",
+      "tags": [
+        "Visual",
+        "Analysis"
+      ]
     }
   ]
 }

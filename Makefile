@@ -15,7 +15,7 @@ CXXFLAGS +=
 # build, not here.
 DEP_INCS = -I$(RACK_DIR)/dep/nanovg/src -I$(RACK_DIR)/dep/nanosvg/src \
 	-I$(RACK_DIR)/dep/glfw/include -I$(RACK_DIR)/dep/oui-blendish \
-	-I$(RACK_DIR)/dep/pffft
+	-I$(RACK_DIR)/dep/pffft -I$(RACK_DIR)/dep/osdialog
 
 LDFLAGS +=
 

@@ -48,6 +48,7 @@ fixed filter banks.
 | `cyberline-lungs` | `CyberlineLungs` | Breath-pressure reservoir; doubles as a physically-shaped envelope generator |
 | `cyberline-heart` | `CyberlineHeart` | Elastance cardiac pump: intrinsic clock, Wiggers envelopes, ECG/beats, phonocardiogram, mass allometry |
 | `cyberline-broca` | `CyberlineBroca` | "Broca" (Broca-Brika) articulatory cortex & phoneme generator: vowel A/B morphing, consonant onset/manner engine, and polyphonic Tract/Larynx buses |
+| `cyberline-visual1` | `CyberlineVisual1` | Audio→image visualizer: FFT band envelopes drive 8×8 DCT coefficients of a rendered image; perturb mode loads an image and lets the spectrum deform it |
 
 ### Roadmap (not v1)
 
@@ -586,6 +587,69 @@ and `LARYNX POLY`).
   - Feature: Oral closure combined with full `velum` port opening (1.0), radiating resonant sound through the nasal tract.
 - **Glides / Approximants:** `/w/` (labiovelar), `/l/` (lateral), `/r/` (retroflex), `/j/` (palatal 'y').
   - Feature: Open constriction aperture, full modal voicing, smooth vocalic transitions.
+
+## 5e. `cyberline-visual1` — Visual1 (audio→image visualizer)
+
+Not an anatomical module — a standalone experiment in direct
+frequency-domain-to-frequency-domain mapping. The image is treated as a
+grid of 8×8 JPEG-style DCT blocks; the audio FFT magnitude spectrum
+(63 log-spaced bands, 35 Hz–16 kHz) is injected into the blocks' 2D DCT
+coefficients by **zigzag position** (audio band *k* → AC coefficient at
+zigzag slot *k*+1), then every block is inverse-DCTed into RGBA pixels
+and blitted as a NanoVG texture (`nvgCreateImageRGBA`/`nvgUpdateImage`).
+
+### Inputs
+
+| # | Name | Range | Notes |
+|---|---|---|---|
+| V1 | L | audio | left/mono analysis input |
+| V2 | R | audio | right analysis input; unpatched follows L (mono renders full image) |
+
+### Outputs
+
+| # | Name | Notes |
+|---|---|---|
+| V1 | FRAME | 5 V trigger pulse (~2 ms) each time a new image frame lands (~86 Hz at 44.1 k, 512-sample hop) — clock for slaving other modules to the visualizer's frame cadence |
+| V2 | ACT | 0–10 V CV of the mean band envelope (loudness proxy) |
+
+### Parameters
+
+| Knob | Default | Range | Notes |
+|---|---|---|---|
+| GAIN | 0.5 | 0–1 | input sensitivity (maps gain 3..40 onto FFT magnitudes; dB window −66..−18) |
+| SPREAD | 0.65 | 0–1 | how deep into the 63-slot zigzag the spectrum reaches ("spectral spread" of the image) |
+| DECAY | 0.4 | 0–1 | band envelope release (τ ≈ 50 ms–4 s) — phosphor-like persistence of spectral events |
+| MODE | MOSAIC | 3-pos | MOSAIC (all blocks share the spectrum, palette-tinted DCT texture), PHASE (deterministic per-block band offsets + ±1 signs: the same spectrum scrambles into evolving mosaics), PERTURB (see below) |
+| STEREO | SUM | 3-pos | SUM (average L+R spectra), INTLV (even zigzag slots ← L, odd ← R), SPLIT (left image half ← L, right ← R; also tints the halves cyan/coral) |
+
+### PERTURB mode
+
+Loads an image (context menu: *Load image* → bundled `res/visual1-demo.jpg`
+or any user JPEG/PNG via the host file dialog — decoded once with
+stb_image, never at DSP time), level-shifts it to ±1 and forward-DCTs it
+into coefficient space. Every rendered frame then multiplies each block's
+AC coefficients by `1 + 1.2·band_env(slot)` plus a small hashed additive
+shimmer (`0.3·env`) so even low-texture photos visibly ripple. Silence
+returns the original image exactly (factor 1): the picture "breathes"
+with the music and relaxes when it stops.
+
+### DSP notes
+
+- 2048-sample Hann window, 512-sample hop, own radix-2 FFT (rack-free
+  core, `tests/render_visual1.cpp` verifies DCT round-trip, band
+  placement, decay, and perturb round-trip headlessly — PPM dumps in
+  /tmp for eyeballing).
+- Analysis runs on hop boundaries inside `processSample()`; the widget
+  thread only blits the latest complete frame (double-buffered, atomic
+  index — no locks in the audio path).
+- 256×192 output = 768 blocks × 64 coefficients ≈ 12M MACs per frame at
+  ~86 Hz — comfortably real-time.
+- Band placement is bin-quantized at low frequencies (44.1 k bins are
+  ~21.5 Hz wide; the log band grid below ~650 Hz shares bins). The test
+  harness documents the expected containment band, not the Hz-exact one.
+- NaN guards on all spectrum paths; DC coefficient carries overall
+  loudness so the image never collapses to black while audio plays.
+
 
 ## 6. Panels
 
