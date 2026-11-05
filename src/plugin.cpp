@@ -18,6 +18,7 @@ void init(rack::Plugin* p) {
 	p->addModel(cyberline::modelCyberlineVoice);
 	p->addModel(cyberline::modelCyberlineHeart);
 	p->addModel(cyberline::modelCyberlineBroca);
+	p->addModel(cyberline::modelCyberlineSagitta);
 	// Visual1 (audio→image DCT visualizer) is implemented but unregistered
 	// for now — the first mapping was underwhelming; revisit later. To
 	// re-enable: add cyberline::modelCyberlineVisual1 here AND to

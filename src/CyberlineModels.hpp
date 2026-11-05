@@ -64,4 +64,5 @@ extern rack::plugin::Model* modelCyberlineVoice;
 extern rack::plugin::Model* modelCyberlineHeart;
 extern rack::plugin::Model* modelCyberlineBroca;
 extern rack::plugin::Model* modelCyberlineVisual1;
+extern rack::plugin::Model* modelCyberlineSagitta;
 } // namespace cyberline
