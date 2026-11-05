@@ -746,3 +746,13 @@ manifest.
   `2mass.cpp` gist: eyes-only, never copied in.
 - Local reference collection: `/storage/69/vcvprojects/refs/` (outside the
   plugin tree, not part of this repo).
+
+## 9. Bioacoustics & Animal Vocalisation
+
+Because `cyberline-larynx` models vocal fold physics with mammal allometric scaling (`FOLDLEN`: 2–45 mm, $\log_{10}(F_0) = -1.43 \cdot \log_{10}(L) + 4.01$) and `cyberline-oral-chamber` models acoustic wave propagation with scalable tube geometry (`VTL`: 6–60 cm), the suite naturally synthesizes non-human animal vocalisations:
+- **Cats:** 20–28 Hz laryngeal tremor (purring) modulated across inhale/exhale, downward pitch/tongue glide (meow), dental hissing.
+- **Elephants:** 15–25 Hz infrasonic rumbles (large folds, 58 cm VTL, nasal shunt through trunk), high-pressure resonant brass trumpets.
+- **Primates:** Fast cyclic pant-hoots, high F0 alarm screeches, and LFO-driven jaw/lip chattering.
+
+See [`docs/animal_vocalisations.md`](animal_vocalisations.md) for full patch diagrams, parameter charts, and modulation guides.
+
