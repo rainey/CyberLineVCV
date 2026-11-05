@@ -48,7 +48,8 @@ fixed filter banks.
 | `cyberline-lungs` | `CyberlineLungs` | Breath-pressure reservoir; doubles as a physically-shaped envelope generator |
 | `cyberline-heart` | `CyberlineHeart` | Elastance cardiac pump: intrinsic clock, Wiggers envelopes, ECG/beats, phonocardiogram, mass allometry |
 | `cyberline-broca` | `CyberlineBroca` | "Broca" (Broca-Brika) articulatory cortex & phoneme generator: vowel A/B morphing, consonant onset/manner engine, and polyphonic Tract/Larynx buses |
-| `cyberline-visual1` | `CyberlineVisual1` | Audio→image visualizer: FFT band envelopes drive 8×8 DCT coefficients of a rendered image; perturb mode loads an image and lets the spectrum deform it |
+| `cyberline-visual1` | `CyberlineVisual1` | Audio→image visualizer: FFT band envelopes drive 8×8 DCT coefficients of a rendered image; perturb mode loads an image and lets the spectrum deform it (unregistered — see §5e) |
+| `cyberline-sagitta` | `CyberlineSagitta` | Vocal-system fluoroscopy: sagittal anatomy of the lungs→larynx→tract pipeline driven by the CV buses and a live waveguide replica (§5f) |
 
 ### Roadmap (not v1)
 
@@ -649,6 +650,66 @@ with the music and relaxes when it stops.
   harness documents the expected containment band, not the Hz-exact one.
 - NaN guards on all spectrum paths; DC coefficient carries overall
   loudness so the image never collapses to black while audio plays.
+
+
+## 5f. `cyberline-sagitta` — Sagitta (vocal-system fluoroscopy)
+
+Display-only side-view ("sagittal") anatomical diagram of the
+lungs → larynx → oral chamber pipeline. Not in the audio path: it taps
+the same CV contracts the real consumers use, in parallel:
+
+| Input | Contract |
+|---|---|
+| TRACT | 6–9 ch poly: TNGX, TNGY, VEL, CPOS, CWID, FRIC[, TENS, PRESS, VOIC] |
+| LARYNX | 3 ch poly: TENS, PRESS, VOIC (used when TRACT carries < 9 ch) |
+| PRES / VOL / FLOW | Lungs PRESSURE (−5..+10 V), VOLUME (0..10 V), FLOW (signed ±5 V) |
+| VOCD | Larynx VOICED audio — drives the replica source + F0 tracking |
+
+The CV *mode* switch selects BUS (Broca's sink-default-offset encoding —
+tongue/constriction channels are offsets around the 5.0/5.0/0/5.0/0
+knobs, velum/fricative absolute 0-10 V) or DIRECT (channels are absolute
+0-10 V parameters). GAIN scales the voiced input.
+
+### What it runs
+
+`CyberlineSagittaCore` (rack-free, like the other cores) decodes the CVs
+exactly as Oral Chamber / Larynx do, then feeds a **replica
+`CyberlineTract` waveguide** (fixed 17.5 cm geometry) with the voiced
+audio as glottal source. Consequences:
+
+- the drawn tongue profile, velum flap and constriction are the model's
+  actual per-section diameters — the constriction ring marks the true
+  narrowest section of the waveguide, not a knob icon;
+- the amber band inside the cavity is the tract's own sound-pressure
+  meters (`amplitude[]`), so the glow literally is the wave traveling
+  toward the lips;
+- the nasal branch is shaped by the decoded velum, with its own meters
+  glowing during nasals;
+- F0 for the fold-wobble animation is measured from the patched voiced
+  audio (hysteresis zero-crossing tracker), tension colors the folds
+  cyan → magenta, subglottal pressure glows under them;
+- Lungs VOLUME inflates the lungs + diaphragm, FLOW drives sign-colored
+  airflow particles along the trachea (cyan inhale, coral exhale; nasal
+  route when the velum opens).
+
+### Exaggerations
+
+Big cartoon eye that glances toward the constriction (or its own breath),
+brow raise with fricative effort, cheek/throat puff under pressure behind
+an occlusion, blink cycle. HUD column with F0 / VOI / TEN / PRS / VEL /
+LNG / FLW / FRC bars and TNG/CNS/SND readouts.
+
+### DSP notes
+
+- Snapshot double-buffer + atomic publish at a 32-sample control cadence;
+  the widget thread only reads completed snapshots (no locks in the
+  audio path).
+- Section→screen mapping is piecewise with a knot at the velopharynx
+  bend (`noseStart` ≈ 73% of the tract) — the ascending pharynx IS most
+  of the model tract, and the drawing respects that.
+- `tests/render_sagitta.cpp` verifies the decode (BUS/DIRECT), velum,
+  constriction placement, F0 tracking, lungs mapping and finite-state
+  under garbage headlessly (7 checks).
 
 
 ## 6. Panels
