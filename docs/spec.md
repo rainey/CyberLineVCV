@@ -289,7 +289,7 @@ than from per-stage curve menus.
 | MODE | CYCLE | CYCLE (free breathing), TRIG (one-shot envelope), CLOSED (air retained after exhale — whale-style recycling), PHASOR (phase-driven; see below) |
 | RATE | 12/min | breathing rate in CYCLE mode; scales the baseline expiratory phrase duration |
 | DEPTH | 0.7 | tidal volume; in TRIG/CLOSED also sets envelope sustain *duration* (energy-limited) |
-| INHALE | 0.4 s | time to fill (quick singer catch-breath to deep yawn) |
+| INHALE | 0.4 s | time to fill (quick singer catch-breath to deep yawn). In CYCLE mode it is referenced to 12 bpm (5 s period) and scales with the breath period (`inhale = period × INHALE/5 s`, capped at 45%), so the I:E ratio holds when RATE changes; TRIG/CLOSED use absolute seconds |
 | MAX FLOW | 0.4 | airway conductance ceiling; adjusts exhale venting from conserved sustain (0) to rapid puff (1) |
 | EFFORT | 0.65 | muscular regulation / appoggio (0 = pure exponential elastic recoil decay, 1 = regulated plateau sustain) |
 | INH MUTE | Mute | 2-position switch: Mute (0 V during inhale) vs Suction (-P / negative pressure during inhale gasp) |

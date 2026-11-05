@@ -114,8 +114,8 @@ void CyberlineVoice::process(const ProcessArgs& args) {
 	float nose = tract.lastNoseOutput;
 
 	outputs[V_VOICED_OUTPUT].setVoltage(rack::math::clamp(voiced * 5.f, -5.f, 5.f));
-	outputs[V_LIPS_OUTPUT].setVoltage(rack::math::clamp(lip * 16.f, -5.f, 5.f));
-	outputs[V_NOSE_OUTPUT].setVoltage(rack::math::clamp(nose * 16.f, -5.f, 5.f));
+	outputs[V_LIPS_OUTPUT].setVoltage(rack::math::clamp(lip * 6.5f, -5.f, 5.f));
+	outputs[V_NOSE_OUTPUT].setVoltage(rack::math::clamp(nose * 6.5f, -5.f, 5.f));
 	lights[V_PHASE_LIGHT].setSmoothBrightness(
 		glottis.noiseModulator, args.sampleTime);
 }

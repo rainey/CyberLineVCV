@@ -130,7 +130,7 @@ struct CyberlineHeart : rack::engine::Module {
 		outputs[BEAT_OUTPUT].setVoltage(o.beat > 0.f ? 5.f : 0.f);
 		outputs[ATRIA_OUTPUT].setVoltage(o.atria > 0.f ? 5.f : 0.f);
 		outputs[SOUND_OUTPUT].setVoltage(
-			rack::math::clamp(o.sound * 5.5f, -5.f, 5.f));
+			rack::math::clamp(o.sound * 5.f, -5.f, 5.f));
 
 		lights[FILL_LIGHT].setSmoothBrightness(core.filling, args.sampleTime);
 		lights[EJECT_LIGHT].setSmoothBrightness(core.systolic, args.sampleTime);
