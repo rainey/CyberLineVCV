@@ -76,16 +76,6 @@
         "Vocal",
         "Polyphonic"
       ]
-    },
-    {
-      "slug": "cyberline-sagitta",
-      "name": "Sagitta",
-      "description": "Vocal-system fluoroscopy: sagittal anatomical diagram of the lungs-larynx-tract pipeline driven by the CV buses and a live waveguide replica; tongue profile, velum, folds, airflow and internal sound-pressure glow",
-      "tags": [
-        "Visual",
-        "Vocal",
-        "Physical modeling"
-      ]
     }
   ]
 }
