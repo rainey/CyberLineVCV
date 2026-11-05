@@ -107,6 +107,26 @@ static void test_lungs_singer_cycle() {
 	}
 	std::printf("  Min inhale pressure with INHMUTE=0: %.3f V\n", minInhalePressure);
 	CHECK(minInhalePressure < -0.5f, "INHMUTE=0 produces negative suction pressure during inhale");
+
+	// Test proportional inhale ratio at different rate (24 bpm -> 2.5s period -> ~0.20s inhale)
+	lungs.reset();
+	lungs.params[CyberlineLungs::RATE_PARAM].setValue(24.f);
+	lungs.params[CyberlineLungs::DEPTH_PARAM].setValue(0.7f);
+	lungs.params[CyberlineLungs::INHALE_PARAM].setValue(0.4f);
+	lungs.params[CyberlineLungs::EFFORT_PARAM].setValue(0.65f);
+	peakVolume = 0.f;
+	peakSample = 0;
+	for (int i = 0; i < (int)(2.5f * args.sampleRate); i++) {
+		lungs.process(args);
+		float v = lungs.outputs[CyberlineLungs::VOLUME_OUTPUT].getVoltage() * 0.1f;
+		if (v > peakVolume) {
+			peakVolume = v;
+			peakSample = i;
+		}
+	}
+	float fastInhaleTime = peakSample * args.sampleTime;
+	std::printf("  At 24 bpm (2.5s period), inhale duration: %.3f s\n", fastInhaleTime);
+	CHECK(fastInhaleTime >= 0.16f && fastInhaleTime <= 0.24f, "Inhale time scales proportionally with cycle period at higher rates");
 }
 
 static void test_lungs_sync_and_gate() {
@@ -139,8 +159,8 @@ static void test_lungs_sync_and_gate() {
 	CHECK(lungs.exhaling == false, "SYNC trigger clears exhale state");
 	CHECK(lungs.volume < 0.2f, "Volume was reset to near 0 on sync");
 
-	// Let inhale finish (0.5s)
-	for (int i = 0; i < (int)(0.5f * args.sampleRate); i++) {
+	// Let inhale finish (~0.6s at 10 bpm)
+	for (int i = 0; i < (int)(0.7f * args.sampleRate); i++) {
 		lungs.process(args);
 	}
 	CHECK(lungs.exhaling == true, "Lungs transitioned to exhale after inhale completed");
@@ -205,6 +225,14 @@ static void test_broca_channels_and_vowels() {
 	float steadyLarynxVoicing = broca.outputs[CyberlineBroca::LARYNX_POLY_OUTPUT].getVoltage(2);
 	CHECK(steadyVoicing >= 9.9f, "Vowels have full 10V voicing on TRACT POLY Ch 9");
 	CHECK(steadyLarynxVoicing >= 9.9f, "Vowels have full 10V voicing on LARYNX POLY Ch 3");
+
+	// Test Vowel B CV modulation
+	broca.inputs[CyberlineBroca::VOWELB_INPUT].channels = 1;
+	broca.params[CyberlineBroca::VOWELB_PARAM].setValue(0.f);
+	broca.inputs[CyberlineBroca::VOWELB_INPUT].setVoltage(5.0f);
+	for (int i = 0; i < 200; i++) broca.process(args);
+	CHECK(broca.activeVowelB > 0, "VOWEL B CV modulates active Vowel B target index");
+	broca.inputs[CyberlineBroca::VOWELB_INPUT].setVoltage(0.f);
 }
 
 static void test_broca_consonants_and_sync() {
@@ -442,6 +470,20 @@ static void test_poly_normalling_larynx_and_voice() {
 	CHECK(minVoiceTargetVoicing < 0.1f, "Voice received voiceless command on TRACT POLY Ch 9 (targetVoicing ~ 0)");
 	CHECK(larynxValid, "Larynx audio output is finite and stable");
 	CHECK(voiceValid, "Voice audio output is finite and stable");
+
+	// Test Larynx Tension CV attenuator knob
+	larynx.inputs[CyberlineLarynx::TENSION_INPUT].channels = 1;
+	larynx.inputs[CyberlineLarynx::TENSION_INPUT].setVoltage(5.0f, 0); // +0.5 tension
+	larynx.params[CyberlineLarynx::TENSION_PARAM].setValue(0.3f);
+	larynx.params[CyberlineLarynx::TENSIONCV_PARAM].setValue(1.0f); // 100% CV
+	for (int i = 0; i < 40; i++) larynx.process(args);
+	float tensFull = larynx.glottis.targetTenseness;
+
+	larynx.params[CyberlineLarynx::TENSIONCV_PARAM].setValue(0.0f); // 0% CV (fully attenuated)
+	for (int i = 0; i < 40; i++) larynx.process(args);
+	float tensAtten = larynx.glottis.targetTenseness;
+	std::printf("  Larynx tenseness full CV: %.3f, attenuated CV: %.3f\n", tensFull, tensAtten);
+	CHECK(tensFull > tensAtten + 0.35f, "Larynx Tension CV attenuator trims CV modulation depth");
 }
 
 int main() {

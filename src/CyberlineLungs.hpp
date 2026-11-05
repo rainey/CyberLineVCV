@@ -75,7 +75,7 @@ struct CyberlineLungs : rack::engine::Module {
 		config(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS);
 		configParam(RATE_PARAM, 4.f, 30.f, 12.f, "Breath rate", " /min");
 		configParam(DEPTH_PARAM, 0.f, 1.f, 0.7f, "Depth (tidal volume)");
-		configParam(INHALE_PARAM, 0.05f, 3.f, 0.4f, "Inhale time", " s");
+		configParam(INHALE_PARAM, 0.05f, 3.f, 0.4f, "Inhale duration / ratio", " s (@12bpm)");
 		configParam(MAXFLOW_PARAM, 0.f, 1.f, 0.4f, "Exhale flow rate (conserve-vent)");
 		configParam(EFFORT_PARAM, 0.f, 1.f, 0.65f, "Effort (sigh recoil - singer plateau)");
 		configSwitch(MODE_PARAM, 0.f, 3.f, 0.f, "Mode",

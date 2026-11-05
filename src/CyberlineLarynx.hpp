@@ -17,6 +17,7 @@ struct CyberlineLarynx : rack::engine::Module {
 		VIBRATE_PARAM,
 		FBGAIN_PARAM,
 		PCOUPLE_PARAM,
+		TENSIONCV_PARAM,
 		NUM_PARAMS
 	};
 	enum InputIds {
@@ -49,6 +50,7 @@ struct CyberlineLarynx : rack::engine::Module {
 		configParam(VIBRATE_PARAM, 0.f, 12.f, 6.f, "Vibrato rate", " Hz");
 		configParam(FBGAIN_PARAM, 0.f, 1.f, 0.f, "Feedback gain");
 		configParam(PCOUPLE_PARAM, 0.f, 1.f, 0.3f, "Pressure-pitch coupling");
+		configParam(TENSIONCV_PARAM, 0.f, 1.f, 1.f, "Tension CV level", "%", 0.f, 100.f);
 		configInput(PITCH_INPUT, "Pitch (1 V/oct)");
 		configInput(TENSION_INPUT, "Tension (0-10 V) / 2-3 ch Larynx Poly Bus (Ch 1: TENS, Ch 2: PRESS, Ch 3: VOICING)");
 		configInput(PRESSURE_INPUT, "Pressure (0-10 V)");

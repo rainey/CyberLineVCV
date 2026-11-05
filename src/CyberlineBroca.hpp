@@ -58,6 +58,7 @@ struct CyberlineBroca : rack::engine::Module {
 		CONSONANT_INPUT,
 		CVMORPH_INPUT,
 		SYNC_INPUT,
+		VOWELB_INPUT,
 		NUM_INPUTS
 	};
 	enum OutputIds {
@@ -164,6 +165,7 @@ struct CyberlineBroca : rack::engine::Module {
 		configInput(TRIG_INPUT, "Syllable trigger (fires consonant onset -> vowel; steps scan when SYNC is patched)");
 		configInput(VOWELA_INPUT, "Vowel A scan CV (±5 V / 0-10 V)");
 		configInput(VMORPH_INPUT, "Vowel A-B morph CV (0-10 V)");
+		configInput(VOWELB_INPUT, "Vowel B scan CV (±5 V / 0-10 V)");
 		configInput(CONSONANT_INPUT, "Consonant scan CV (±5 V / 0-10 V)");
 		configInput(CVMORPH_INPUT, "Consonant/Vowel mix CV (0-10 V)");
 		configInput(SYNC_INPUT, "Sync / Reset (trigger: resets syllable cycle & scan step to 0)");

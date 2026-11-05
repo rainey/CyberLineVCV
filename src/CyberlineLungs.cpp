@@ -44,7 +44,12 @@ void CyberlineLungs::process(const ProcessArgs& args) {
 			params[DEPTH_PARAM].getValue()
 			+ inputs[DEPTHCV_INPUT].getVoltage() * 0.1f, 0.f, 1.f);
 		float effort = params[EFFORT_PARAM].getValue();
-		float inhaleTime = params[INHALE_PARAM].getValue();
+		float rawInhale = params[INHALE_PARAM].getValue();
+		// In CYCLE mode, inhale duration scales proportionally with cyclePeriod (I:E ratio)
+		// anchored to 12 bpm (5.0 s period), preserving phrasing symmetry across tempos
+		float inhaleTime = (mode == CYCLE)
+			? std::fmin(cyclePeriod * (rawInhale / 5.0f), cyclePeriod * 0.45f)
+			: rawInhale;
 		float maxFlow = params[MAXFLOW_PARAM].getValue();
 		bool muteInhale = params[INHMUTE_PARAM].getValue() >= 0.5f;
 

@@ -216,8 +216,8 @@ struct CyberlineHeartCore {
 		}
 		float rawNoise = uniform() * 2.f - 1.f;
 		murmurLp += (rawNoise - murmurLp) * 0.14f;
-		sound = sound * 1.15f + murmurGate * 0.55f * murmurLp;
-		o.sound = std::tanh(sound * in.soundLvl * 1.25f);
+		sound = sound * 1.45f + murmurGate * 0.75f * murmurLp;
+		o.sound = std::tanh(sound * in.soundLvl * 1.8f);
 
 		// trigger pulses
 		beatPulse = fmaxf(0.f, beatPulse - sampleTime);

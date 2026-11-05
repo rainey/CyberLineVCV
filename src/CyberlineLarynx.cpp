@@ -17,9 +17,10 @@ void CyberlineLarynx::process(const ProcessArgs& args) {
 		float voicingAmt = (inputs[TENSION_INPUT].getChannels() >= 3)
 			? rack::math::clamp(inputs[TENSION_INPUT].getVoltage(2) * 0.1f, 0.f, 1.f)
 			: 1.f;
+		float tensCvScale = params[TENSIONCV_PARAM].getValue();
 		float tension = rack::math::clamp(
 			params[TENSION_PARAM].getValue()
-			+ inputs[TENSION_INPUT].getVoltage(0) * 0.1f, 0.f, 1.f);
+			+ inputs[TENSION_INPUT].getVoltage(0) * 0.1f * tensCvScale, 0.f, 1.f);
 		float pKnob = params[PRESSURE_PARAM].getValue();
 		float pressure;
 		if (inputs[PRESSURE_INPUT].isConnected()) {

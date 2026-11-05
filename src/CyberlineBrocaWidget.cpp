@@ -267,7 +267,7 @@ struct CyberlineBrocaWidget : rack::app::ModuleWidget {
 		nvgStroke(vg);
 
 		float c1 = 38.f, c2 = 105.f, c3 = 172.f;
-		float cvX[6] = {22.f, 55.2f, 88.4f, 121.6f, 154.8f, 188.f};
+		float cvX[7] = {18.f, 47.f, 76.f, 105.f, 134.f, 163.f, 192.f};
 		float outX[4] = {32.f, 80.7f, 129.3f, 178.f};
 		float rIn = 268.f, rOut = 328.f;
 
@@ -321,13 +321,14 @@ struct CyberlineBrocaWidget : rack::app::ModuleWidget {
 			}
 		};
 
-		// Input rings: SYNC, TRIG, VOWEL, V.MRPH, CONS, C/V
+		// Input rings: SYNC, TRIG, VOWEL A, V.MRPH, VOWEL B, CONS, C/V
 		drawPortRing(cvX[0], rIn, neonMint,   false, false); // SYNC
 		drawPortRing(cvX[1], rIn, neonMint,   false, false); // TRIG
 		drawPortRing(cvX[2], rIn, neonCyan,   false, false); // VOWEL A CV
 		drawPortRing(cvX[3], rIn, neonViolet, false, false); // V.MORPH CV
-		drawPortRing(cvX[4], rIn, neonAmber,  false, false); // CONS CV
-		drawPortRing(cvX[5], rIn, neonCoral,  false, false); // C/V CV
+		drawPortRing(cvX[4], rIn, neonViolet, false, false); // VOWEL B CV
+		drawPortRing(cvX[5], rIn, neonAmber,  false, false); // CONS CV
+		drawPortRing(cvX[6], rIn, neonCoral,  false, false); // C/V CV
 
 		// Output rings: TRACT POLY (violet), LARYNX POLY (coral), C/V ENV (cyan), BURST (amber)
 		drawPortRing(outX[0], rOut, neonViolet, true, true);
@@ -362,18 +363,19 @@ struct CyberlineBrocaWidget : rack::app::ModuleWidget {
 		text(c3, 174, "ONSET s");
 
 		// Row 3 input labels inside bracket
-		nvgFontSize(vg, 6.6f);
+		nvgFontSize(vg, 6.2f);
 		nvgFillColor(vg, nvgRGB(0x80, 0xe8, 0xb8));
 		text(cvX[0], 251, "SYNC");
 		text(cvX[1], 251, "TRIG");
 		nvgFillColor(vg, nvgRGB(0x88, 0xe4, 0xfc));
-		text(cvX[2], 251, "VOWEL");
+		text(cvX[2], 251, "VOW.A");
 		nvgFillColor(vg, nvgRGB(0xd0, 0xb0, 0xff));
 		text(cvX[3], 251, "V.MRPH");
+		text(cvX[4], 251, "VOW.B");
 		nvgFillColor(vg, nvgRGB(0xf8, 0xc0, 0x78));
-		text(cvX[4], 251, "CONS");
+		text(cvX[5], 251, "CONS");
 		nvgFillColor(vg, nvgRGB(0xf8, 0x90, 0x98));
-		text(cvX[5], 251, "C/V");
+		text(cvX[6], 251, "C/V");
 
 		// Row 4 output labels
 		nvgFontSize(vg, 7.2f);
@@ -413,7 +415,7 @@ struct CyberlineBrocaWidget : rack::app::ModuleWidget {
 
 		float c1 = 38.f, c2 = 105.f, c3 = 172.f;
 		float rKnob1 = 116.f, rKnob2 = 194.f;
-		float cvX[6] = {22.f, 55.2f, 88.4f, 121.6f, 154.8f, 188.f};
+		float cvX[7] = {18.f, 47.f, 76.f, 105.f, 134.f, 163.f, 192.f};
 		float outX[4] = {32.f, 80.7f, 129.3f, 178.f};
 		float rIn = 268.f, rOut = 328.f;
 
@@ -427,13 +429,14 @@ struct CyberlineBrocaWidget : rack::app::ModuleWidget {
 		addParam(rack::createParamCentered<RoundSmallBlackKnob>(rack::Vec(c2, rKnob2), module, CyberlineBroca::CVMORPH_PARAM));
 		addParam(rack::createParamCentered<RoundSmallBlackKnob>(rack::Vec(c3, rKnob2), module, CyberlineBroca::ONSET_PARAM));
 
-		// Row 3: 6 CV/Trigger inputs (SYNC, TRIG, VOWEL, V.MRPH, CONS, C/V)
+		// Row 3: 7 CV/Trigger inputs (SYNC, TRIG, VOWEL A, V.MRPH, VOWEL B, CONS, C/V)
 		addInput(rack::createInputCentered<PJ301MPort>(rack::Vec(cvX[0], rIn), module, CyberlineBroca::SYNC_INPUT));
 		addInput(rack::createInputCentered<PJ301MPort>(rack::Vec(cvX[1], rIn), module, CyberlineBroca::TRIG_INPUT));
 		addInput(rack::createInputCentered<PJ301MPort>(rack::Vec(cvX[2], rIn), module, CyberlineBroca::VOWELA_INPUT));
 		addInput(rack::createInputCentered<PJ301MPort>(rack::Vec(cvX[3], rIn), module, CyberlineBroca::VMORPH_INPUT));
-		addInput(rack::createInputCentered<PJ301MPort>(rack::Vec(cvX[4], rIn), module, CyberlineBroca::CONSONANT_INPUT));
-		addInput(rack::createInputCentered<PJ301MPort>(rack::Vec(cvX[5], rIn), module, CyberlineBroca::CVMORPH_INPUT));
+		addInput(rack::createInputCentered<PJ301MPort>(rack::Vec(cvX[4], rIn), module, CyberlineBroca::VOWELB_INPUT));
+		addInput(rack::createInputCentered<PJ301MPort>(rack::Vec(cvX[5], rIn), module, CyberlineBroca::CONSONANT_INPUT));
+		addInput(rack::createInputCentered<PJ301MPort>(rack::Vec(cvX[6], rIn), module, CyberlineBroca::CVMORPH_INPUT));
 
 		// Row 4: 4 outputs (TRACT POLY, LARYNX POLY, C/V ENV, BURST)
 		addOutput(rack::createOutputCentered<PJ301MPort>(rack::Vec(outX[0], rOut), module, CyberlineBroca::TRACT_POLY_OUTPUT));

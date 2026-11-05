@@ -20,7 +20,8 @@
       "tags": [
         "Physical modeling",
         "Oscillator",
-        "Synth voice"
+        "Synth voice",
+        "Polyphonic"
       ]
     },
     {
@@ -40,7 +41,8 @@
       "tags": [
         "Physical modeling",
         "Filter",
-        "Vocal"
+        "Vocal",
+        "Polyphonic"
       ]
     },
     {
@@ -50,7 +52,8 @@
       "tags": [
         "Physical modeling",
         "Synth voice",
-        "Vocal"
+        "Vocal",
+        "Polyphonic"
       ]
     },
     {

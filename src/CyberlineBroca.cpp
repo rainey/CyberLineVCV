@@ -76,8 +76,11 @@ void CyberlineBroca::process(const ProcessArgs& args) {
 		? inputs[VOWELA_INPUT].getVoltage() * ((float)(NUM_VOWELS - 1) / 10.f)
 		: (inputs[SYNC_INPUT].isConnected() ? (float) scanStep : 0.f);
 	int idxA = ((int) std::round(params[VOWELA_PARAM].getValue() + vACv) % NUM_VOWELS + NUM_VOWELS) % NUM_VOWELS;
+	float vBCv = inputs[VOWELB_INPUT].isConnected()
+		? inputs[VOWELB_INPUT].getVoltage() * ((float)(NUM_VOWELS - 1) / 10.f)
+		: 0.f;
 	int idxB = rack::math::clamp(
-		(int) std::round(params[VOWELB_PARAM].getValue()),
+		(int) std::round(params[VOWELB_PARAM].getValue() + vBCv),
 		0, NUM_VOWELS - 1);
 	float vMorph = rack::math::clamp(
 		params[VMORPH_PARAM].getValue() + inputs[VMORPH_INPUT].getVoltage() * 0.1f,

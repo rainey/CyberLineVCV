@@ -137,6 +137,7 @@ reimplemented from the 1985 paper, plus guards and modular control).
 | Knob | Default | Range | Notes |
 |---|---|---|---|
 | TENSION | 0.6 | 0–1 | |
+| TENS CV | 1.0 | 0–1 | attenuator trimmer for TENSION CV input |
 | PRESSURE | 0.8 | 0–1 | replaces PT's `intensity` envelope; smoothed internally |
 | FOLD LENGTH | 14 mm | 2–45 mm | vocal-fold length; allometric F0 scaling per Charlton/Fletcher mammal law (`log10 F0 = −1.43·log10 L(mm) + 4.01` at zero tension), plus mass/dim timbre effect (thicker folds = darker). Human ≈ 13–15 mm, giraffe 41 mm; keeps DRIFT/creak behavior physical at big sizes |
 | FREQ OCT | −2…+2 | octave offset for L1 | F0 clamped 20–2000 Hz after CV; below 20 Hz the LF period grows unbounded (PT silent-state bug) |
@@ -527,8 +528,9 @@ and `LARYNX POLY`).
 | B2 | TRIG | trigger | fires consonant onset → vowel release; when SYNC is patched and VOWEL CV unpatched, steps cyclically through vowel table |
 | B3 | VOWEL A CV | ±5 V / 0–10 V | CV scan through the 12 cardinal vowels |
 | B4 | V.MRPH CV | 0–10 V | CV modulation of VOWEL A/B morph position |
-| B5 | CONS CV | ±5 V / 0–10 V | CV scan through the 21 consonants |
-| B6 | C/V CV | 0–10 V | CV modulation of consonant/vowel balance |
+| B5 | VOWEL B CV | ±5 V / 0–10 V | CV scan through the secondary vowel target |
+| B6 | CONS CV | ±5 V / 0–10 V | CV scan through the 21 consonants |
+| B7 | C/V CV | 0–10 V | CV modulation of consonant/vowel balance |
 
 ### Outputs
 

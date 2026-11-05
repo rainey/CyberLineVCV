@@ -98,8 +98,8 @@ void CyberlineOralChamber::process(const ProcessArgs& args) {
 	float lip = tract.process(args.sampleTime, source, inject, injPos, noise);
 	float nose = tract.lastNoseOutput;
 
-	outputs[LIPS_OUTPUT].setVoltage(rack::math::clamp(lip * 5.f, -5.f, 5.f));
-	outputs[NOSE_OUTPUT].setVoltage(rack::math::clamp(nose * 5.f, -5.f, 5.f));
+	outputs[LIPS_OUTPUT].setVoltage(rack::math::clamp(lip * 16.f, -5.f, 5.f));
+	outputs[NOSE_OUTPUT].setVoltage(rack::math::clamp(nose * 16.f, -5.f, 5.f));
 
 	// SHAPE: cycle one section amplitude per sample
 	if (scanIndex >= tract.n) scanIndex = 0;
