@@ -185,6 +185,144 @@ static void test_lungs_sync_and_gate() {
 	CHECK(lungs.volume < volAfterHold, "Releasing gate allows exhale drain to resume");
 }
 
+static void test_lungs_exhale_first_polarity() {
+	std::printf("--- Testing CyberlineLungs: exhale-first cycle polarity ---\n");
+	CyberlineLungs lungs;
+	rack::engine::Module::ProcessArgs args;
+	args.sampleRate = 48000.f;
+	args.sampleTime = 1.f / 48000.f;
+
+	lungs.params[CyberlineLungs::RATE_PARAM].setValue(12.f); // 5.0s period
+	lungs.params[CyberlineLungs::DEPTH_PARAM].setValue(0.8f);
+	lungs.params[CyberlineLungs::INHALE_PARAM].setValue(0.5f);
+	lungs.params[CyberlineLungs::MAXFLOW_PARAM].setValue(1.f); // fast vent: drain ~1.7s
+	lungs.params[CyberlineLungs::MODE_PARAM].setValue((float)CyberlineLungs::CYCLE);
+	lungs.params[CyberlineLungs::POLARITY_PARAM].setValue(1.f); // Exhale first
+
+	// SYNC pulse: the cycle must begin on the exhale — full lungs releasing
+	// on the beat, not a silent inhale
+	lungs.inputs[CyberlineLungs::SYNC_INPUT].setVoltage(10.f);
+	for (int i = 0; i < 48; i++) lungs.process(args); // 1 ms pulse
+	lungs.inputs[CyberlineLungs::SYNC_INPUT].setVoltage(0.f);
+	for (int i = 0; i < 100; i++) lungs.process(args);
+
+	CHECK(lungs.exhaling == true, "Exhale-first SYNC begins the cycle with the exhale");
+	CHECK(lungs.inhaling == false, "Exhale-first SYNC does not inhale first");
+	CHECK(lungs.volume > 0.7f, "Exhale-first SYNC tops up the reservoir to full");
+	CHECK(lungs.outputs[CyberlineLungs::PHASE_OUTPUT].getVoltage() > 2.5f,
+		"PHASE gate is high at the cycle boundary in exhale-first");
+	CHECK(lungs.outputs[CyberlineLungs::PRESSURE_OUTPUT].getVoltage() > 1.f,
+		"PRESS is active immediately at the cycle boundary in exhale-first");
+
+	// Run past the exhale drain: the reservoir empties and the module
+	// recharges by inhaling (scan for it — drain duration depends on knobs)
+	bool sawRecharge = false;
+	float t = 0.f;
+	for (int i = 0; i < (int)(4.5f * args.sampleRate); i++) {
+		lungs.process(args);
+		t += args.sampleTime;
+		if (t > 1.5f && lungs.inhaling) { sawRecharge = true; break; }
+	}
+	CHECK(sawRecharge, "After the drain, exhale-first recharges by inhaling");
+
+	// After the recharge completes, the module holds at the top (no
+	// immediate re-exhale — the exhale waits for the next cycle boundary)
+	for (int i = 0; i < (int)(1.0f * args.sampleRate); i++) lungs.process(args);
+	CHECK(!lungs.inhaling && !lungs.exhaling && lungs.volume > 0.7f,
+		"Recharge completes to a top hold, not an immediate re-exhale");
+	CHECK(lungs.outputs[CyberlineLungs::PHASE_OUTPUT].getVoltage() < 0.5f,
+		"PHASE gate is low during the top hold (waiting for the boundary)");
+
+	// Crossing the next cycle boundary restarts the exhale from full
+	// (scan for it — the hold lasts until the 5 s boundary)
+	float volAtHold = 0.f;
+	bool boundaryRestart = false;
+	for (int i = 0; i < (int)(4.5f * args.sampleRate); i++) {
+		lungs.process(args);
+		if (lungs.exhaling) { boundaryRestart = true; break; }
+	}
+	CHECK(boundaryRestart, "Cycle boundary restarts the exhale in exhale-first");
+	// Let the drain run a moment, then confirm it is venting from the top-up
+	for (int i = 0; i < (int)(0.5f * args.sampleRate); i++) lungs.process(args);
+	CHECK(lungs.volume < 0.75f && lungs.exhaling,
+		"Exhale drains from the full top-up at the boundary");
+
+	// Switching back to inhale-first must restore classic behavior
+	lungs.params[CyberlineLungs::POLARITY_PARAM].setValue(0.f);
+	lungs.inputs[CyberlineLungs::SYNC_INPUT].setVoltage(10.f);
+	for (int i = 0; i < 48; i++) lungs.process(args);
+	lungs.inputs[CyberlineLungs::SYNC_INPUT].setVoltage(0.f);
+	for (int i = 0; i < 100; i++) lungs.process(args);
+	CHECK(lungs.inhaling == true && lungs.volume < 0.2f,
+		"Inhale-first SYNC still resets to a silent fill");
+}
+
+static void test_lungs_phasor_ratio() {
+	std::printf("--- Testing CyberlineLungs: PHASOR I:E ratio follows INHALE knob ---\n");
+	rack::engine::Module::ProcessArgs args;
+	args.sampleRate = 48000.f;
+	args.sampleTime = 1.f / 48000.f;
+
+	// Feed one full 0->10 V saw cycle over 5 s and measure what fraction
+	// of the cycle spends inhaling. The split must follow the INHALE knob
+	// (INHALE/5 s, the same 12-bpm reference as CYCLE mode), not the old
+	// fixed 50/50 mapping.
+	struct Case { float inhale; float polarity; float expect; const char* name; };
+	Case cases[] = {
+		{0.4f, 0.f, 0.08f, "inhale-first, INHALE 0.4s -> 8%"},
+		{2.0f, 0.f, 0.40f, "inhale-first, INHALE 2.0s -> 40%"},
+		{0.4f, 1.f, 0.08f, "exhale-first, INHALE 0.4s -> 8%"},
+		{3.5f, 0.f, 0.70f, "inhale-first, INHALE 3.5s -> 70% (no 45% cap in PHASOR)"},
+	};
+	for (auto& c : cases) {
+		CyberlineLungs lungs;
+		lungs.params[CyberlineLungs::DEPTH_PARAM].setValue(0.8f);
+		lungs.params[CyberlineLungs::INHALE_PARAM].setValue(c.inhale);
+		lungs.params[CyberlineLungs::MODE_PARAM].setValue((float)CyberlineLungs::PHASOR);
+		lungs.params[CyberlineLungs::POLARITY_PARAM].setValue(c.polarity);
+
+		int totalSamples = (int)(5.0f * args.sampleRate);
+		int inhaleTicks = 0, totalTicks = 0;
+		for (int i = 0; i < totalSamples; i++) {
+			// 0 -> 10 V linear saw (the cycle under test)
+			lungs.inputs[CyberlineLungs::GATE_INPUT].setVoltage(
+				10.f * (float)i / (float)totalSamples);
+			lungs.process(args);
+			if (i % 32 == 0) { // control-rate tick census
+				totalTicks++;
+				if (lungs.inhaling) inhaleTicks++;
+			}
+		}
+		float frac = (float)inhaleTicks / (float)totalTicks;
+		std::printf("  %s: measured %.3f\n", c.name, frac);
+		// Endpoints of the ramp sit at bucket edges; 0.03 tolerance is generous
+		CHECK(std::fabs(frac - c.expect) < 0.03f, c.name);
+	}
+
+	// Exhale-first mirror check: with a saw, the drain must begin at
+	// phase 0 — just after the boundary the lungs are still near full
+	// and actively draining (a held constant phase is a no-flow hold,
+	// so probe while the saw is moving)
+	CyberlineLungs lungs;
+	lungs.params[CyberlineLungs::DEPTH_PARAM].setValue(0.8f);
+	lungs.params[CyberlineLungs::INHALE_PARAM].setValue(0.4f);
+	lungs.params[CyberlineLungs::MODE_PARAM].setValue((float)CyberlineLungs::PHASOR);
+	lungs.params[CyberlineLungs::POLARITY_PARAM].setValue(1.f);
+	int totalSamples = (int)(5.0f * args.sampleRate);
+	float volAfterBoundary = 0.f;
+	for (int i = 0; i <= (int)(0.1f * args.sampleRate); i++) {
+		lungs.inputs[CyberlineLungs::GATE_INPUT].setVoltage(
+			10.f * (float)i / (float)totalSamples);
+		lungs.process(args);
+	}
+	volAfterBoundary = lungs.volume;
+	CHECK(lungs.exhaling, "Exhale-first PHASOR drains right after the phase-0 boundary");
+	CHECK(volAfterBoundary > 0.7f && volAfterBoundary < 0.795f,
+		"Exhale-first PHASOR starts the drain from full at the boundary");
+	CHECK(lungs.outputs[CyberlineLungs::PHASE_OUTPUT].getVoltage() > 2.5f,
+		"Exhale-first PHASOR raises PHASE at the phase-0 boundary");
+}
+
 static void test_broca_channels_and_vowels() {
 	std::printf("--- Testing CyberlineBroca: buses and vowel morphing ---\n");
 	CyberlineBroca broca;
@@ -651,6 +789,8 @@ int main() {
 
 	test_lungs_singer_cycle();
 	test_lungs_sync_and_gate();
+	test_lungs_exhale_first_polarity();
+	test_lungs_phasor_ratio();
 	test_broca_channels_and_vowels();
 	test_broca_consonants_and_sync();
 	test_poly_normalling_oral_chamber();

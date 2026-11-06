@@ -2,9 +2,12 @@
 // generator. Spec: docs/spec.md §5b.
 //
 // Model: tidal volume V (0..1) filled by inhale, drained by exhale. Output
-// pressure P = elastic recoil + regulated effort. Three modes: CYCLE
+// pressure P = elastic recoil + regulated effort. Four modes: CYCLE
 // (free breathing at RATE), TRIG (one-shot on trigger), CLOSED (air retained
-// across breaths — durations shrink until refilled, whale-style).
+// across breaths — durations shrink until refilled, whale-style), PHASOR
+// (external phase CV owns the period; the INHALE knob still owns the I:E
+// ratio). START polarity switches the cycle start between inhale (physio)
+// and exhale (musical).
 //
 // Physics block runs at control rate (32-sample cadence); outputs are
 // interpolated per sample. Signed-CV convention applies to FLOW.
@@ -23,6 +26,7 @@ struct CyberlineLungs : rack::engine::Module {
 		EFFORT_PARAM,
 		MODE_PARAM,     // 4-position switch: CYCLE / TRIG / CLOSED / PHASOR
 		INHMUTE_PARAM,  // 2-position switch: 0 = Suction (-P / gasp), 1 = Inhale Mute (0 V)
+		POLARITY_PARAM, // 2-position switch: 0 = Inhale first (physio), 1 = Exhale first (musical)
 		NUM_PARAMS
 	};
 	enum InputIds {
@@ -61,6 +65,7 @@ struct CyberlineLungs : rack::engine::Module {
 	bool syncPending = false;
 	bool gateRisePending = false;
 	bool gateFallPending = false;
+	bool rechargeInhale = false; // exhale-first: the inhale recharges for the next boundary (hold at top, don't auto-exhale)
 	float cycleTimer = 999.f;  // s since current breath started (starts immediately in CYCLE)
 
 	// Output interpolation (per sample)
@@ -75,13 +80,15 @@ struct CyberlineLungs : rack::engine::Module {
 		config(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS);
 		configParam(RATE_PARAM, 4.f, 30.f, 12.f, "Breath rate", " /min");
 		configParam(DEPTH_PARAM, 0.f, 1.f, 0.7f, "Depth (tidal volume)");
-		configParam(INHALE_PARAM, 0.05f, 3.f, 0.4f, "Inhale duration / ratio", " s (@12bpm)");
+		configParam(INHALE_PARAM, 0.05f, 5.f, 0.4f, "Inhale duration / ratio", " s (@12bpm)");
 		configParam(MAXFLOW_PARAM, 0.f, 1.f, 0.4f, "Exhale flow rate (conserve-vent)");
 		configParam(EFFORT_PARAM, 0.f, 1.f, 0.65f, "Effort (sigh recoil - singer plateau)");
 		configSwitch(MODE_PARAM, 0.f, 3.f, 0.f, "Mode",
 			{"Cycle", "Trigger", "Closed", "Phasor"});
 		configSwitch(INHMUTE_PARAM, 0.f, 1.f, 1.f, "Inhale pressure",
 			{"Suction (-P / gasp)", "Mute (0 V on inhale)"});
+		configSwitch(POLARITY_PARAM, 0.f, 1.f, 0.f, "Cycle start",
+			{"Inhale first (physio)", "Exhale first (musical)"});
 		configInput(TRIGGER_INPUT, "Trigger (catch-breath / one-shot / Closed refill)");
 		configInput(GATE_INPUT, "Gate (breath hold / Closed release valve / Phasor CV)");
 		configInput(DEPTHCV_INPUT, "Depth CV (0-10 V)");
@@ -100,6 +107,7 @@ struct CyberlineLungs : rack::engine::Module {
 		closedBurstTarget = 0.f; cycleTimer = 999.f;
 		gateWasHigh = trigWasHigh = syncWasHigh = false;
 		trigPending = syncPending = gateRisePending = gateFallPending = false;
+		rechargeInhale = false;
 		lastPhasorVolume = 0.f;
 		outPressure = outVolume = outFlow = outPhase = 0.f;
 		tgtPressure = tgtVolume = tgtFlow = tgtPhase = 0.f;

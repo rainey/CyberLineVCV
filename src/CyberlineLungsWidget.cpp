@@ -504,6 +504,45 @@ struct CyberlineLungsWidget : rack::app::ModuleWidget {
 		}
 	};
 
+	// 2-position snap switch for the cycle-start polarity:
+	// 0 = Inhale first (physio, cyan), 1 = Exhale first (musical, amber)
+	struct PolaritySwitch : VerticalSnapSwitch<2> {
+		PolaritySwitch() {
+			box.size = rack::Vec(16.f, 24.f);
+		}
+
+		float slotY(int i) const override {
+			return 6.5f + i * (box.size.y - 13.f);
+		}
+
+		void draw(const DrawArgs& args) override {
+			float w = box.size.x, h = box.size.y;
+			nvgBeginPath(args.vg);
+			nvgRoundedRect(args.vg, w * 0.5f - 3.2f, 2.f, 6.4f, h - 4.f, 3.2f);
+			nvgFillColor(args.vg, nvgRGB(0x0d, 0x0f, 0x12));
+			nvgFill(args.vg);
+			nvgStrokeWidth(args.vg, 1.f);
+			nvgStrokeColor(args.vg, nvgRGB(0x2a, 0x2e, 0x35));
+			nvgStroke(args.vg);
+			for (int i = 0; i < 2; i++) {
+				nvgBeginPath(args.vg);
+				nvgCircle(args.vg, w * 0.5f, slotY(i), 1.1f);
+				nvgFillColor(args.vg, nvgRGB(0x44, 0x4c, 0x56));
+				nvgFill(args.vg);
+			}
+			float v = getParamQuantity() ? getParamQuantity()->getValue() : 0.f;
+			int pos = (int) std::round(rack::math::clamp(v, 0.f, 1.f));
+			nvgBeginPath(args.vg);
+			nvgRoundedRect(args.vg, 1.f, slotY(pos) - 4.5f, w - 2.f, 9.f, 3.5f);
+			// Cyan = inhale-first (fills before voicing), amber = exhale-first
+			// (the beat fires the drain) — matches the gauge phase colors
+			nvgFillColor(args.vg, pos == 0
+				? nvgRGB(0x48, 0xd8, 0xf8)
+				: nvgRGB(0xf0, 0x90, 0x54));
+			nvgFill(args.vg);
+		}
+	};
+
 	static void drawPanel(const rack::widget::Widget::DrawArgs& args, float panelW) {
 		NVGcontext* vg = args.vg;
 		NVGcolor bg = nvgRGB(0x13, 0x16, 0x19);
@@ -604,8 +643,9 @@ struct CyberlineLungsWidget : rack::app::ModuleWidget {
 			nvgText(args.vg, x, y, s, NULL);
 		};
 
-		// params (2 columns below the top lung gauge; 3rd row has EFFORT, INH P switch, MODE, EXH)
-		float effX = 40.f, inhSwX = 88.f, modeX = 145.f, exhX = 183.f;
+		// params (2 columns below the top lung gauge; 3rd row has EFFORT, INH P,
+		// START polarity, MODE, EXH)
+		float effX = 40.f, inhSwX = 88.f, polX = 117.f, modeX = 150.f, exhX = 183.f;
 		text(colL, 101, "RATE");
 		nvgFillColor(args.vg, nvgRGB(0x88, 0xc8, 0xf0));
 		text(colR, 101, "DEPTH");
@@ -614,22 +654,33 @@ struct CyberlineLungsWidget : rack::app::ModuleWidget {
 		text(effX, 204, "EFFORT");
 		nvgFillColor(args.vg, nvgRGB(0x7e, 0xd8, 0xf8));
 		text(inhSwX + 6.f, 204, "INH P");
+		nvgFillColor(args.vg, nvgRGB(0xf4, 0xa8, 0x74));
+		text(polX, 204, "START");
 		nvgFillColor(args.vg, nvgRGB(0x80, 0xe0, 0xb0));
 		text(modeX, 204, "MODE");
 		text(exhX, 214, "EXH");
 		nvgFillColor(args.vg, label);
 
-		// 2-position INH P tick labels (GASP / MUTE) & 4-position MODE tick labels
+		// 2-position INH P tick labels (GASP / MUTE, left of the switch),
+		// START polarity tick labels (IN / EX, right of the switch), and the
+		// 4-position MODE tick labels
 		if (font && font->handle >= 0) {
 			nvgFontSize(args.vg, 5.5f);
-			nvgTextAlign(args.vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
+			nvgTextAlign(args.vg, NVG_ALIGN_RIGHT | NVG_ALIGN_MIDDLE);
 			nvgFillColor(args.vg, nvgRGB(0x7c, 0x8a, 0x98));
 
 			static const char* inhNames[2] = {"GASP", "MUTE"};
 			float inhTop = 224.f - 12.f;
 			for (int i = 0; i < 2; i++) {
 				float iy = inhTop + 6.5f + i * (24.f - 13.f);
-				nvgText(args.vg, inhSwX + 10.f, iy, inhNames[i], NULL);
+				nvgText(args.vg, inhSwX - 10.f, iy, inhNames[i], NULL);
+			}
+
+			nvgTextAlign(args.vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
+			static const char* polNames[2] = {"IN", "EX"};
+			for (int i = 0; i < 2; i++) {
+				float iy = inhTop + 6.5f + i * (24.f - 13.f);
+				nvgText(args.vg, polX + 10.f, iy, polNames[i], NULL);
 			}
 
 			static const char* modeNames[4] = {"CYC", "TRG", "CLS", "PHS"};
@@ -693,7 +744,8 @@ struct CyberlineLungsWidget : rack::app::ModuleWidget {
 		addParam(rack::createParamCentered<RoundSmallBlackKnob>(rack::Vec(colR, 173), module, CyberlineLungs::MAXFLOW_PARAM));
 		addParam(rack::createParamCentered<RoundSmallBlackKnob>(rack::Vec(40.f, 224), module, CyberlineLungs::EFFORT_PARAM));
 		addParam(rack::createParamCentered<InhaleSwitch>(rack::Vec(88.f, 224), module, CyberlineLungs::INHMUTE_PARAM));
-		addParam(rack::createParamCentered<ModeSwitch>(rack::Vec(145.f, 224), module, CyberlineLungs::MODE_PARAM));
+		addParam(rack::createParamCentered<PolaritySwitch>(rack::Vec(117.f, 224), module, CyberlineLungs::POLARITY_PARAM));
+		addParam(rack::createParamCentered<ModeSwitch>(rack::Vec(150.f, 224), module, CyberlineLungs::MODE_PARAM));
 
 		// Phase light beside the mode switch
 		addChild(rack::createLightCentered<rack::componentlibrary::SmallLight<rack::componentlibrary::GreenLight>>(

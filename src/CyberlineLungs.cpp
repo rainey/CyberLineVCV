@@ -69,33 +69,72 @@ void CyberlineLungs::process(const ProcessArgs& args) {
 		// Drain rate for a reference depth of 0.7 (deeper breaths store more air and last longer)
 		float refDrainRate = 0.7f / baseExhaleDur;
 
+		// Cycle-start polarity: physiologically a breath begins with the
+		// inhale (silent fill, then the voiced exhale). Musically it is
+		// usually better for the cycle boundary to fire the sound:
+		// exhale-first grabs a full breath instantly at the start event and
+		// releases on the beat, then recharges by inhaling at the end of
+		// the cycle.
+		bool exhaleFirst = params[POLARITY_PARAM].getValue() >= 0.5f;
+
 		if (syncRising && mode != PHASOR) {
-			// Hard cycle reset: zeroes lung volume & timer and begins a fresh inhale
-			volume = 0.f;
+			// Hard cycle reset
 			cycleTimer = 0.f;
-			inhaling = true;
-			exhaling = false;
-			phase = 0.f;
-			flow = std::fmax(depth / std::fmax(inhaleTime, 0.05f), 0.08f);
+			if (exhaleFirst) {
+				// Begin on the exhale: grab air instantly, release on the
+				// beat (in CLOSED this grabs and holds if the gate valve
+				// is shut — the valve still owns the release)
+				volume = depth;
+				inhaling = false;
+				exhaling = true;
+				rechargeInhale = false;
+				closedBurstTarget = 0.f; // no leftover ration target: drain fully
+				phase = 1.f;
+				flow = 0.f;
+			} else {
+				// Zeroes lung volume and begins a fresh inhale
+				volume = 0.f;
+				inhaling = true;
+				exhaling = false;
+				phase = 0.f;
+				flow = std::fmax(depth / std::fmax(inhaleTime, 0.05f), 0.08f);
+			}
 		}
 
 		if (mode == PHASOR) {
 			// Phase-driven: the GATE input is the phase CV
-			// (0-10 V -> 0-1 of the breath cycle). 0-50% inhale,
-			// 50-100% exhale; EFFORT shapes the drain curve, while
-			// INHALE/MAX FLOW are ignored (the external phasor owns
-			// the timing). FLOW reports the actual dV/dt, so its
+			// (0-10 V -> 0-1 of the breath cycle). EFFORT shapes the drain
+			// curve; MAX FLOW and RATE are ignored (the external phasor
+			// owns the period). FLOW reports the actual dV/dt, so its
 			// magnitude follows the phasor speed — including jumps.
+			// I:E split: the INHALE knob still owns the *ratio* — same
+			// 12-bpm reference as CYCLE mode (inhale = period x
+			// INHALE/5 s), so a 5 s phasor reproduces the CYCLE-mode
+			// inhale time exactly. PHASOR is stateless (volume is a pure
+			// function of the phase input — nothing can overrun), so the
+			// CYCLE-mode 45% cap does not apply here: the knob's own span
+			// (0.05..5 s) maps to 1..100% of the cycle, guarded at 98% to
+			// keep the drain region finite.
+			// With exhale-first polarity the mapping mirrors so the drain
+			// begins at phase 0, matching the other modes.
 			float p = rack::math::clamp(
 				inputs[GATE_INPUT].getVoltage() * 0.1f, 0.f, 1.f);
-			if (p <= 0.5f) {
-				volume = depth * (p / 0.5f);
-			} else {
-				float t = 1.f - (p - 0.5f) / 0.5f; // 1 start, 0 end
+			float split = rack::math::clamp(rawInhale / 5.0f, 0.01f, 0.98f);
+			bool draining = exhaleFirst ? (p <= 1.f - split) : (p > split);
+			if (draining) {
+				// Exhale drain curve: t = 1 at drain start, 0 at empty.
+				// Inhale-first: drain across (split, 1]. Exhale-first:
+				// drain across [0, 1-split].
+				float d = exhaleFirst ? p : (p - split);
+				float t = 1.f - d / (1.f - split);
 				float k = 0.4f + 2.6f * (1.f - effort);
 				float e = (std::exp(-k * (1.f - t)) - std::exp(-k))
 					/ (1.f - std::exp(-k));
 				volume = depth * ((1.f - effort) * e + effort * t);
+			} else {
+				// Inhale fill ramp: 0 -> depth across the inhale fraction
+				float f = exhaleFirst ? (p - (1.f - split)) : p;
+				volume = depth * (f / split);
 			}
 			if (!std::isfinite(volume)) volume = 0.f;
 			flow = rack::math::clamp(
@@ -210,7 +249,9 @@ void CyberlineLungs::process(const ProcessArgs& args) {
 			if (mode == CYCLE) {
 				cycleTimer += dt;
 				if (!inhaling && !exhaling && cycleTimer >= cyclePeriod
-						&& volume < depth * 0.999f) {
+						// Inhale-first needs air room to fill; exhale-first
+						// starts from the top hold (full lungs) instead
+						&& (exhaleFirst || volume < depth * 0.999f)) {
 					start = true;
 				}
 				inhaleTime = std::fmin(inhaleTime, cyclePeriod * 0.45f);
@@ -221,12 +262,26 @@ void CyberlineLungs::process(const ProcessArgs& args) {
 			if (gateRising) start = true;
 
 			if (start) {
-				inhaling = true;
-				exhaling = false;
-				float it = std::fmax(inhaleTime, 0.05f);
-				flow = std::fmax((depth - volume) / it, 0.05f);
-				phase = 0.f;
 				cycleTimer = 0.f;
+				if (exhaleFirst) {
+					// The cycle begins on the exhale: top up the reservoir
+					// instantly (grab air) and release on the beat. The
+					// inhale recharges after the drain (see the exhale-
+					// emptied handler), then holds at the top until the
+					// next boundary.
+					inhaling = false;
+					exhaling = true;
+					rechargeInhale = false;
+					volume = depth;
+					flow = 0.f;
+					phase = 1.f;
+				} else {
+					inhaling = true;
+					exhaling = false;
+					float it = std::fmax(inhaleTime, 0.05f);
+					flow = std::fmax((depth - volume) / it, 0.05f);
+					phase = 0.f;
+				}
 			}
 
 			// Gate pedal: held high = inhale toward depth, then HOLD the breath
@@ -257,24 +312,40 @@ void CyberlineLungs::process(const ProcessArgs& args) {
 				if (volume >= depth) {
 					volume = depth;
 					inhaling = false;
-					if (!gate) {
-						exhaling = true;
-					} else {
+					if (gate) {
 						// Top Breath-Hold: lungs full, gate held high -> zero flow immediately
 						exhaling = false;
 						flow = 0.f;
+					} else if (rechargeInhale && exhaleFirst) {
+						// Exhale-first recharge complete: hold at the top
+						// until the next cycle boundary (the exhale fires
+						// exactly on the beat)
+						rechargeInhale = false;
+						exhaling = false;
+						flow = 0.f;
+					} else {
+						exhaling = true;
 					}
 				}
 			} else if (exhaling) {
 				// In CYCLE mode, if cycleTimer reaches cyclePeriod while a slow conserved
 				// exhale is still finishing, smoothly catch the next breath right on beat
 				if (mode == CYCLE && cycleTimer >= cyclePeriod && depth > 0.01f) {
-					inhaling = true;
-					exhaling = false;
-					float it = std::fmax(inhaleTime, 0.05f);
-					flow = std::fmax((depth - volume) / it, 0.05f);
-					phase = 0.f;
-					cycleTimer = 0.f;
+					if (exhaleFirst) {
+						// On-beat re-attack (mirror of the inhale-first catch
+						// breath below): the overrun exhale is topped up and
+						// re-released from full, so the drain always starts
+						// exactly on the beat
+						volume = depth;
+						cycleTimer = 0.f;
+					} else {
+						inhaling = true;
+						exhaling = false;
+						float it = std::fmax(inhaleTime, 0.05f);
+						flow = std::fmax((depth - volume) / it, 0.05f);
+						phase = 0.f;
+						cycleTimer = 0.f;
+					}
 				} else {
 					float normVol = volume / std::fmax(depth, 0.1f);
 					// At effort = 0 (sigh), drain is fast initially (2.2 * normVol) and decays exponentially;
@@ -287,10 +358,22 @@ void CyberlineLungs::process(const ProcessArgs& args) {
 					phase = 1.f;
 					if (volume <= 0.001f) {
 						volume = 0.f;
-						flow = 0.f;
 						phase = 0.f;
-						exhaling = false;
-						inhaling = false;
+						if (exhaleFirst) {
+							// Reservoir spent: recharge immediately (inhale
+							// now and hold at the top until the next
+							// boundary) — inhale-first rests empty at the
+							// bottom instead
+							exhaling = false;
+							inhaling = true;
+							rechargeInhale = true;
+							float it = std::fmax(inhaleTime, 0.05f);
+							flow = std::fmax(depth / it, 0.05f);
+						} else {
+							flow = 0.f;
+							exhaling = false;
+							inhaling = false;
+						}
 					}
 				}
 			} else {

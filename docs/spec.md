@@ -314,7 +314,7 @@ than from per-stage curve menus.
 | G1 | TRIGGER | edge | starts one breath (one-shot envelope: inhale runs to DEPTH, exhale begins automatically — no sustained level needed); retrigger mid-exhale = catch-breath |
 | G2 | GATE | 0/1 | breath pedal (all modes except PHASOR): rising edge starts a breath; held high = inhale to DEPTH and HOLD (cuts an in-progress exhale); release = exhale from current volume. **In PHASOR mode this input is the phase CV** (0–10 V → 0–1) |
 | G3 | DEPTH CV | 0–10 V → 0–1 | modulates tidal volume |
-| G4 | SYNC | edge | hard cycle reset (trigger): zeroes volume and timer, restarts a fresh inhale immediately from 0 V |
+| G4 | SYNC | edge | hard cycle reset (trigger): restarts the breath cycle from its start per the START polarity — Inhale first zeroes volume and begins a fresh inhale from 0 V; Exhale first tops up to full and releases the exhale on the beat |
 
 ### Outputs
 
@@ -332,10 +332,11 @@ than from per-stage curve menus.
 | MODE | CYCLE | CYCLE (free breathing), TRIG (one-shot envelope), CLOSED (air retained after exhale — whale-style recycling), PHASOR (phase-driven; see below) |
 | RATE | 12/min | breathing rate in CYCLE mode; scales the baseline expiratory phrase duration |
 | DEPTH | 0.7 | tidal volume; in TRIG/CLOSED also sets envelope sustain *duration* (energy-limited) |
-| INHALE | 0.4 s | time to fill (quick singer catch-breath to deep yawn). In CYCLE mode it is referenced to 12 bpm (5 s period) and scales with the breath period (`inhale = period × INHALE/5 s`, capped at 45%), so the I:E ratio holds when RATE changes; TRIG/CLOSED use absolute seconds |
+| INHALE | 0.4 s | time to fill (quick singer catch-breath to deep yawn; 0.05–5 s). In CYCLE mode it is referenced to 12 bpm (5 s period) and scales with the breath period (`inhale = period × INHALE/5 s`, capped at 45%), so the I:E ratio holds when RATE changes; TRIG/CLOSED use absolute seconds; in PHASOR the knob maps to the cycle share (1–98%, no 45% cap — see below) |
 | MAX FLOW | 0.4 | airway conductance ceiling; adjusts exhale venting from conserved sustain (0) to rapid puff (1) |
 | EFFORT | 0.65 | muscular regulation / appoggio (0 = pure exponential elastic recoil decay, 1 = regulated plateau sustain) |
 | INH MUTE | Mute | 2-position switch: Mute (0 V during inhale) vs Suction (-P / negative pressure during inhale gasp) |
+| START | Inhale first | 2-position cycle-start polarity. **Inhale first (physio)**: the cycle begins with the silent fill, the voiced exhale follows (default; classic reservoir behavior). **Exhale first (musical)**: the cycle boundary fires the sound — the reservoir is topped up instantly and the exhale begins on the beat, then the inhale recharges at the end of the cycle and holds at the top. Affects CYCLE auto-starts, SYNC resets, and TRIG one-shots (a trigger re-releases a full envelope on the beat); GATE pedal and CLOSED rationing semantics are unchanged; in PHASOR the mapping mirrors so the drain begins at phase 0 (the I:E split still follows the INHALE knob) |
 
 ### DSP notes
 
@@ -363,10 +364,16 @@ than from per-stage curve menus.
   natural physics (inhale time + drain law) is slower than the period, the
   natural duration wins; the drain is never accelerated to hit RATE.
 - **PHASOR mode (phase-driven):** the GATE input becomes the phase CV
-  (0–10 V → 0–1 of one breath cycle): 0–50% = inhale (volume ∝ p), 50–100% =
-  exhale (drain shape follows EFFORT: exponential at 0, linear plateau at 1).
-  The external phasor owns the timing — INHALE/MAX FLOW are ignored, RATE is
-  ignored. FLOW reports the actual dV/dt (including phase jumps), so its
+  (0–10 V → 0–1 of one breath cycle). The external phasor owns the *period*;
+  the INHALE knob still owns the *ratio*: the inhale occupies
+  `period × INHALE/5 s` of the cycle (same 12-bpm reference as CYCLE mode),
+  so a 5 s phasor reproduces the CYCLE-mode inhale time exactly and faster
+  phasors scale it proportionally. PHASOR is stateless (volume is a pure
+  function of the phase — nothing can overrun), so the CYCLE-mode 45% cap
+  does not apply: the knob's span maps to 1–98% of the cycle, allowing
+  inverse-ratio (inhale-dominant) shapes. The drain shape
+  follows EFFORT (exponential at 0, linear plateau at 1); MAX FLOW and RATE
+  are ignored. FLOW reports the actual dV/dt (including phase jumps), so its
   magnitude scales with phasor speed. Accepts any unipolar 0–10 V ramp;
   bipolar sources should be offset/attenuated first (e.g. Fundamental 8vert).
   Phase is continuous, so the module tracks external acceleration, deceler-
