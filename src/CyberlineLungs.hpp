@@ -13,6 +13,7 @@
 // interpolated per sample. Signed-CV convention applies to FLOW.
 
 #pragma once
+#include "CyberlineModels.hpp"
 #include <rack.hpp>
 
 namespace cyberline {
@@ -75,6 +76,7 @@ struct CyberlineLungs : rack::engine::Module {
 
 	static constexpr int PHYS_INTERVAL = 32;
 	int physCounter = 0;
+	CyberlineCpuMeter cpuMeter;   // plugin-side CPU % ring (see CyberlineModels.hpp)
 
 	CyberlineLungs() {
 		config(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS);

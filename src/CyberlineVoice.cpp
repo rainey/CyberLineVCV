@@ -7,6 +7,7 @@
 namespace cyberline {
 
 void CyberlineVoice::process(const ProcessArgs& args) {
+	bool measure = cpuMeter.frameStart();
 	// Subnormal protection (glottis one-poles + damped waveguide lines).
 	DenormalGuard denormalGuard;
 
@@ -138,6 +139,8 @@ void CyberlineVoice::process(const ProcessArgs& args) {
 	outputs[V_NOSE_OUTPUT].setVoltage(rack::math::clamp(nose * 6.5f, -5.f, 5.f));
 	lights[V_PHASE_LIGHT].setSmoothBrightness(
 		glottis.noiseModulator, args.sampleTime);
+
+	cpuMeter.frameEnd(measure, args.sampleRate);
 }
 
 } // namespace cyberline

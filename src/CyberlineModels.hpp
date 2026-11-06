@@ -3,6 +3,8 @@
 #pragma once
 #include "CyberlineQuality.hpp"
 #include <rack.hpp>
+#include <cstdio>
+#include <cstdint>
 
 // The per-plugin instance pointer (defined in plugin.cpp at global scope;
 // JayBird's build renames the token to pluginInstance__cyberline via
@@ -156,4 +158,83 @@ inline void appendQualityMenu(rack::ui::Menu* menu, rack::engine::Module* module
 	lo->value = 1.f;
 	menu->addChild(lo);
 }
+// Plugin-side CPU metering + percent overlay.
+//
+// Rack's stock per-module strip (cpuMeter setting) draws its percent text
+// with blendish; observed on this suite: the strip's graph line + plate
+// render on cyberline modules but the blendish text does not (stock
+// Fundamental modules show it). Rather than depend on that, each module
+// measures its own process() duration on a 37-frame cadence (matching
+// Rack's METER_DIVIDER; two system::getTime() calls then, ~40 ns every
+// 37 samples, ~0.02% overhead) into a public ring buffer, and the widget
+// overlays the same-style percent text with our own font — reliable on
+// every host. No-op cost when performance meters are off (guard on
+// settings::cpuMeter).
+struct CyberlineCpuMeter {
+	static constexpr int LEN = 32;
+	static constexpr int DIVIDER = 37;   // same cadence Rack uses
+	float ring[LEN] = {};                // avg seconds per process(), ring
+	int idx = 0;
+	long long counter = 0;
+	bool measuring = false;              // this sample is a measurement
+	double t0 = 0.0;
+
+	// Call at the TOP of process():
+	inline bool frameStart() {
+		if (!rack::settings::cpuMeter)
+			return false;
+		bool measure = (counter++ % DIVIDER) == 0;
+		if (measure)
+			t0 = rack::system::getTime();
+		return measure;
+	}
+	// Call at the END of process() with frameStart()'s return value:
+	inline void frameEnd(bool measure, float sampleRate) {
+		if (!measure)
+			return;
+		float duration = (float) (rack::system::getTime() - t0);
+		// running average over the last DIVIDER samples before ring push,
+		// so the displayed number is smooth (Rack averages the same way)
+		avg = (avg < 0.f) ? duration : avg * 0.85f + duration * 0.15f;
+		idx = (idx + 1) % LEN;
+		ring[idx] = avg;
+		(void) sampleRate;
+	}
+	float avg = -1.f;
+
+	// Percent of one audio core at the current sample rate (what the
+	// stock meter's number means).
+	float percent(float sampleRate) const {
+		if (avg < 0.f)
+			return 0.f;
+		return avg * sampleRate * 100.f;
+	}
+};
+
+// Widget overlay: the stock strip's number, drawn with our font. Call at
+// the end of the widget's draw(), after ModuleWidget::draw(args), passing
+// the CONCRETE module type (ModuleWidget::module is the base pointer, so
+// the cpuMeter member needs the downcast). No-op when performance meters
+// are off / no module.
+template <typename ModuleT>
+inline void drawCpuMeterText(const rack::widget::Widget::DrawArgs& args,
+		ModuleT* module) {
+	if (!module || !rack::settings::cpuMeter)
+		return;
+	float sampleRate = rack::contextGet()->engine->getSampleRate();
+	const CyberlineCpuMeter* meter = &module->cpuMeter;
+	char text[32];
+	std::snprintf(text, sizeof(text), "%.2f%%", meter->percent(sampleRate));
+
+	auto* vg = args.vg;
+	auto font = getLabelFont();
+	if (!font)
+		return;
+	nvgFontFaceId(vg, font->handle);
+	nvgFontSize(vg, 11.f);
+	nvgFillColor(vg, nvgRGB(0xff, 0xa5, 0x42));   // matches Rack's orange strip
+	nvgTextAlign(vg, NVG_ALIGN_RIGHT | NVG_ALIGN_BASELINE);
+	nvgText(vg, args.clipBox.size.x - 4.f, args.clipBox.size.y - 3.f, text, NULL);
+}
+
 } // namespace cyberline

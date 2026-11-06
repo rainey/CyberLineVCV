@@ -6,12 +6,15 @@
 // for the DSP; this is the Rack wrapper.
 
 #pragma once
+#include "CyberlineModels.hpp"
 #include <rack.hpp>
 #include "CyberlineHeartCore.hpp"
 
 namespace cyberline {
 
 struct CyberlineHeart : rack::engine::Module {
+	CyberlineCpuMeter cpuMeter;   // plugin-side CPU % ring (see CyberlineModels.hpp)
+
 	enum ParamIds {
 		RATE_PARAM,
 		MASS_PARAM,
@@ -90,6 +93,7 @@ struct CyberlineHeart : rack::engine::Module {
 	}
 
 	void process(const ProcessArgs& args) override {
+		bool measure = cpuMeter.frameStart();
 		if (args.sampleRate != core.sampleRate)
 			core.setSampleRate(args.sampleRate);
 
@@ -134,6 +138,8 @@ struct CyberlineHeart : rack::engine::Module {
 
 		lights[FILL_LIGHT].setSmoothBrightness(core.filling, args.sampleTime);
 		lights[EJECT_LIGHT].setSmoothBrightness(core.systolic, args.sampleTime);
+
+		cpuMeter.frameEnd(measure, args.sampleRate);
 	}
 
 	void onReset() override { core.reset(); }

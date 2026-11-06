@@ -11,6 +11,7 @@ void CyberlineOralChamber::process(const ProcessArgs& args) {
 	// zero; without FTZ/DAZ the x86 FPU traps to microcode assists during
 	// ring-out (~60x CPU). Restores the previous MXCSR on scope exit.
 	DenormalGuard denormalGuard;
+	bool measure = cpuMeter.frameStart();
 
 	if (args.sampleRate != lastSampleRate) {
 		lastSampleRate = args.sampleRate;
@@ -132,6 +133,8 @@ void CyberlineOralChamber::process(const ProcessArgs& args) {
 	int probe = tract.n / 3;
 	float p = (tract.R[probe] + tract.L[probe]) * 5.f;
 	outputs[PROBE_OUTPUT].setVoltage(rack::math::clamp(p, -8.f, 8.f));
+
+	cpuMeter.frameEnd(measure, args.sampleRate);
 }
 
 } // namespace cyberline

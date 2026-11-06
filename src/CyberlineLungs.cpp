@@ -6,6 +6,7 @@
 namespace cyberline {
 
 void CyberlineLungs::process(const ProcessArgs& args) {
+	bool measure = cpuMeter.frameStart();
 	// Subnormal protection: the reservoir/smoothing states decay toward
 	// zero between breaths; FTZ/DAZ keeps the FPU off the microcode path.
 	DenormalGuard denormalGuard;
@@ -426,6 +427,8 @@ void CyberlineLungs::process(const ProcessArgs& args) {
 	outputs[PHASE_OUTPUT].setVoltage(outPhase > 0.5f ? 5.f : 0.f);
 	lights[PHASE_LIGHT].setSmoothBrightness(outPhase > 0.5f ? 1.f : 0.f,
 		args.sampleTime);
+
+	cpuMeter.frameEnd(measure, args.sampleRate);
 }
 
 } // namespace cyberline

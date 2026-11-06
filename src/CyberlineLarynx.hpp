@@ -3,6 +3,7 @@
 
 #pragma once
 #include "CyberlineGlottis.hpp"
+#include "CyberlineModels.hpp"
 #include <rack.hpp>
 
 namespace cyberline {
@@ -39,6 +40,7 @@ struct CyberlineLarynx : rack::engine::Module {
 
 	CyberlineGlottis glottis;
 	float lastFoldLen = -1.f;
+	CyberlineCpuMeter cpuMeter;   // plugin-side CPU % ring (see CyberlineModels.hpp)
 	float cachedAllo = 235.f;
 
 	CyberlineLarynx() {

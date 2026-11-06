@@ -7,6 +7,7 @@
 namespace cyberline {
 
 void CyberlineLarynx::process(const ProcessArgs& args) {
+	bool measure = cpuMeter.frameStart();
 	// Subnormal protection (glottis one-poles decay to silence between
 	// phonemes; FTZ/DAZ keeps the FPU off the microcode-assist path).
 	DenormalGuard denormalGuard;
@@ -75,6 +76,8 @@ void CyberlineLarynx::process(const ProcessArgs& args) {
 	outputs[VOICED_OUTPUT].setVoltage(rack::math::clamp(out * 5.f, -5.f, 5.f));
 	outputs[NOISEMOD_OUTPUT].setVoltage(
 		rack::math::clamp(glottis.noiseModulator * 10.f, 0.f, 5.f));
+
+	cpuMeter.frameEnd(measure, args.sampleRate);
 }
 
 } // namespace cyberline

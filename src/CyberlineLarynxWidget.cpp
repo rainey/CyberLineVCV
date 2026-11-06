@@ -408,6 +408,7 @@ struct CyberlineLarynxWidget : rack::app::ModuleWidget {
 	void draw(const DrawArgs& args) override {
 		drawPanel(args, PANEL_W);
 		ModuleWidget::draw(args);
+		drawCpuMeterText(args, static_cast<CyberlineLarynx*>(module));
 	}
 };
 

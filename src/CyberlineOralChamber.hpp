@@ -3,6 +3,7 @@
 
 #pragma once
 #include "CyberlineTract.hpp"
+#include "CyberlineModels.hpp"
 #include <rack.hpp>
 
 namespace cyberline {
@@ -55,6 +56,7 @@ struct CyberlineOralChamber : rack::engine::Module {
 	// SHAPE scan: one section amplitude per audio sample, cycling
 	int scanIndex = 0;
 	int blockCounter = 0;
+	CyberlineCpuMeter cpuMeter;   // plugin-side CPU % ring (see CyberlineModels.hpp)
 
 	CyberlineOralChamber() {
 		config(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS);

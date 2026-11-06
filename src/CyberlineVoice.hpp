@@ -6,6 +6,7 @@
 #pragma once
 #include "CyberlineGlottis.hpp"
 #include "CyberlineTract.hpp"
+#include "CyberlineModels.hpp"
 #include <rack.hpp>
 
 namespace cyberline {
@@ -59,6 +60,7 @@ struct CyberlineVoice : rack::engine::Module {
 	float lastFoldLen = -1.f;
 	float cachedAllo = 235.f;
 	int scanIndex = 0;
+	CyberlineCpuMeter cpuMeter;   // plugin-side CPU % ring (see CyberlineModels.hpp)
 
 	CyberlineVoice() {
 		config(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS);

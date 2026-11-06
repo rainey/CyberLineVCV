@@ -5,6 +5,7 @@
 // LARYNX POLY).
 
 #pragma once
+#include "CyberlineModels.hpp"
 #include <rack.hpp>
 
 namespace cyberline {
@@ -84,6 +85,7 @@ struct CyberlineBroca : rack::engine::Module {
 	bool onsetActive = false;
 	float onsetPhase = 1.f;     // 0..1 progress through triggered consonant onset
 	int scanStep = 0;           // cyclical step offset (advanced on TRIG when SYNC is used, reset on SYNC)
+	CyberlineCpuMeter cpuMeter;   // plugin-side CPU % ring (see CyberlineModels.hpp)
 
 	// Smoothed anatomical outputs (in parameter-space units before offset conversion)
 	float curTongueX = 5.0f;
