@@ -148,7 +148,10 @@ fixed filter banks.
       ~0.0016, inaudible in a noise-gate modulation) — ~20% glottis cost.
   The always-on fixes (denormal protection, 5 ms VTL CV slew + waveguide
   state resampling on section-count changes, transient-decay
-  precomputation) apply in both modes and do not alter the sound.
+  precomputation, and the settled-shape reshape early-out — while every
+  diameter sits bit-exactly on its unchanged target the two O(n) reshape
+  loops are a provable no-op and are skipped; ~15% off idle/static tract
+  cost in both modes) apply in both modes and do not alter the sound.
 
 ## 3. `cyberline-larynx` — Larynx
 

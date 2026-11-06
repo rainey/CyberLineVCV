@@ -134,6 +134,25 @@ int main() {
 		report(label, nsPerSample(N / 4, t0, Clock::now()), sr);
 	}
 
+	// ---- static (settled) shape: the common idle case. The lerps
+	// converge and the reshape early-out skips its O(n) loops.
+	{
+		const float sr = 48000.f;
+		CyberlineTract t;
+		t.setGeometry(17.5f, sr);
+		t.setTongue(t.bladeStart + 0.5f * (t.tipStart - t.bladeStart), 2.5f);
+		t.applyConstriction();
+		float dt = 1.f / sr;
+		for (long i = 0; i < sr; i++)   // settle
+			t.process(dt, (i & 1) ? 0.2f : -0.2f, 0.f, 0.f, 0.f);
+		auto t0 = Clock::now();
+		float acc = 0.f;
+		for (long i = 0; i < N / 4; i++)
+			acc += t.process(dt, (i & 1) ? 0.2f : -0.2f, 0.f, 0.f, 0.1f);
+		sink = acc;
+		report("Tract static settled (HIGH)", nsPerSample(N / 4, t0, Clock::now()), sr);
+	}
+
 	// ---- glottis: HIGH vs LOW quality waveform ----
 	for (int low = 0; low < 2; low++) {
 		const float sr = 48000.f;

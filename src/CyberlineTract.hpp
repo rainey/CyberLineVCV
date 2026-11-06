@@ -136,6 +136,13 @@ struct CyberlineTract {
 	float slowReturnTab[TRACT_SECTIONS_MAX];
 	// true if reshape() changed any oral diameter or the velum this sample
 	bool shapeMoved = true;
+	// Set by every target-set writer (setTongue / setVelum / setGeometry /
+	// reset). While false AND the diameters are bit-exactly settled on
+	// their targets, reshape()'s two O(n) loops are a provable no-op (the
+	// lerps yield nd == d exactly) and are skipped — an always-on saver,
+	// bit-exact in both quality modes. Static patches stop paying the
+	// reshape cost after the muscle lerps converge.
+	bool targetsDirty = true;
 	// true once reflection[] == newReflection[] for the current (unchanged)
 	// shape, i.e. further coefficient updates would be exact no-ops
 	bool reflectionsSettled = false;
@@ -168,6 +175,8 @@ struct CyberlineTract {
 		silenceCounter = 0;
 		reflCounter = 0;
 		fadePos = 0;
+		shapeMoved = true;
+		targetsDirty = true;
 		setTractLength(44);
 		setTongue(tongueIndex, tongueDiameter);
 		syncReflections();
@@ -299,6 +308,7 @@ struct CyberlineTract {
 		calculateReflections();
 		syncReflections();
 		shapeMoved = true;
+		targetsDirty = true;
 		reflectionsSettled = false;
 		initialized = true;
 	}
@@ -327,12 +337,16 @@ struct CyberlineTract {
 			restDiameter[i] = d;
 		}
 		for (int i = 0; i < n; i++) targetDiameter[i] = restDiameter[i];
+		targetsDirty = true;
 	}
 
 	void setVelum(float v) {
 		if (v < 0.f) v = 0.f;
 		if (v > 1.f) v = 1.f;
-		velum = v;
+		if (v != velum) {
+			velum = v;
+			targetsDirty = true;
+		}
 	}
 
 	void setConstriction(float pos, float width, float amount) {
@@ -568,6 +582,14 @@ struct CyberlineTract {
 	// Shape update (call once per audio sample before the 2x step pair, or per
 	// block). deltaTime in seconds. Moves diameters toward targets (muscle speed).
 	void reshape(float deltaTime) {
+		// Settled early-out (always-on, bit-exact): with no rewritten
+		// targets and no movement last sample, every diameter sits exactly
+		// on its target (float equality — the lerps converge onto it, or
+		// stall with up == d), so this update would compute nd == d for
+		// every section, leave the obstruction scan unchanged and leave
+		// velum untouched. Skip the two O(n) loops entirely.
+		if (!targetsDirty && !shapeMoved)
+			return;
 		float amount = deltaTime * muscleSpeed * 2.f; // section-units per s
 		float stepDown = 2.f * amount;
 		// Branch-free update (ternary min/max instead of std::fmin/fmax, which are
@@ -607,6 +629,7 @@ struct CyberlineTract {
 		if (nv != v) moved = true;
 		noseDiameter[0] = nv;
 		shapeMoved = moved;
+		targetsDirty = false;
 	}
 
 	// Apply constriction to target diameters (block-rate, from CV state).

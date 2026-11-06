@@ -24,6 +24,7 @@
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <cassert>
 #include <string>
 
@@ -490,6 +491,65 @@ static void test_quality_global_and_override() {
 	CyberlineQuality::setGlobal(globalWas);
 }
 
+// Settled-shape reshape early-out: bit-exact against the always-run path.
+static void test_tract_settled_early_out_bitexact() {
+	std::printf("--- Testing Tract settled-shape early-out (bit-exact) ---\n");
+	const float sr = 44100.f;
+	const int settleN = (int) (1.0f * sr);    // let the lerps converge
+	const int runN = (int) (1.0f * sr);       // then compare A/B
+
+	CyberlineTract a, b;
+	for (int pass = 0; pass < 2; pass++) {
+		CyberlineTract& t = pass ? b : a;
+		t.setGeometry(17.5f, sr);
+		t.setTongue(t.bladeStart + 0.4f * (t.tipStart - t.bladeStart), 3.f);
+		t.applyConstriction();
+	}
+	float dt = 1.f / sr;
+	// settle both identically
+	for (int i = 0; i < settleN; i++) {
+		float s = 0.4f * std::sin(2.f * (float) M_PI * 110.f * i / sr);
+		a.process(dt, s, 0.f, 0.f, 0.f);
+		b.process(dt, s, 0.f, 0.f, 0.f);
+	}
+	// A: force the full reshape path every sample (reference behavior)
+	// B: normal (early-out engages once settled)
+	bool identical = true;
+	int earlyOuts = 0;
+	for (int i = 0; i < runN; i++) {
+		if ((i & 15) == 0) {
+			// small block-rate target wiggle (like a slow CV), then stillness
+			if ((i & 31) < 16) {
+				float tx = 0.45f + 0.02f * (float) ((i >> 4) & 1);
+				a.setTongue(a.bladeStart + tx * (a.tipStart - a.bladeStart), 3.f);
+				b.setTongue(b.bladeStart + tx * (b.tipStart - b.bladeStart), 3.f);
+				a.applyConstriction();
+				b.applyConstriction();
+			}
+		}
+		a.targetsDirty = true;   // disable the early-out for A only
+		float s = 0.4f * std::sin(2.f * (float) M_PI * 110.f * i / sr)
+			+ 0.05f * std::sin(2.f * (float) M_PI * 777.f * i / sr);
+		float na = std::sin(0.f);   // (noise deterministic: none)
+		float la = a.process(dt, s, 0.f, 0.f, na);
+		float lb = b.process(dt, s, 0.f, 0.f, na);
+		if (b.targetsDirty == false && b.shapeMoved == false)
+			earlyOuts++;
+		if (std::memcmp(&la, &lb, sizeof(float)) != 0
+			|| std::memcmp(&a.lastNoseOutput, &b.lastNoseOutput,
+				sizeof(float)) != 0) {
+			identical = false;
+			std::printf("  first mismatch at sample %d: %.9g vs %.9g\n",
+				i, la, lb);
+			break;
+		}
+	}
+	std::printf("  %d samples compared, early-out engaged on %d\n",
+		runN, earlyOuts);
+	CHECK(earlyOuts > 0, "settled early-out actually engages");
+	CHECK(identical, "early-out path is bit-exact vs full reshape path");
+}
+
 static void test_poly_normalling_larynx_and_voice() {
 	std::printf("--- Testing Poly Normalling: Broca -> Larynx & Voice ---\n");
 	CyberlineBroca broca;
@@ -595,6 +655,7 @@ int main() {
 	test_broca_consonants_and_sync();
 	test_poly_normalling_oral_chamber();
 	test_quality_global_and_override();
+	test_tract_settled_early_out_bitexact();
 	test_poly_normalling_larynx_and_voice();
 
 	std::printf("=========================================\n");
