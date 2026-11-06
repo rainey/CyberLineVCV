@@ -22,6 +22,12 @@ void init(rack::Plugin* p) {
 	// from the main build for now. Revisit later. To re-enable: uncomment
 	// cyberline::modelCyberlineSagitta here and re-add to plugin.json.
 	// p->addModel(cyberline::modelCyberlineSagitta);
+	// GOTCHA: any patch saved while a model was registered still holds a
+	// module instance for it; once unregistered, Rack's patch loader pops
+	// a blocking "Could not find module" modal before the main loop (the
+	// window opens black and ignores input). scripts/rackplay.sh prunes
+	// stale instances from the test user dir; other saved patches need
+	// the instance removed by hand before they will load.
 	// Visual1 (audio→image DCT visualizer) is implemented but unregistered
 	// for now — the first mapping was underwhelming; revisit later. To
 	// re-enable: add cyberline::modelCyberlineVisual1 here AND to

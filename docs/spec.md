@@ -678,6 +678,11 @@ with the music and relaxes when it stops.
 
 ## 5f. `cyberline-sagitta` — Sagitta (vocal-system fluoroscopy)
 
+STATUS: implemented but unregistered from the browser (graphics revisit
+later); code and tests kept in tree. Note: saved patches containing a
+Sagitta instance fail to load (blocking modal) until the instance is
+removed or the model is re-registered.
+
 Display-only side-view ("sagittal") anatomical diagram of the
 lungs → larynx → oral chamber pipeline. Not in the audio path: it taps
 the same CV contracts the real consumers use, in parallel:
