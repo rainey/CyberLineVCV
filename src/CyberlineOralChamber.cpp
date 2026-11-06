@@ -1,6 +1,7 @@
 // CyberlineOralChamber — module process.
 
 #include "CyberlineOralChamber.hpp"
+#include "CyberlineQuality.hpp"
 #include "CyberlineDspGuard.hpp"
 
 namespace cyberline {
@@ -19,10 +20,12 @@ void CyberlineOralChamber::process(const ProcessArgs& args) {
 
 	// ---- block-rate parameter read (every 16 samples) ----
 	if ((blockCounter++ & 15) == 0) {
-		// Quality: LOW decouples the coefficient refresh from the audio
-		// rate (16-sample fade) at a ~90% division-load reduction during
-		// articulation. Toggled from the context menu.
-		tract.lowQuality = params[QUALITY_PARAM].getValue() > 0.5f;
+		// Quality: module override (hidden param) resolved against the
+		// plugin-wide global (default LOW). LOW decouples the coefficient
+		// refresh from the audio rate (16-sample fade) at a ~90%
+		// division-load reduction during articulation.
+		tract.lowQuality = CyberlineQuality::effectiveLow(
+			params[QUALITY_PARAM].getValue());
 
 		// VTL: 5 ms one-pole slew on the CV so sample jitter cannot
 		// repeatedly trigger geometry rebuilds (setGeometry still

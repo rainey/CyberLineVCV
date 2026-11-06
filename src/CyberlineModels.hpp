@@ -1,6 +1,7 @@
 // cyberline — model declarations shared by registration and widgets.
 
 #pragma once
+#include "CyberlineQuality.hpp"
 #include <rack.hpp>
 
 // The per-plugin instance pointer (defined in plugin.cpp at global scope;
@@ -76,23 +77,54 @@ extern rack::plugin::Model* modelCyberlineSagitta;
 // exponentials / fast aspiration-gate sine. The always-on fixes
 // (denormal protection, VTL slew + state resampling, transient decay
 // precomputation) apply in both modes and do not change the sound.
+// DSP-quality context menu shared by every cyberline module.
+//
+// Two layers:
+//   - Global (all modules): persists in the plugin settings file, applies
+//     to every module in FOLLOW mode (the default). Undo is not recorded
+//     for the global — it is a plugin setting, not patch data.
+//   - Per-module override (paramId >= 0): hidden QUALITY_PARAM,
+//     0 = HIGH pinned, 1 = LOW pinned, 2 = FOLLOW GLOBAL (default).
+//     Saved with the patch and undoable.
+//
+// Modules without quality-dependent DSP pass module = nullptr / paramId
+// = -1 and expose only the global section.
 inline void appendQualityMenu(rack::ui::Menu* menu, rack::engine::Module* module, int paramId) {
-	if (!module)
-		return;
 	menu->addChild(new rack::ui::MenuSeparator);
-	menu->addChild(rack::createMenuLabel("DSP quality"));
+	menu->addChild(rack::createMenuLabel("DSP quality (all modules)"));
+
+	struct GlobalItem : rack::ui::MenuItem {
+		bool low;
+		void onAction(const rack::event::Action& e) override {
+			CyberlineQuality::setGlobal(low);
+		}
+	};
+	auto* ghi = rack::createMenuItem<GlobalItem>("High (full fidelity)",
+		CHECKMARK(!CyberlineQuality::getGlobal()));
+	ghi->low = false;
+	menu->addChild(ghi);
+	auto* glo = rack::createMenuItem<GlobalItem>("Low (fast approximations)",
+		CHECKMARK(CyberlineQuality::getGlobal()));
+	glo->low = true;
+	menu->addChild(glo);
+
+	if (!module || paramId < 0)
+		return;
+
+	menu->addChild(new rack::ui::MenuSeparator);
+	menu->addChild(rack::createMenuLabel("This module (override)"));
 
 	struct QualityItem : rack::ui::MenuItem {
 		rack::engine::Module* module;
 		int paramId;
-		float value;   // 0 = High, 1 = Low
+		float value;   // 0 = HIGH pinned, 1 = LOW pinned, 2 = follow global
 		void onAction(const rack::event::Action& e) override {
 			float old = module->params[paramId].getValue();
 			if (old == value)
 				return;
 			module->params[paramId].setValue(value);
 			auto* h = new rack::history::ParamChange;
-			h->name = "set quality";
+			h->name = "set quality override";
 			h->moduleId = module->id;
 			h->paramId = paramId;
 			h->oldValue = old;
@@ -101,14 +133,24 @@ inline void appendQualityMenu(rack::ui::Menu* menu, rack::engine::Module* module
 		}
 	};
 	float cur = module->params[paramId].getValue();
-	auto* hi = rack::createMenuItem<QualityItem>("High (full fidelity)",
-		CHECKMARK(cur < 0.5f));
+	int mode = (int) std::floor(cur + 0.5f);
+	const char* followLabel = CyberlineQuality::getGlobal()
+		? "Follow global (currently Low)"
+		: "Follow global (currently High)";
+	auto* fo = rack::createMenuItem<QualityItem>(followLabel,
+		CHECKMARK(mode == 2));
+	fo->module = module;
+	fo->paramId = paramId;
+	fo->value = 2.f;
+	menu->addChild(fo);
+	auto* hi = rack::createMenuItem<QualityItem>("High for this module",
+		CHECKMARK(mode == 0));
 	hi->module = module;
 	hi->paramId = paramId;
 	hi->value = 0.f;
 	menu->addChild(hi);
-	auto* lo = rack::createMenuItem<QualityItem>("Low (fast approximations)",
-		CHECKMARK(cur >= 0.5f));
+	auto* lo = rack::createMenuItem<QualityItem>("Low for this module",
+		CHECKMARK(mode == 1));
 	lo->module = module;
 	lo->paramId = paramId;
 	lo->value = 1.f;

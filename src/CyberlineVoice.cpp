@@ -1,6 +1,7 @@
 // CyberlineVoice — module process.
 
 #include "CyberlineVoice.hpp"
+#include "CyberlineQuality.hpp"
 #include "CyberlineDspGuard.hpp"
 
 namespace cyberline {
@@ -17,10 +18,12 @@ void CyberlineVoice::process(const ProcessArgs& args) {
 
 	// ---- block-rate parameters (every 16 samples) ----
 	if ((scanIndex++ & 15) == 0) {
-		// Quality: LOW enables the block-rate coefficient refresh (tract)
-		// and the incremental-exponential / fast-gate-sine approximations
-		// (glottis). Toggled from the context menu.
-		bool low = params[V_QUALITY_PARAM].getValue() > 0.5f;
+		// Quality: module override (hidden param) resolved against the
+		// plugin-wide global (default LOW). LOW enables the block-rate
+		// coefficient refresh (tract) and the incremental-exponential /
+		// fast-gate-sine approximations (glottis).
+		bool low = CyberlineQuality::effectiveLow(
+			params[V_QUALITY_PARAM].getValue());
 		tract.lowQuality = low;
 		glottis.lowQuality = low;
 		bool tractPoly6 = (inputs[V_TONGUEX_INPUT].getChannels() >= 6);

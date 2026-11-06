@@ -19,7 +19,7 @@ struct CyberlineOralChamber : rack::engine::Module {
 		INJPOS_PARAM,
 		SPEED_PARAM,
 		WALL_PARAM,
-		QUALITY_PARAM,  // 0 = HIGH (default DSP), 1 = LOW (fast approximations); context-menu toggled
+		QUALITY_PARAM,  // 0 = HIGH pinned, 1 = LOW pinned, 2 = FOLLOW GLOBAL (default); context-menu toggled
 		NUM_PARAMS
 	};
 	enum InputIds {
@@ -82,7 +82,7 @@ struct CyberlineOralChamber : rack::engine::Module {
 		configOutput(NOSE_OUTPUT, "Nose");
 		configOutput(SHAPE_OUTPUT, "Shape scan (CV)");
 		configOutput(PROBE_OUTPUT, "Probe (CV)");
-		configParam(QUALITY_PARAM, 0.f, 1.f, 0.f, "Quality (High/Low, context menu)");
+		configParam(QUALITY_PARAM, 0.f, 2.f, 2.f, "Quality override (context menu)");
 	}
 
 	void process(const ProcessArgs& args) override;

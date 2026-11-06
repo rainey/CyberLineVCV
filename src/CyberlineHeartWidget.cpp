@@ -571,6 +571,12 @@ struct CyberlineHeartWidget : rack::app::ModuleWidget {
 		}
 	}
 
+	void appendContextMenu(rack::ui::Menu* menu) override {
+		ModuleWidget::appendContextMenu(menu);
+		// Heart has no quality-dependent DSP; expose the plugin-wide global.
+		appendQualityMenu(menu, nullptr, -1);
+	}
+
 	void draw(const DrawArgs& args) override {
 		drawPanel(args, PANEL_W);
 		ModuleWidget::draw(args);

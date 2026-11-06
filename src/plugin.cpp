@@ -12,6 +12,8 @@ rack::Plugin* pluginInstance;
 void init(rack::Plugin* p) {
 	pluginInstance = p;
 
+	cyberline::CyberlineQuality::init(p);   // load the global DSP quality (default LOW)
+
 	p->addModel(cyberline::modelCyberlineLarynx);
 	p->addModel(cyberline::modelCyberlineLungs);
 	p->addModel(cyberline::modelCyberlineOralChamber);

@@ -26,7 +26,7 @@ struct CyberlineVoice : rack::engine::Module {
 		V_TONGUEY_PARAM,
 		V_VELUM_PARAM,
 		V_SPEED_PARAM,
-		V_QUALITY_PARAM,   // 0 = HIGH, 1 = LOW (fast approximations); context-menu toggled
+		V_QUALITY_PARAM,   // 0 = HIGH pinned, 1 = LOW pinned, 2 = FOLLOW GLOBAL (default); context-menu toggled
 		NUM_PARAMS
 	};
 	enum InputIds {
@@ -74,7 +74,7 @@ struct CyberlineVoice : rack::engine::Module {
 		configParam(V_TONGUEY_PARAM, 0.f, 10.f, 5.f, "Tongue constriction");
 		configParam(V_VELUM_PARAM, 0.f, 1.f, 0.01f, "Velum");
 		configParam(V_SPEED_PARAM, 0.f, 1.f, 0.5f, "Muscle speed");
-		configParam(V_QUALITY_PARAM, 0.f, 1.f, 0.f, "Quality (High/Low, context menu)");
+		configParam(V_QUALITY_PARAM, 0.f, 2.f, 2.f, "Quality override (context menu)");
 		configInput(V_PITCH_INPUT, "Pitch (1 V/oct)");
 		configInput(V_TENSION_INPUT, "Tension (0-10 V) / 2-3 ch Larynx Poly Bus (Ch 1: TENS, Ch 2: PRESS, Ch 3: VOICING)");
 		configInput(V_PRESSURE_INPUT, "Pressure (0-10 V)");

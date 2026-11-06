@@ -19,6 +19,7 @@
 #include "../src/CyberlineOralChamber.hpp"
 #include "../src/CyberlineLarynx.hpp"
 #include "../src/CyberlineVoice.hpp"
+#include "../src/CyberlineQuality.hpp"
 
 #include <cmath>
 #include <cstdio>
@@ -393,7 +394,7 @@ static void test_poly_normalling_oral_chamber() {
 	std::printf("  LOW quality: maxJump %.3f V finite %s\n", lowMaxJump,
 		lowFinite ? "yes" : "NO");
 	CHECK(lowFinite && lowMaxJump < 6.f, "LOW quality mode stays finite without pops");
-	chamber.params[CyberlineOralChamber::QUALITY_PARAM].setValue(0.f);
+	chamber.params[CyberlineOralChamber::QUALITY_PARAM].setValue(2.f);
 
 	// Set Broca to nasal /M/ and trigger
 	int mIndex = -1;
@@ -425,6 +426,68 @@ static void test_poly_normalling_oral_chamber() {
 	}
 	std::printf("  Oral Chamber nose radiation during Broca /M/: %.4f V\n", maxNoseOut);
 	CHECK(maxNoseOut > 0.05f, "Broca TRACT POLY Ch 2 (Velum) correctly normalled into Chamber and opened nasal tract");
+}
+
+// Global DSP quality: default LOW, per-module override resolution.
+static void test_quality_global_and_override() {
+	std::printf("--- Testing DSP quality: global default + per-module override ---\n");
+	CyberlineOralChamber chamber;
+	rack::engine::Module::ProcessArgs args;
+	args.sampleRate = 48000.f;
+	args.sampleTime = 1.f / 48000.f;
+
+	bool globalWas = CyberlineQuality::getGlobal();
+	CyberlineQuality::setGlobal(true);   // LOW (also the factory default)
+
+	// The modules re-read the override param on their 16-sample block
+	// cadence, so run a block of samples after each change.
+	auto runBlock = [&]() {
+		for (int i = 0; i < 32; i++) chamber.process(args);
+	};
+
+	// FOLLOW (default param 2) resolves to the global
+	chamber.params[CyberlineOralChamber::QUALITY_PARAM].setValue(2.f);
+	runBlock();
+	CHECK(chamber.tract.lowQuality == true,
+		"FOLLOW mode resolves to the global quality (default LOW)");
+
+	// pinned HIGH wins over a LOW global
+	chamber.params[CyberlineOralChamber::QUALITY_PARAM].setValue(0.f);
+	runBlock();
+	CHECK(chamber.tract.lowQuality == false,
+		"pinned HIGH overrides the global LOW");
+
+	// pinned LOW
+	chamber.params[CyberlineOralChamber::QUALITY_PARAM].setValue(1.f);
+	runBlock();
+	CHECK(chamber.tract.lowQuality == true, "pinned LOW stays LOW");
+
+	// a HIGH global reaches FOLLOW-mode modules...
+	CyberlineQuality::setGlobal(false);
+	chamber.params[CyberlineOralChamber::QUALITY_PARAM].setValue(2.f);
+	runBlock();
+	CHECK(chamber.tract.lowQuality == false,
+		"HIGH global reaches FOLLOW-mode modules");
+
+	// ...and a LOW global switches them back
+	CyberlineQuality::setGlobal(true);
+	runBlock();
+	CHECK(chamber.tract.lowQuality == true,
+		"LOW global reaches FOLLOW-mode modules");
+
+	// Voice resolves both cores through the same override param
+	CyberlineVoice voice;
+	voice.params[CyberlineVoice::V_QUALITY_PARAM].setValue(0.f);
+	for (int i = 0; i < 32; i++) voice.process(args);
+	CHECK(!voice.tract.lowQuality && !voice.glottis.lowQuality,
+		"Voice pinned HIGH applies to tract and glottis");
+	voice.params[CyberlineVoice::V_QUALITY_PARAM].setValue(2.f);
+	for (int i = 0; i < 32; i++) voice.process(args);
+	CHECK(voice.tract.lowQuality && voice.glottis.lowQuality,
+		"Voice FOLLOW mode applies the global (LOW) to tract and glottis");
+
+	// restore the pre-test global so later tests see the default state
+	CyberlineQuality::setGlobal(globalWas);
 }
 
 static void test_poly_normalling_larynx_and_voice() {
@@ -531,6 +594,7 @@ int main() {
 	test_broca_channels_and_vowels();
 	test_broca_consonants_and_sync();
 	test_poly_normalling_oral_chamber();
+	test_quality_global_and_override();
 	test_poly_normalling_larynx_and_voice();
 
 	std::printf("=========================================\n");

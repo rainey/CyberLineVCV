@@ -89,6 +89,9 @@ fixed filter banks.
   runs its waveguide at 2× internally (two steps per sample) as PT does.
 - No file I/O, no MIDI, no windowing/glfw calls. Visualization is drawn from
   module state via Rack widgets only. Keeps Cardinal adaptation work at zero.
+  Sole exception: the DSP-quality global writes/reads one line
+  (`low=0|1`) in `quality.json` inside the plugin's user directory at
+  plugin init / menu change — a config file, not data I/O.
 - Robustness: every recursive/feedback path gets (a) NaN/inf guard — if a
   sample is non-finite, reinitialize that state and continue, (b) output
   clamp. The PinkTromboneVCV port's blowups (NaN under audio-rate modulation,
@@ -119,19 +122,30 @@ fixed filter banks.
   traps the x86 FPU into microcode assists for every junction operation —
   measured ~60x CPU (2.4 µs vs 41 ns per sample) and buffer-overrun pops
   after phonemes.
-- **DSP quality (context menu)**: Larynx, Oral Chamber and Voice carry a
-  hidden `QUALITY_PARAM` toggled from the module context menu
-  (*DSP quality → High / Low*); it saves with the patch and participates in
-  undo. HIGH is the full-fidelity DSP (default, unchanged behavior). LOW
-  adds only perceptually-transparent cost savers:
-  - Tract: reflection-coefficient refresh on a 16-sample cadence with a
-    16-sample fade (instead of a fresh target + 1-sample crossfade every
-    sample while articulating) — ~90% fewer O(n) divisions during motion,
-    ~18% total tract cost at 17.5 cm VTL.
-  - Glottis: the LF waveform's exponentials become per-sample multiplies
-    (per-period re-derived step factors, exact within float) and the
-    aspiration-noise gate sine uses a Bhaskara-I approximation (max error
-    ~0.0016, inaudible in a noise-gate modulation) — ~20% glottis cost.
+- **DSP quality (context menu)**: a plugin-wide global with per-module
+  overrides, managed from every cyberline module's context menu under
+  *DSP quality*:
+  - *DSP quality (all modules)*: High (full fidelity) / Low (fast
+    approximations). Applies to all modules; the default is **Low**. The
+    global persists in `quality.json` (one line, `low=0|1`) inside the
+    plugin's user directory — the suite's only file I/O, one line written
+    on change (spec §2 "No file I/O" carve-out: a config file, not data
+    I/O; Cardinal-safe because `asset::plugin()` resolves inside the
+    plugin bundle).
+  - *This module (override)* on the quality-bearing modules (Larynx,
+    Oral Chamber, Voice): hidden `QUALITY_PARAM` — 0 = High pinned,
+    1 = Low pinned, 2 = Follow global (default). Saves with the patch and
+    participates in undo. The other modules (Lungs, Heart, Broca) show
+    only the global section.
+  - LOW adds only perceptually-transparent cost savers:
+    - Tract: reflection-coefficient refresh on a 16-sample cadence with a
+      16-sample fade (instead of a fresh target + 1-sample crossfade every
+      sample while articulating) — ~90% fewer O(n) divisions during motion,
+      ~18% total tract cost at 17.5 cm VTL.
+    - Glottis: the LF waveform's exponentials become per-sample multiplies
+      (per-period re-derived step factors, exact within float) and the
+      aspiration-noise gate sine uses a Bhaskara-I approximation (max error
+      ~0.0016, inaudible in a noise-gate modulation) — ~20% glottis cost.
   The always-on fixes (denormal protection, 5 ms VTL CV slew + waveguide
   state resampling on section-count changes, transient-decay
   precomputation) apply in both modes and do not alter the sound.

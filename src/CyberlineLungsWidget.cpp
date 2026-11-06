@@ -712,6 +712,12 @@ struct CyberlineLungsWidget : rack::app::ModuleWidget {
 		addOutput(rack::createOutputCentered<PJ301MPort>(rack::Vec(PANEL_W * 0.85f, row2), module, CyberlineLungs::PHASE_OUTPUT));
 	}
 
+	void appendContextMenu(rack::ui::Menu* menu) override {
+		ModuleWidget::appendContextMenu(menu);
+		// Lungs has no quality-dependent DSP; expose the plugin-wide global.
+		appendQualityMenu(menu, nullptr, -1);
+	}
+
 	void draw(const DrawArgs& args) override {
 		drawPanel(args, PANEL_W);
 		ModuleWidget::draw(args);

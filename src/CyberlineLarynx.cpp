@@ -1,6 +1,7 @@
 // CyberlineLarynx — module process.
 
 #include "CyberlineLarynx.hpp"
+#include "CyberlineQuality.hpp"
 #include "CyberlineDspGuard.hpp"
 
 namespace cyberline {
@@ -10,10 +11,12 @@ void CyberlineLarynx::process(const ProcessArgs& args) {
 	// phonemes; FTZ/DAZ keeps the FPU off the microcode-assist path).
 	DenormalGuard denormalGuard;
 
-	// Quality: LOW enables the incremental-exponential waveform and the
-	// fast aspiration-gate sine (~0.0016 max sine error, inaudible in a
-	// noise-gate modulation). Toggled from the context menu.
-	glottis.lowQuality = params[QUALITY_PARAM].getValue() > 0.5f;
+	// Quality: module override (hidden param) resolved against the
+	// plugin-wide global (default LOW). LOW enables the incremental-
+	// exponential waveform and the fast aspiration-gate sine (~0.0016 max
+	// sine error, inaudible in a noise-gate modulation).
+	glottis.lowQuality = CyberlineQuality::effectiveLow(
+		params[QUALITY_PARAM].getValue());
 
 	if (glottis.sampleRate != args.sampleRate)
 		glottis.setSampleRate(args.sampleRate);
