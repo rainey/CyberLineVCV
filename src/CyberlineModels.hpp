@@ -65,4 +65,53 @@ extern rack::plugin::Model* modelCyberlineHeart;
 extern rack::plugin::Model* modelCyberlineBroca;
 extern rack::plugin::Model* modelCyberlineVisual1;
 extern rack::plugin::Model* modelCyberlineSagitta;
+
+// DSP-quality context menu for the vocal-tract modules. The selection
+// lives in a hidden param (0 = HIGH full-fidelity DSP, 1 = LOW fast
+// approximations) so it saves with the patch and participates in undo.
+//
+// LOW gates only the perceptually-transparent cost savers: the tract's
+// block-rate reflection refresh (16-sample fade instead of a fresh
+// target + 1-sample crossfade every sample) and the glottis' incremental
+// exponentials / fast aspiration-gate sine. The always-on fixes
+// (denormal protection, VTL slew + state resampling, transient decay
+// precomputation) apply in both modes and do not change the sound.
+inline void appendQualityMenu(rack::ui::Menu* menu, rack::engine::Module* module, int paramId) {
+	if (!module)
+		return;
+	menu->addChild(new rack::ui::MenuSeparator);
+	menu->addChild(rack::createMenuLabel("DSP quality"));
+
+	struct QualityItem : rack::ui::MenuItem {
+		rack::engine::Module* module;
+		int paramId;
+		float value;   // 0 = High, 1 = Low
+		void onAction(const rack::event::Action& e) override {
+			float old = module->params[paramId].getValue();
+			if (old == value)
+				return;
+			module->params[paramId].setValue(value);
+			auto* h = new rack::history::ParamChange;
+			h->name = "set quality";
+			h->moduleId = module->id;
+			h->paramId = paramId;
+			h->oldValue = old;
+			h->newValue = value;
+			APP->history->push(h);
+		}
+	};
+	float cur = module->params[paramId].getValue();
+	auto* hi = rack::createMenuItem<QualityItem>("High (full fidelity)",
+		CHECKMARK(cur < 0.5f));
+	hi->module = module;
+	hi->paramId = paramId;
+	hi->value = 0.f;
+	menu->addChild(hi);
+	auto* lo = rack::createMenuItem<QualityItem>("Low (fast approximations)",
+		CHECKMARK(cur >= 0.5f));
+	lo->module = module;
+	lo->paramId = paramId;
+	lo->value = 1.f;
+	menu->addChild(lo);
+}
 } // namespace cyberline

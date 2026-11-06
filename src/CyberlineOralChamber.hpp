@@ -19,6 +19,7 @@ struct CyberlineOralChamber : rack::engine::Module {
 		INJPOS_PARAM,
 		SPEED_PARAM,
 		WALL_PARAM,
+		QUALITY_PARAM,  // 0 = HIGH (default DSP), 1 = LOW (fast approximations); context-menu toggled
 		NUM_PARAMS
 	};
 	enum InputIds {
@@ -48,6 +49,8 @@ struct CyberlineOralChamber : rack::engine::Module {
 	CyberlineTract tract;
 	float vtlCm = 17.5f;
 	float lastSampleRate = 0.f;
+	float vtlSlew = 17.5f;      // slewed VTL (5 ms one-pole) — smooths CV
+	                            // modulation so geometry rebuilds never jitter
 
 	// SHAPE scan: one section amplitude per audio sample, cycling
 	int scanIndex = 0;
@@ -79,12 +82,14 @@ struct CyberlineOralChamber : rack::engine::Module {
 		configOutput(NOSE_OUTPUT, "Nose");
 		configOutput(SHAPE_OUTPUT, "Shape scan (CV)");
 		configOutput(PROBE_OUTPUT, "Probe (CV)");
+		configParam(QUALITY_PARAM, 0.f, 1.f, 0.f, "Quality (High/Low, context menu)");
 	}
 
 	void process(const ProcessArgs& args) override;
 	void onReset() override {
 		tract.reset();
 		vtlCm = 17.5f;
+		vtlSlew = 17.5f;
 		lastSampleRate = 0.f;
 		scanIndex = 0;
 		blockCounter = 0;

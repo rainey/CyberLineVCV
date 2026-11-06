@@ -486,6 +486,11 @@ struct CyberlineOralChamberWidget : rack::app::ModuleWidget {
 		addOutput(rack::createOutputCentered<PJ301MPort>(rack::Vec(k4[3], rOut), module, CyberlineOralChamber::PROBE_OUTPUT));
 	}
 
+	void appendContextMenu(rack::ui::Menu* menu) override {
+		ModuleWidget::appendContextMenu(menu);
+		appendQualityMenu(menu, module, CyberlineOralChamber::QUALITY_PARAM);
+	}
+
 	void draw(const DrawArgs& args) override {
 		drawPanel(args, PANEL_W);
 		ModuleWidget::draw(args);

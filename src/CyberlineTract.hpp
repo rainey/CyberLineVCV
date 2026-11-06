@@ -32,6 +32,10 @@ struct CyberlineTransient {
 	float lifeTime = 0.2f;
 	float strength = 0.3f;
 	float exponent = 200.f;
+	// incremental decay (replaces the per-step std::exp call):
+	// amp *= decayPerStep each waveguide step, exact within float
+	float currentAmp = 0.f;
+	float decayPerStep = 1.f;
 	bool living = false;
 };
 
@@ -48,6 +52,20 @@ struct CyberlineTract {
 	float lipPrev = 0.f, lipCur = 0.f, nosePrev = 0.f, noseCur = 0.f;
 	bool initialized = false;
 	bool transientsEnabled = true;
+	// LOW quality: decouple reflection-coefficient refresh from the audio
+	// sample rate (16-sample cadence with a 16-sample fade instead of a
+	// fresh target + 1-sample crossfade every sample while the shape moves).
+	bool lowQuality = false;
+	int reflCounter = 0;     // samples since last coefficient refresh
+	int fadePos = 0;         // sample position within the coefficient fade
+	static constexpr int REFL_BLOCK = 16;   // refresh cadence (samples)
+	static constexpr int REFL_FADE = 16;    // fade length (samples)
+	// Subnormal flush: wave energy decays exponentially in the damped delay
+	// lines; below ~1e-15 the x86 FPU would trap to microcode assists for
+	// every junction op (~60x CPU). Count consecutive silent steps and
+	// hard-zero the lines after 64 (~0.7 ms) — inaudible, and it can only
+	// trigger when the output is already at the -300 dB floor.
+	int silenceCounter = 0;
 
 	// Section counts (derived from VTL)
 	int n = 44;              // oral tract sections
@@ -147,6 +165,9 @@ struct CyberlineTract {
 		decimCounter = 0;
 		lipPrev = lipCur = nosePrev = noseCur = 0.f;
 		initialized = false;
+		silenceCounter = 0;
+		reflCounter = 0;
+		fadePos = 0;
 		setTractLength(44);
 		setTongue(tongueIndex, tongueDiameter);
 		syncReflections();
@@ -214,11 +235,47 @@ struct CyberlineTract {
 			}
 		}
 		if (initialized) {
-			for (int i = oldN; i < n; i++) {
-				R[i] = L[i] = amplitude[i] = 0.f;
+			// Resample the traveling-wave state (and meters) onto the new
+			// section grid: expanding no longer zero-fills and contracting
+			// no longer truncates, so VTL modulation glides instead of
+			// popping. (Diameters are resampled below the same way.)
+			float oldR[TRACT_SECTIONS_MAX], oldL[TRACT_SECTIONS_MAX],
+				oldA[TRACT_SECTIONS_MAX];
+			std::memcpy(oldR, R, sizeof(float) * oldN);
+			std::memcpy(oldL, L, sizeof(float) * oldN);
+			std::memcpy(oldA, amplitude, sizeof(float) * oldN);
+			for (int i = 0; i < n; i++) {
+				float src = (float) i * (float) (oldN - 1) / (float) (n - 1);
+				int s0 = (int) src;
+				int s1 = (s0 + 1 < oldN) ? s0 + 1 : s0;
+				float frac = src - (float) s0;
+				R[i] = oldR[s0] * (1.f - frac) + oldR[s1] * frac;
+				L[i] = oldL[s0] * (1.f - frac) + oldL[s1] * frac;
+				amplitude[i] = oldA[s0] * (1.f - frac) + oldA[s1] * frac;
 			}
-			for (int i = oldNoseLen; i < noseLength; i++) {
-				Rn[i] = Ln[i] = noseAmplitude[i] = 0.f;
+		}
+		if (initialized) {
+			if (oldNoseLen > 1) {
+				float oldRn[NOSE_SECTIONS_MAX], oldLn[NOSE_SECTIONS_MAX],
+					oldAn[NOSE_SECTIONS_MAX];
+				std::memcpy(oldRn, Rn, sizeof(float) * oldNoseLen);
+				std::memcpy(oldLn, Ln, sizeof(float) * oldNoseLen);
+				std::memcpy(oldAn, noseAmplitude, sizeof(float) * oldNoseLen);
+				for (int i = 0; i < noseLength; i++) {
+					float src = (float) i * (float) (oldNoseLen - 1)
+						/ (float) (noseLength - 1);
+					int s0 = (int) src;
+					int s1 = (s0 + 1 < oldNoseLen) ? s0 + 1 : s0;
+					float frac = src - (float) s0;
+					Rn[i] = oldRn[s0] * (1.f - frac) + oldRn[s1] * frac;
+					Ln[i] = oldLn[s0] * (1.f - frac) + oldLn[s1] * frac;
+					noseAmplitude[i] = oldAn[s0] * (1.f - frac)
+						+ oldAn[s1] * frac;
+				}
+			} else {
+				for (int i = oldNoseLen; i < noseLength; i++) {
+					Rn[i] = Ln[i] = noseAmplitude[i] = 0.f;
+				}
 			}
 			tongueIndex = tongueIndex * (float) n / (float) oldN;
 		}
@@ -375,18 +432,21 @@ struct CyberlineTract {
 			Ln[i] = jln[i + 1] * wallDamping;
 		}
 
-		// meters (deterministic cadence)
+		// meters (deterministic cadence); flush tiny residuals so the
+		// 0.995-decay meters cannot linger in subnormal territory either
 		if (++meterCounter >= METER_INTERVAL) {
 			meterCounter = 0;
 			for (int i = 0; i < n; i++) {
 				float a = std::fabs(R[i] + L[i]);
 				if (a > amplitude[i]) amplitude[i] = a;
 				else amplitude[i] *= 0.995f;
+				if (amplitude[i] < 1e-15f) amplitude[i] = 0.f;
 			}
 			for (int i = 0; i < noseLength; i++) {
 				float a = std::fabs(Rn[i] + Ln[i]);
 				if (a > noseAmplitude[i]) noseAmplitude[i] = a;
 				else noseAmplitude[i] *= 0.995f;
+				if (noseAmplitude[i] < 1e-15f) noseAmplitude[i] = 0.f;
 			}
 		}
 
@@ -394,6 +454,22 @@ struct CyberlineTract {
 		float noseOut = Rn[noseLength - 1];
 		// caller reads noseOut via lastNoseOutput
 		lastNoseOutput = noseOut;
+
+		// Subnormal flush: after a phoneme the damped lines decay toward
+		// zero; once both radiation outputs sit at the -300 dB floor for
+		// 64 consecutive steps, hard-zero the state (inaudible, and it
+		// prevents the x86 microcode-assist trap storm).
+		if (std::fabs(lipOut) < 1e-15f && std::fabs(noseOut) < 1e-15f) {
+			if (++silenceCounter > 64) {
+				silenceCounter = 0;
+				for (int i = 0; i < n; i++) R[i] = L[i] = 0.f;
+				for (int i = 0; i < noseLength; i++) Rn[i] = Ln[i] = 0.f;
+				for (int i = 0; i < n; i++) amplitude[i] = 0.f;
+				for (int i = 0; i < noseLength; i++) noseAmplitude[i] = 0.f;
+			}
+		} else {
+			silenceCounter = 0;
+		}
 
 		// NaN guard
 		if (!std::isfinite(lipOut) || !std::isfinite(noseOut)) {
@@ -408,16 +484,73 @@ struct CyberlineTract {
 	// One host sample of tract processing: shape update, coefficient refresh and
 	// the sample-rate-appropriate number of waveguide steps. Returns the lip
 	// output; the nose output is left in lastNoseOutput.
+	//
+	// LOW quality: the O(n) coefficient refresh runs on a 16-sample cadence
+	// while the shape is moving, and the per-step lambda crossfades over a
+	// 16-sample fade instead of a single sample pair (same interpolation
+	// path, spread over the block — inaudible at muscleSpeed-limited
+	// articulation rates, ~90% fewer divisions during speech).
 	float process(float deltaTime, float source, float inject, float injectPos,
 			float noise) {
 		reshape(deltaTime);
-		calculateReflectionsPublic();
+
+		bool fadeActive = false;
+		if (lowQuality) {
+			bool refresh = false;
+			if (shapeMoved) {
+				if (reflCounter == 0)
+					refresh = true;
+				reflCounter = (reflCounter + 1) % REFL_BLOCK;
+				reflectionsSettled = false;
+			} else {
+				reflCounter = 0;
+				// settle on the final shape; if a fade was mid-flight the
+				// coefficients have not reached the final target yet, so
+				// refresh once more (fade restarts from where they are)
+				if (!reflectionsSettled || fadePos < REFL_FADE)
+					refresh = true;
+				reflectionsSettled = true;
+			}
+			if (refresh) {
+				// fold any partial fade progress into the base coefficients
+				// so the new fade starts exactly where the loop currently
+				// sits (calculateReflections would otherwise use the last
+				// target as base — a jump from mid-fade state)
+				if (fadePos > 0 && fadePos < REFL_FADE) {
+					float f = (float) fadePos / (float) REFL_FADE;
+					for (int i = 1; i < n; i++)
+						reflection[i] += (newReflection[i] - reflection[i]) * f;
+					reflectionLeft += (newReflectionLeft - reflectionLeft) * f;
+					reflectionRight += (newReflectionRight - reflectionRight) * f;
+					reflectionNose += (newReflectionNose - reflectionNose) * f;
+				}
+				calculateReflections();
+				fadePos = 0;
+			}
+			fadeActive = fadePos < REFL_FADE;
+		} else {
+			calculateReflectionsPublic();
+		}
+
 		if (oversample == 2) {
+			if (fadeActive) {
+				float l0 = (float) fadePos / (float) REFL_FADE;
+				float l1 = (float) (fadePos + 1) / (float) REFL_FADE;
+				fadePos++;
+				step(source, inject, injectPos, noise, l0);
+				return step(source, inject, injectPos, noise, l1);
+			}
 			step(source, inject, injectPos, noise, 0.5f);
 			return step(source, inject, injectPos, noise, 1.0f);
 		}
-		if (decim == 1)
+		if (decim == 1) {
+			if (fadeActive) {
+				float l = (float) (2 * fadePos + 1) / (2.f * REFL_FADE);
+				fadePos++;
+				return step(source, inject, injectPos, noise, l);
+			}
 			return step(source, inject, injectPos, noise, 1.0f);
+		}
 		// Very high host rate: step the waveguide once every `decim` samples and
 		// linearly interpolate between consecutive outputs.
 		if (decimCounter == 0) {
@@ -555,10 +688,15 @@ private:
 		for (int i = 1; i < n; i++) {
 			reflection[i] = newReflection[i];
 			float a1 = area(i - 1), a2 = area(i);
-			if (a1 + a2 == 0.f) newReflection[i] = 0.f;
-			else if (a2 == 0.f) newReflection[i] = 0.999f;
-			else if (a1 == 0.f) newReflection[i] = -0.999f;
-			else newReflection[i] = (a1 - a2) / (a1 + a2);
+			// Branch-light form preserving the original edge semantics:
+			// full open/closed junctions clamp to +-0.999 (never +-1, which
+			// would make the loop lossless and ring forever), and the
+			// degenerate all-zero area pair yields 0.
+			float sum = a1 + a2;
+			float r = (sum > 1e-9f) ? (a1 - a2) / sum : 0.f;
+			if (r > 0.999f) r = 0.999f;
+			if (r < -0.999f) r = -0.999f;
+			newReflection[i] = r;
 		}
 		reflectionLeft = newReflectionLeft;
 		reflectionRight = newReflectionRight;
@@ -615,24 +753,28 @@ private:
 		t->lifeTime = 0.2f;
 		t->strength = 0.3f;
 		t->exponent = 200.f;
+		// exact geometric equivalent of exp(-0.693*exponent*timeAlive):
+		// precompute the per-step factor once, multiply each step
+		t->currentAmp = t->strength;
+		t->decayPerStep = std::exp(-0.69314718f * t->exponent
+			/ internalRate);
 		t->living = true;
 		transientCount++;
 	}
 
 	void processTransients() {
 		if (transientCount <= 0) return;
-		float dt = 1.f / internalRate;   // per waveguide step
 		for (int i = 0; i < TRACT_TRANSIENTS_MAX; i++) {
 			CyberlineTransient* t = &transients[i];
 			if (!t->living) continue;
-			float amp = t->strength
-				* std::exp(-0.69314718f * t->exponent * t->timeAlive);
+			float amp = t->currentAmp;
+			t->currentAmp = amp * t->decayPerStep;
 			int pos = t->position;
 			if (pos >= 0 && pos < n) {
 				R[pos] += amp * 0.5f;
 				L[pos] += amp * 0.5f;
 			}
-			t->timeAlive += dt;
+			t->timeAlive += 1.f / internalRate;
 			if (t->timeAlive >= t->lifeTime) {
 				t->living = false;
 				transientCount--;

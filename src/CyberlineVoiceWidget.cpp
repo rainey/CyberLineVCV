@@ -508,6 +508,11 @@ struct CyberlineVoiceWidget : rack::app::ModuleWidget {
 		addOutput(rack::createOutputCentered<PJ301MPort>(rack::Vec(c3, rOut), module, CyberlineVoice::V_VOICED_OUTPUT));
 	}
 
+	void appendContextMenu(rack::ui::Menu* menu) override {
+		ModuleWidget::appendContextMenu(menu);
+		appendQualityMenu(menu, module, CyberlineVoice::V_QUALITY_PARAM);
+	}
+
 	void draw(const DrawArgs& args) override {
 		drawPanel(args, PANEL_W);
 		ModuleWidget::draw(args);

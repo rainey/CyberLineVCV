@@ -353,12 +353,47 @@ static void test_poly_normalling_oral_chamber() {
 	for (int i = 0; i < 32; i++) chamber.process(args);
 	CHECK(std::fabs(chamber.vtlCm - 17.5f) < 0.1f, "VTL default is 17.5 cm");
 
-	// Add 1.0V CV to VTL input (scaled +5.4 cm/V -> 22.9 cm)
+	// Add 1.0V CV to VTL input (scaled +5.4 cm/V -> 22.9 cm).
+	// The CV is slewed with a 5 ms one-pole (pop prevention); run long
+	// enough for it to settle before checking the converged length.
 	chamber.inputs[CyberlineOralChamber::VTL_INPUT].setVoltage(1.0f);
-	for (int i = 0; i < 32; i++) chamber.process(args);
-	std::printf("  Oral Chamber VTL at 1V CV: %.2f cm\n", chamber.vtlCm);
+	for (int i = 0; i < 44100 / 20; i++) chamber.process(args);
+	std::printf("  Oral Chamber VTL at 1V CV (settled): %.2f cm\n", chamber.vtlCm);
 	CHECK(std::fabs(chamber.vtlCm - 22.9f) < 0.2f, "VTL CV modulates effective tract length to 22.9 cm");
 	chamber.inputs[CyberlineOralChamber::VTL_INPUT].setVoltage(0.f);
+	for (int i = 0; i < 44100 / 20; i++) chamber.process(args);
+
+	// LOW quality mode: finite output with no discontinuities while the
+	// tongue articulates and the VTL sweeps (exercises the block-rate
+	// reflection fade, the state resample and the subnormal flush).
+	chamber.params[CyberlineOralChamber::QUALITY_PARAM].setValue(1.f);
+	chamber.inputs[CyberlineOralChamber::SOURCE_INPUT].channels = 1;
+	bool lowFinite = true;
+	float lowMaxJump = 0.f, lowPrev = 0.f;
+	int lowN = (int) (0.4f * args.sampleRate);
+	for (int i = 0; i < lowN; i++) {
+		if ((i & 15) == 0) {
+			float ph = (float) (i % (lowN / 2)) / (float) (lowN / 2);
+			chamber.params[CyberlineOralChamber::TONGUEX_PARAM].setValue(
+				5.f + 4.f * std::sin(2.f * (float) M_PI * ph));
+			chamber.params[CyberlineOralChamber::TONGUEY_PARAM].setValue(
+				4.f + 3.f * std::sin(2.f * (float) M_PI * 0.7f * ph));
+			chamber.params[CyberlineOralChamber::VTL_PARAM].setValue(
+				14.f + 4.f * std::sin(2.f * (float) M_PI * 0.3f * ph));
+		}
+		chamber.inputs[CyberlineOralChamber::SOURCE_INPUT].setVoltage(
+			2.5f * std::sin(2.f * (float) M_PI * 110.f * i * args.sampleTime));
+		chamber.process(args);
+		float lip = chamber.outputs[CyberlineOralChamber::LIPS_OUTPUT].getVoltage();
+		if (!std::isfinite(lip)) lowFinite = false;
+		float j = std::fabs(lip - lowPrev);
+		if (i > 100 && j > lowMaxJump) lowMaxJump = j;
+		lowPrev = lip;
+	}
+	std::printf("  LOW quality: maxJump %.3f V finite %s\n", lowMaxJump,
+		lowFinite ? "yes" : "NO");
+	CHECK(lowFinite && lowMaxJump < 6.f, "LOW quality mode stays finite without pops");
+	chamber.params[CyberlineOralChamber::QUALITY_PARAM].setValue(0.f);
 
 	// Set Broca to nasal /M/ and trigger
 	int mIndex = -1;

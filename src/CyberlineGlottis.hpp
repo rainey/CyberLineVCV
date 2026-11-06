@@ -49,6 +49,15 @@ struct CyberlineGlottis {
 	float alpha = 0.f, E0 = 0.f, epsilon = 0.f, shift = 0.f, Delta = 0.f;
 	float Te = 0.f, omega = 0.f;
 
+	// LOW quality: incremental-exponential state for the LF waveform
+	// (exp(alpha*t) and exp(-epsilon*(t-Te)) as per-sample multiplies).
+	// Re-derived exactly at every period boundary and at the branch
+	// transition; numerically equivalent to the libm calls within float.
+	bool lowQuality = false;
+	float expAlphaStep = 1.f, expEpsStep = 1.f;
+	float waveExpA = 1.f, waveExpE = 1.f;
+	bool epsBranch = false;
+
 	// Aspiration noise gate (glottal open phase), exposed for NOISE MOD output
 	float noiseModulator = 0.3f;
 
@@ -143,6 +152,19 @@ struct CyberlineGlottis {
 		float z = std::log(y);
 		alpha = z / (Tp / 2.f - Te);
 		E0 = -1.f / (s * std::exp(alpha * Te));
+
+		// LOW quality: per-period step factors for the incremental
+		// exponentials (exp(alpha*t) and exp(-epsilon*(t-Te)) become a
+		// multiply per sample instead of a libm call). Exact within float
+		// over one period; re-derived fresh every period. NOTE: the LF
+		// waveform runs in normalized time (t = 0..1 over the period), so
+		// the per-sample step is dt_norm = f0 / sampleRate.
+		waveExpA = 1.f;
+		waveExpE = 1.f;
+		epsBranch = false;
+		float dtNorm = f0 / sampleRate;
+		expAlphaStep = std::exp(alpha * dtNorm);
+		expEpsStep = std::exp(-epsilon * dtNorm);
 	}
 
 	void reset() {
@@ -165,6 +187,23 @@ struct CyberlineGlottis {
 	// One sample. noise: white noise in [-1, 1]. fbDrive: pre-scaled feedback
 	// sample (module multiplies input by feedback gain). driftAmt: 0..1.
 	// vibRate: Hz. Returns normalized voiced sample (roughly ±1).
+	// Bhaskara I sine for the LOW-quality aspiration gate (max error
+	// ~0.0016, far below what a noise-gate modulation can reveal);
+	// input phase p in [0, 1) wraps of 2*pi.
+	static float fastSinPi(float p) {
+		// fold to 0..pi
+		float x = p - std::floor(p);
+		if (x >= 0.5f) {
+			x -= 0.5f;
+			float s = x * 2.f * (float) M_PI;   // 0..pi
+			float b = s * ((float) M_PI - s);
+			return -16.f * b / (5.f * (float) M_PI * (float) M_PI - 4.f * b);
+		}
+		float s = x * 2.f * (float) M_PI;       // 0..pi
+		float b = s * ((float) M_PI - s);
+		return 16.f * b / (5.f * (float) M_PI * (float) M_PI - 4.f * b);
+	}
+
 	float process(float noise, float fbDrive, float driftAmt, float vibRate) {
 		// Per-sample 1-pole smoothing on tract feedback drive (avoids aliasing
 		// and HF loop instability, spec §3)
@@ -243,10 +282,29 @@ struct CyberlineGlottis {
 		// LF waveform (two branches)
 		float t = timeInWaveform / waveformLength;
 		float wave;
-		if (t > Te)
-			wave = (-std::exp(-epsilon * (t - Te)) + shift) / Delta;
-		else
-			wave = E0 * std::exp(alpha * t) * std::sin(omega * t);
+		if (lowQuality) {
+			// Incremental exponentials: multiply per sample instead of two
+			// libm exp() calls. The sin(omega*t) that shapes the pulse
+			// stays exact — it defines the timbre.
+			if (t > Te) {
+				if (!epsBranch) {
+					waveExpE = std::exp(-epsilon * (t - Te));
+					epsBranch = true;
+				} else {
+					waveExpE *= expEpsStep;
+				}
+				wave = (-waveExpE + shift) / Delta;
+			} else {
+				epsBranch = false;
+				wave = E0 * waveExpA * std::sin(omega * t);
+				waveExpA *= expAlphaStep;
+			}
+		} else {
+			if (t > Te)
+				wave = (-std::exp(-epsilon * (t - Te)) + shift) / Delta;
+			else
+				wave = E0 * std::exp(alpha * t) * std::sin(omega * t);
+		}
 
 		float out = 0.f;
 		if (intensity >= 0.f) {
@@ -255,7 +313,9 @@ struct CyberlineGlottis {
 			if (ampEff < 0.f) ampEff = 0.f;
 			if (ampEff > 1.5f) ampEff = 1.5f;
 
-			float voicedGate = 0.1f + 0.2f * std::fmax(0.f, std::sin(2.f * (float) M_PI * t));
+			float gateSin = lowQuality ? fastSinPi(t)
+				: std::sin(2.f * (float) M_PI * t);
+			float voicedGate = 0.1f + 0.2f * std::fmax(0.f, gateSin);
 			float ti = curTenseness * intensity * voicing;
 			noiseModulator = ti * voicedGate + (1.f - ti) * 0.3f * (intensity > 1e-4f ? 1.f : 0.f);
 			// Aspiration colour: breathy-voiced shape while voicing, blending
@@ -273,7 +333,9 @@ struct CyberlineGlottis {
 			float suction = -intensity;
 			float ingDrive = suction * (0.35f + 0.65f * curTenseness);
 			float voicedAmt = std::fmax(0.f, (ingDrive - 0.14f) / 0.86f);
-			float voicedGate = 0.15f + 0.25f * std::fmax(0.f, std::sin(2.f * (float) M_PI * t));
+			float gateSin = lowQuality ? fastSinPi(t)
+				: std::sin(2.f * (float) M_PI * t);
+			float voicedGate = 0.15f + 0.25f * std::fmax(0.f, gateSin);
 			noiseModulator = std::fmin(1.f, suction * (0.45f + 0.35f * voicedGate));
 			float aspiration = suction * (0.4f + 0.6f * oneMinusSqrtTenseness)
 				* noiseModulator * noise;

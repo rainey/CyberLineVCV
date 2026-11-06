@@ -1,10 +1,14 @@
 // CyberlineLungs — module process.
 
 #include "CyberlineLungs.hpp"
+#include "CyberlineDspGuard.hpp"
 
 namespace cyberline {
 
 void CyberlineLungs::process(const ProcessArgs& args) {
+	// Subnormal protection: the reservoir/smoothing states decay toward
+	// zero between breaths; FTZ/DAZ keeps the FPU off the microcode path.
+	DenormalGuard denormalGuard;
 	// Per-sample trigger/gate edge detection (short pulses must not fall
 	// between 32-sample physics ticks)
 	bool gate = inputs[GATE_INPUT].getVoltage() >= 1.f;

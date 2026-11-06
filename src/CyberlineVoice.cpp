@@ -1,10 +1,14 @@
 // CyberlineVoice — module process.
 
 #include "CyberlineVoice.hpp"
+#include "CyberlineDspGuard.hpp"
 
 namespace cyberline {
 
 void CyberlineVoice::process(const ProcessArgs& args) {
+	// Subnormal protection (glottis one-poles + damped waveguide lines).
+	DenormalGuard denormalGuard;
+
 	if (args.sampleRate != lastSampleRate) {
 		lastSampleRate = args.sampleRate;
 		glottis.setSampleRate(args.sampleRate);
@@ -13,6 +17,12 @@ void CyberlineVoice::process(const ProcessArgs& args) {
 
 	// ---- block-rate parameters (every 16 samples) ----
 	if ((scanIndex++ & 15) == 0) {
+		// Quality: LOW enables the block-rate coefficient refresh (tract)
+		// and the incremental-exponential / fast-gate-sine approximations
+		// (glottis). Toggled from the context menu.
+		bool low = params[V_QUALITY_PARAM].getValue() > 0.5f;
+		tract.lowQuality = low;
+		glottis.lowQuality = low;
 		bool tractPoly6 = (inputs[V_TONGUEX_INPUT].getChannels() >= 6);
 		bool tractPoly8 = (inputs[V_TONGUEX_INPUT].getChannels() >= 8);
 		bool tensPoly2  = (inputs[V_TENSION_INPUT].getChannels() >= 2);
@@ -58,9 +68,16 @@ void CyberlineVoice::process(const ProcessArgs& args) {
 		f0 += params[V_PCOUPLE_PARAM].getValue() * std::fabs(storedPressure) * 30.f;
 		glottis.setTargets(f0, storedTension, storedPressure, foldLen, voicingAmt);
 
-		float vtl = params[V_VTL_PARAM].getValue();
-		if (vtl != vtlCm) {
-			vtlCm = vtl;
+		// VTL: 5 ms one-pole slew so CV jitter cannot retrigger geometry
+		// rebuilds (setGeometry early-returns while the rounded section
+		// count is unchanged).
+		float vtlTarget = params[V_VTL_PARAM].getValue();
+		float dtBlock = 16.f / args.sampleRate;
+		float vtlAlpha = 1.f - std::exp(-dtBlock / 0.005f);
+		vtlSlew += (vtlTarget - vtlSlew) * vtlAlpha;
+		if (!std::isfinite(vtlSlew)) vtlSlew = vtlTarget;
+		if (vtlSlew != vtlCm) {
+			vtlCm = vtlSlew;
 			tract.setGeometry(vtlCm, args.sampleRate);
 		}
 

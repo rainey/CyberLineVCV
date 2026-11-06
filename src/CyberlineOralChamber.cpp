@@ -1,10 +1,16 @@
 // CyberlineOralChamber — module process.
 
 #include "CyberlineOralChamber.hpp"
+#include "CyberlineDspGuard.hpp"
 
 namespace cyberline {
 
 void CyberlineOralChamber::process(const ProcessArgs& args) {
+	// Subnormal protection: the waveguide lines decay exponentially toward
+	// zero; without FTZ/DAZ the x86 FPU traps to microcode assists during
+	// ring-out (~60x CPU). Restores the previous MXCSR on scope exit.
+	DenormalGuard denormalGuard;
+
 	if (args.sampleRate != lastSampleRate) {
 		lastSampleRate = args.sampleRate;
 		tract.setGeometry(vtlCm, args.sampleRate);
@@ -13,11 +19,23 @@ void CyberlineOralChamber::process(const ProcessArgs& args) {
 
 	// ---- block-rate parameter read (every 16 samples) ----
 	if ((blockCounter++ & 15) == 0) {
-		float vtl = rack::math::clamp(
+		// Quality: LOW decouples the coefficient refresh from the audio
+		// rate (16-sample fade) at a ~90% division-load reduction during
+		// articulation. Toggled from the context menu.
+		tract.lowQuality = params[QUALITY_PARAM].getValue() > 0.5f;
+
+		// VTL: 5 ms one-pole slew on the CV so sample jitter cannot
+		// repeatedly trigger geometry rebuilds (setGeometry still
+		// early-returns while the rounded section count is unchanged).
+		float vtlTarget = rack::math::clamp(
 			params[VTL_PARAM].getValue() + inputs[VTL_INPUT].getVoltage() * 5.4f,
 			6.f, 60.f);
-		if (vtl != vtlCm) {
-			vtlCm = vtl;
+		float dtBlock = 16.f / args.sampleRate;
+		float vtlAlpha = 1.f - std::exp(-dtBlock / 0.005f);
+		vtlSlew += (vtlTarget - vtlSlew) * vtlAlpha;
+		if (!std::isfinite(vtlSlew)) vtlSlew = vtlTarget;
+		if (vtlSlew != vtlCm) {
+			vtlCm = vtlSlew;
 			tract.setGeometry(vtlCm, args.sampleRate);
 		}
 

@@ -5,6 +5,7 @@
 #include "../src/CyberlineGlottis.hpp"
 #include "../src/CyberlineTract.hpp"
 #include "../src/CyberlineHeartCore.hpp"
+#include "../src/CyberlineDspGuard.hpp"
 #include <chrono>
 #include <cstdio>
 #include <initializer_list>
@@ -67,6 +68,87 @@ int main() {
 		for (long i = 0; i < N; i++) acc += h.process(p).sound;
 		sink = acc;
 		report("HeartCore::process", nsPerSample(N, t0, Clock::now()), sr);
+	}
+
+	// ---- denormal stress: ring-out to silence with vs without FTZ/DAZ ----
+	// The damped delay lines decay exponentially; below ~1.17e-38 the x86
+	// FPU leaves the fast path for a microcode assist on every junction op.
+	{
+		const float sr = 48000.f;
+		const long ringN = 48000 * 4;   // 4 s of decay after a burst
+
+		// with FTZ/DAZ (what the modules do via DenormalGuard)
+		{
+			DenormalGuard guard;
+			CyberlineTract t;
+			t.setGeometry(17.5f, sr);
+			float dt = 1.f / sr;
+			// excite, then let it ring out
+			for (long i = 0; i < 1000; i++)
+				t.process(dt, 0.5f, 0.f, 0.f, 0.f);
+			auto t0 = Clock::now();
+			float acc = 0.f;
+			for (long i = 0; i < ringN; i++) acc += t.process(dt, 0.f, 0.f, 0.f, 0.f);
+			sink = acc;
+			report("Tract ring-out 4s (FTZ on)", nsPerSample(ringN, t0, Clock::now()), sr);
+		}
+		// without FTZ/DAZ (the pre-fix behavior)
+		{
+			CyberlineTract t;
+			t.setGeometry(17.5f, sr);
+			float dt = 1.f / sr;
+			for (long i = 0; i < 1000; i++)
+				t.process(dt, 0.5f, 0.f, 0.f, 0.f);
+			auto t0 = Clock::now();
+			float acc = 0.f;
+			for (long i = 0; i < ringN; i++) acc += t.process(dt, 0.f, 0.f, 0.f, 0.f);
+			sink = acc;
+			report("Tract ring-out 4s (FTZ off)", nsPerSample(ringN, t0, Clock::now()), sr);
+		}
+	}
+
+	// ---- articulation benchmark: moving shape, HIGH vs LOW quality ----
+	// Tongue re-target every 16 samples (simulating CV motion), which
+	// keeps shapeMoved true and forces coefficient refreshes.
+	for (int low = 0; low < 2; low++) {
+		const float sr = 48000.f;
+		CyberlineTract t;
+		t.setGeometry(17.5f, sr);
+		t.lowQuality = low != 0;
+		float dt = 1.f / sr;
+		auto t0 = Clock::now();
+		float acc = 0.f;
+		for (long i = 0; i < N / 4; i++) {
+			if ((i & 15) == 0) {
+				float tx = (float) ((i >> 4) % 100) / 100.f;
+				t.setTongue(t.bladeStart + tx * (t.tipStart - t.bladeStart), 2.5f);
+				t.applyConstriction();
+			}
+			float s = (i & 1) ? 0.2f : -0.2f;
+			acc += t.process(dt, s, 0.f, 0.f, 0.1f);
+		}
+		sink = acc;
+		char label[64];
+		std::snprintf(label, sizeof(label), "Tract moving-shape (%s quality)",
+			low ? "LOW " : "HIGH");
+		report(label, nsPerSample(N / 4, t0, Clock::now()), sr);
+	}
+
+	// ---- glottis: HIGH vs LOW quality waveform ----
+	for (int low = 0; low < 2; low++) {
+		const float sr = 48000.f;
+		CyberlineGlottis g;
+		g.setSampleRate(sr);
+		g.lowQuality = low != 0;
+		g.setTargets(140.f, 0.6f, 0.8f, 14.f);
+		auto t0 = Clock::now();
+		float acc = 0.f;
+		for (long i = 0; i < N; i++) acc += g.process(0.3f, 0.f, 0.3f, 6.f);
+		sink = acc;
+		char label[64];
+		std::snprintf(label, sizeof(label), "Glottis::process (%s quality)",
+			low ? "LOW " : "HIGH");
+		report(label, nsPerSample(N, t0, Clock::now()), sr);
 	}
 	return 0;
 }

@@ -111,6 +111,30 @@ fixed filter banks.
     inhaling; rectify explicitly to model inhaled/circular phonation).
   - Every signed output also has a plain unipolar/gate sibling where it makes
     sense (Lungs PHASE) for logic-friendly use.
+- **Denormal protection**: the vocal modules (Larynx, Oral Chamber, Voice,
+  Lungs) open a `cyberline::DenormalGuard` (RAII MXCSR FTZ + DAZ, no-op on
+  non-x86) at the top of `process()`, and `CyberlineTract` hard-zeroes the
+  damped delay lines + meters after 64 consecutive sub-threshold steps
+  (~-300 dB floor). Rationale: decay-to-silence in the waveguide otherwise
+  traps the x86 FPU into microcode assists for every junction operation —
+  measured ~60x CPU (2.4 µs vs 41 ns per sample) and buffer-overrun pops
+  after phonemes.
+- **DSP quality (context menu)**: Larynx, Oral Chamber and Voice carry a
+  hidden `QUALITY_PARAM` toggled from the module context menu
+  (*DSP quality → High / Low*); it saves with the patch and participates in
+  undo. HIGH is the full-fidelity DSP (default, unchanged behavior). LOW
+  adds only perceptually-transparent cost savers:
+  - Tract: reflection-coefficient refresh on a 16-sample cadence with a
+    16-sample fade (instead of a fresh target + 1-sample crossfade every
+    sample while articulating) — ~90% fewer O(n) divisions during motion,
+    ~18% total tract cost at 17.5 cm VTL.
+  - Glottis: the LF waveform's exponentials become per-sample multiplies
+    (per-period re-derived step factors, exact within float) and the
+    aspiration-noise gate sine uses a Bhaskara-I approximation (max error
+    ~0.0016, inaudible in a noise-gate modulation) — ~20% glottis cost.
+  The always-on fixes (denormal protection, 5 ms VTL CV slew + waveguide
+  state resampling on section-count changes, transient-decay
+  precomputation) apply in both modes and do not alter the sound.
 
 ## 3. `cyberline-larynx` — Larynx
 
