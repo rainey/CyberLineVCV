@@ -183,7 +183,7 @@ reimplemented from the 1985 paper, plus guards and modular control).
 | TENS CV | 1.0 | 0–1 | attenuator trimmer for TENSION CV input |
 | PRESSURE | 0.8 | 0–1 | replaces PT's `intensity` envelope; smoothed internally |
 | FOLD LENGTH | 14 mm | 2–45 mm | vocal-fold length; allometric F0 scaling per Charlton/Fletcher mammal law (`log10 F0 = −1.43·log10 L(mm) + 4.01` at zero tension), plus mass/dim timbre effect (thicker folds = darker). Human ≈ 13–15 mm, giraffe 41 mm; keeps DRIFT/creak behavior physical at big sizes |
-| FREQ OCT | −2…+2 | octave offset for L1 | F0 clamped 20–2000 Hz after CV; below 20 Hz the LF period grows unbounded (PT silent-state bug) |
+| FREQ OCT | −2…+2 | octave offset for L1 (encoder-style knob that snaps to whole octaves; legacy fractional saved values are still rounded by the engine) | F0 clamped 20–2000 Hz after CV; below 20 Hz the LF period grows unbounded (PT silent-state bug) |
 | DRIFT | 0.3 | 0–1 | simplex wobble on F0 and tenseness (PT's `autoWobble`/vibrato noise terms), depth scaled |
 | VIBRATO RATE | 6 Hz | 0–12 | sinusoid vibrato depth fixed small; CV of pitch comes from patching |
 | FEEDBACK GAIN | 0 | 0–1 | gain on L4 injected into the glottal driving pressure (semi-coupling) |

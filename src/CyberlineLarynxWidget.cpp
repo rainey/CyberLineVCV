@@ -384,7 +384,7 @@ struct CyberlineLarynxWidget : rack::app::ModuleWidget {
 		addParam(rack::createParamCentered<RoundBlackKnob>(rack::Vec(c1, r[0]), module, CyberlineLarynx::TENSION_PARAM));
 		addParam(rack::createParamCentered<RoundBlackKnob>(rack::Vec(c2, r[0]), module, CyberlineLarynx::PRESSURE_PARAM));
 		addParam(rack::createParamCentered<RoundSmallBlackKnob>(rack::Vec(c1, r[1]), module, CyberlineLarynx::FOLDLEN_PARAM));
-		addParam(rack::createParamCentered<RoundSmallBlackKnob>(rack::Vec(c2, r[1]), module, CyberlineLarynx::OCT_PARAM));
+		addParam(rack::createParamCentered<OctEncoderKnob>(rack::Vec(c2, r[1]), module, CyberlineLarynx::OCT_PARAM));
 		addParam(rack::createParamCentered<RoundSmallBlackKnob>(rack::Vec(c1, r[2]), module, CyberlineLarynx::DRIFT_PARAM));
 		addParam(rack::createParamCentered<RoundSmallBlackKnob>(rack::Vec(c2, r[2]), module, CyberlineLarynx::VIBRATE_PARAM));
 		addParam(rack::createParamCentered<RoundSmallBlackKnob>(rack::Vec(c1, r[3]), module, CyberlineLarynx::FBGAIN_PARAM));

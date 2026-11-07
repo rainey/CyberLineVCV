@@ -48,7 +48,7 @@ struct CyberlineLarynx : rack::engine::Module {
 		configParam(TENSION_PARAM, 0.f, 1.f, 0.6f, "Tension");
 		configParam(PRESSURE_PARAM, 0.f, 1.f, 0.8f, "Pressure");
 		configParam(FOLDLEN_PARAM, 2.f, 45.f, 14.f, "Fold length", " mm");
-		configParam(OCT_PARAM, -2.f, 2.f, 0.f, "Octave");
+		configParam<OctaveParamQuantity>(OCT_PARAM, -2.f, 2.f, 0.f, "Octave");
 		configParam(DRIFT_PARAM, 0.f, 1.f, 0.3f, "Drift");
 		configParam(VIBRATE_PARAM, 0.f, 12.f, 6.f, "Vibrato rate", " Hz");
 		configParam(FBGAIN_PARAM, 0.f, 1.f, 0.f, "Feedback gain");

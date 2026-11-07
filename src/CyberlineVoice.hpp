@@ -67,7 +67,7 @@ struct CyberlineVoice : rack::engine::Module {
 		configParam(V_TENSION_PARAM, 0.f, 1.f, 0.6f, "Tension");
 		configParam(V_PRESSURE_PARAM, 0.f, 1.f, 0.8f, "Pressure");
 		configParam(V_FOLDLEN_PARAM, 2.f, 45.f, 14.f, "Fold length", " mm");
-		configParam(V_PITCHOCT_PARAM, -2.f, 2.f, 0.f, "Octave");
+		configParam<OctaveParamQuantity>(V_PITCHOCT_PARAM, -2.f, 2.f, 0.f, "Octave");
 		configParam(V_DRIFT_PARAM, 0.f, 1.f, 0.3f, "Drift");
 		configParam(V_FB_PARAM, 0.f, 1.f, 0.f, "Tract feedback");
 		configParam(V_PCOUPLE_PARAM, 0.f, 1.f, 0.3f, "Pressure-pitch coupling");

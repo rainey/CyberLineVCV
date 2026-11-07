@@ -474,7 +474,7 @@ struct CyberlineVoiceWidget : rack::app::ModuleWidget {
 		addParam(rack::createParamCentered<RoundBlackKnob>(rack::Vec(k4[0], rKnob1), module, CyberlineVoice::V_TENSION_PARAM));
 		addParam(rack::createParamCentered<RoundBlackKnob>(rack::Vec(k4[1], rKnob1), module, CyberlineVoice::V_PRESSURE_PARAM));
 		addParam(rack::createParamCentered<RoundSmallBlackKnob>(rack::Vec(k4[2], rKnob1), module, CyberlineVoice::V_FOLDLEN_PARAM));
-		addParam(rack::createParamCentered<RoundSmallBlackKnob>(rack::Vec(k4[3], rKnob1), module, CyberlineVoice::V_PITCHOCT_PARAM));
+		addParam(rack::createParamCentered<OctEncoderKnob>(rack::Vec(k4[3], rKnob1), module, CyberlineVoice::V_PITCHOCT_PARAM));
 
 		// Row 2: DRIFT, P-PITCH, FB GAIN, VTL cm
 		addParam(rack::createParamCentered<RoundSmallBlackKnob>(rack::Vec(k4[0], rKnob2), module, CyberlineVoice::V_DRIFT_PARAM));
