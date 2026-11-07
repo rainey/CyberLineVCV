@@ -5,7 +5,7 @@ The `cyberline` voice synthesis pipeline—[`CyberlineLungs`](../src/CyberlineLu
 > [!NOTE]
 > These recipes are **untested starting points**. Pitch values were computed from the Larynx's real pitch law: `F0 = 10^(4.01 − 1.43·log10(FOLDLEN_mm)) × 2^(PITCH_V + OCT) × sqrt(TENSION / 0.6)`, plus up to `PCOUPLE × 30 Hz` from pressure. Expect to tune by ear.
 
-This guide details how to configure and modulate the modules to simulate non-human animal vocalisations, including terrestrial mammals (cats, elephants, primates), birds (songbirds, doves/owls, corvids), and marine mammals (whales, dolphins, sea lions).
+This guide details how to configure and modulate the modules to simulate vocalisations across the mammalian range, including terrestrial mammals (cats, elephants, primates, and humans — including non-speech human vocalisations), birds (songbirds, doves/owls, corvids), and marine mammals (whales, dolphins, sea lions).
 
 ---
 
@@ -147,6 +147,42 @@ Primate calls combine fast rhythmic respiratory bursts (pant-hoots) with flexibl
 
 ---
 
+### 4. Human (*Homo sapiens*) — Adult Female Voiced Exhale (Moan)
+
+The human voice sits squarely in the suite's design range (12–18 mm folds,
+17 cm tract), but the adult female register favors the short end of both
+distributions. A sustained non-speech vocalisation ("moan") is physically a
+*breathiness + strain* phenomenon, not a phoneme: low-enough tension that the
+aspiration term is audible, a slightly open velum that softens the vowel, and
+a pitch contour coupled to the emptying reservoir — the sound climbs as the
+breath runs out.
+
+```
+  [ Lungs: 6 bpm, TRIG/CYCLE ] ──PRESSURE──▶ [ Larynx: 11.5mm ] ──VOICED──▶ [ Oral Chamber: 15.5cm ] ──▶ LIPS + NOSE
+              ──VOLUME──(invert 0.08x)──▶ PITCH      (TENSION 0.4)            (VELUM 0.1, slow TONGUEY)
+              ──VOLUME──(att. 1.5V)─────▶ TONGUEY
+```
+
+#### A. Core Moan
+* **Module Settings:**
+  * **`CyberlineLungs`:** `RATE`: `6/min` (CYCLE) or TRIG mode for one-shot calls; `DEPTH`: `0.85`, `INHALE`: `0.3 s` (quick catch-breath), `MAXFLOW`: `0.3` (conserved air → long drain), `EFFORT`: `0.75` (plateau sustain tapering at the end), `INH MUTE`: `Mute` (silent fill). With the **`START`** switch set to **Exhale first**, the sound fires on the cycle boundary and the silent inhale recharges afterward — useful for clock-synced calls; keep **Inhale first** for the physiological gasp-before-release shape.
+  * **`CyberlineLarynx`:** `FOLDLEN`: `11.5 mm` (≈215 Hz at tension 0.6; female anatomy), `TENSION`: `0.4` — the key knob: chest voice, but low enough that `intensity·(1−√tension)` aspiration is audible (0.3 → whisper-adjacent, 0.55 → fuller/cleaner), `OCT`: `0` (place base F0 ≈ F#3–A3), `DRIFT`: `0.4`, `VIBRATE`: `4.5 Hz` (slow, not singer vibrato), `PCOUPLE`: `0.45` (loud passages bend sharp — the intensity/moan interaction), `PRESSURE` knob: `0.15` (the Lungs envelope owns the dynamics).
+  * **`CyberlineOralChamber`:** `VTL`: `15.5 cm` (shorter than the 17.5 cm male-neutral default → formants up, brighter color), `TONGUEX`: `-1.0`, `TONGUEY`: low (open "ah"), `VELUM`: `0.1` — a slightly open nasal branch is what separates a soft vulnerable vowel from speech; push to `0.3` for closed "mmm/nnn" intensities, `WALL`: default.
+* **Patch:**
+  1. `Lungs` `PRESSURE` → `Larynx` `PRESSURE` (the loudness swell).
+  2. `Lungs` `VOLUME` → **inverting attenuverter** → `Larynx` `PITCH`, inverted and scaled to ≈ `0.08×` (≈0.8 V at empty): pitch *rises* as the lungs drain (strain coupling) — the signature contour of the moan.
+  3. `Lungs` `VOLUME` → attenuator (`1.5 V` full-scale) → `Oral Chamber` `TONGUEY`: the vowel drifts "ah → uh/eh" as the breath empties. Free micro-detail, no extra module.
+  4. `Larynx` `VOICED` → `Oral Chamber` `SOURCE`; take `LIPS` plus ≈20% `NOSE` in the mix.
+  5. Optional: slow LFO (0.03–0.05 Hz) → `TONGUEX` for vowel wandering during long calls.
+* **Variants:**
+  * **Gasp onset:** set `INH MUTE` to `Suction` and fold a scaled copy of `PRESSURE` (the negative inhale lobe) quietly into the output mix — you hear the sharp intake before each exhale.
+  * **With `CyberlineVoice`:** same recipe, but set its `FEEDBACK GAIN` ≈ `0.2` — tract loading on the glottis adds naturalness with no extra cable.
+  * **With `CyberlineBroca`:** `VOWEL A` = /a/, `VOWEL B` = /o/ or /u/, `V.MORPH` ≈ `0.35` (CV it for wandering), `TRACT POLY` → chamber `TNGX/POLY`, `LARYNX POLY` → larynx `TENS/POLY`; modulating the voicing channel with `Lungs` `PHASE` gives breathy-onset vowels automatically.
+  * **Heartbeat timing:** `CyberlineHeart` `BEAT` → `Lungs` `TRIGGER` (RATE ≈ 70, `DRIVE` −0.4, `HRV` up): calls timed to the pulse, irregularly.
+* **Finishing (external):** short plate reverb; no fast compression (the source is already close-mic'd); gentle lowpass ≈ 6–8 kHz. Tuning order when it sounds wrong: male → lower `FOLDLEN` + `VTL` + `TENSION`; too clear/speechy → lower `TENSION`, raise `VELUM` slightly.
+
+---
+
 ## 4. Avian / Bird Call Patch Recipes
 
 Birds produce sound via a **syrinx** located at the base of the trachea rather than a larynx at the top. The entire trachea functions as a resonant acoustic filter above the sound generator, while beak aperture (gape) dictates high-frequency radiation.
@@ -273,6 +309,7 @@ Pitch figures are approximate, computed from the Larynx pitch law (see the note 
 | **Cat (Meow)** | 7.5 mm | ~830 Hz falling to ~550 Hz | 8.5 cm | `LIPS` | Pitch fall + vowel glide |
 | **Cat (Purr)** | 7.5 mm | ~400 Hz carrier, 24–28 Hz pulsing | 8.0 cm | `LIPS` + `NOSE` | External LFO into Pressure/Tension |
 | **Primate (Chimp)** | 9 mm | ~380 Hz, rising | 11 cm | `LIPS` | Rhythmic panting (35–50 bpm) |
+| **Human F (Moan)** | 11.5 mm | ~215 Hz, rising as V empties | 15.5 cm | `LIPS` + `NOSE` | Inverted VOLUME → Pitch (strain), low TENSION (breathiness), VELUM ~0.1 |
 | **Sea Lion (Bark)** | 15–18 mm | ~180–240 Hz | 15–18 cm | `LIPS` | 2–2.8 Hz bursts, feedback growl |
 | **Large Feline (Roar)** | 28–35 mm | ~70–100 Hz | 30–40 cm | `LIPS` | Heavy folds, wide tract (untested) |
 | **Elephant (Rumble)** | 45 mm | ~16–24 Hz | 55–60 cm | `NOSE` | `OCT -1`, no pitch bias, open velum |
