@@ -147,11 +147,12 @@ Primate calls combine fast rhythmic respiratory bursts (pant-hoots) with flexibl
 
 ---
 
-### 4. Human (*Homo sapiens*) — Adult Female Voiced Exhale (Moan)
+### 4. Human (*Homo sapiens*) — Adult Non-Speech Vocalisations (Moan / Groan)
 
 The human voice sits squarely in the suite's design range (12–18 mm folds,
-17 cm tract), but the adult female register favors the short end of both
-distributions. A sustained non-speech vocalisation ("moan") is physically a
+17 cm tract): the adult female register favors the short end of both
+distributions, the adult male the long end (recipe B). A sustained non-speech
+vocalisation ("moan"/"groan") is physically a
 *breathiness + strain* phenomenon, not a phoneme: low-enough tension that the
 aspiration term is audible, a slightly open velum that softens the vowel, and
 a pitch contour coupled to the emptying reservoir — the sound climbs as the
@@ -163,10 +164,10 @@ breath runs out.
               ──VOLUME──(att. 1.5V)─────▶ TONGUEY
 ```
 
-#### A. Core Moan
+#### A. Adult Female (Moan)
 * **Module Settings:**
   * **`CyberlineLungs`:** `RATE`: `6/min` (CYCLE) or TRIG mode for one-shot calls; `DEPTH`: `0.85`, `INHALE`: `0.3 s` (quick catch-breath), `MAXFLOW`: `0.3` (conserved air → long drain), `EFFORT`: `0.75` (plateau sustain tapering at the end), `INH MUTE`: `Mute` (silent fill). With the **`START`** switch set to **Exhale first**, the sound fires on the cycle boundary and the silent inhale recharges afterward — useful for clock-synced calls; keep **Inhale first** for the physiological gasp-before-release shape.
-  * **`CyberlineLarynx`:** `FOLDLEN`: `11.5 mm` (≈215 Hz at tension 0.6; female anatomy), `TENSION`: `0.4` — the key knob: chest voice, but low enough that `intensity·(1−√tension)` aspiration is audible (0.3 → whisper-adjacent, 0.55 → fuller/cleaner), `OCT`: `0` (place base F0 ≈ F#3–A3), `DRIFT`: `0.4`, `VIBRATE`: `4.5 Hz` (slow, not singer vibrato), `PCOUPLE`: `0.45` (loud passages bend sharp — the intensity/moan interaction), `PRESSURE` knob: `0.15` (the Lungs envelope owns the dynamics).
+  * **`CyberlineLarynx`:** `FOLDLEN`: `11.5 mm` (≈310 Hz base at tension 0.6 per the pitch law; ≈255 Hz ≈ B3 at the recipe's `TENSION 0.4` — female modal range), `TENSION`: `0.4` — the key knob: chest voice, but low enough that `intensity·(1−√tension)` aspiration is audible (0.3 → whisper-adjacent, 0.55 → fuller/cleaner), `OCT`: `0` (use `−0.5` to sit the base ≈ F#3–A3 instead), `DRIFT`: `0.4`, `VIBRATE`: `4.5 Hz` (slow, not singer vibrato), `PCOUPLE`: `0.45` (loud passages bend sharp — the intensity/moan interaction), `PRESSURE` knob: `0.15` (the Lungs envelope owns the dynamics).
   * **`CyberlineOralChamber`:** `VTL`: `15.5 cm` (shorter than the 17.5 cm male-neutral default → formants up, brighter color), `TONGUEX`: `-1.0`, `TONGUEY`: low (open "ah"), `VELUM`: `0.1` — a slightly open nasal branch is what separates a soft vulnerable vowel from speech; push to `0.3` for closed "mmm/nnn" intensities, `WALL`: default.
 * **Patch:**
   1. `Lungs` `PRESSURE` → `Larynx` `PRESSURE` (the loudness swell).
@@ -179,7 +180,28 @@ breath runs out.
   * **With `CyberlineVoice`:** same recipe, but set its `FEEDBACK GAIN` ≈ `0.2` — tract loading on the glottis adds naturalness with no extra cable.
   * **With `CyberlineBroca`:** `VOWEL A` = /a/, `VOWEL B` = /o/ or /u/, `V.MORPH` ≈ `0.35` (CV it for wandering), `TRACT POLY` → chamber `TNGX/POLY`, `LARYNX POLY` → larynx `TENS/POLY`; modulating the voicing channel with `Lungs` `PHASE` gives breathy-onset vowels automatically.
   * **Heartbeat timing:** `CyberlineHeart` `BEAT` → `Lungs` `TRIGGER` (RATE ≈ 70, `DRIVE` −0.4, `HRV` up): calls timed to the pulse, irregularly.
-* **Finishing (external):** short plate reverb; no fast compression (the source is already close-mic'd); gentle lowpass ≈ 6–8 kHz. Tuning order when it sounds wrong: male → lower `FOLDLEN` + `VTL` + `TENSION`; too clear/speechy → lower `TENSION`, raise `VELUM` slightly.
+* **Finishing (external):** short plate reverb; no fast compression (the source is already close-mic'd); gentle lowpass ≈ 6–8 kHz. Tuning order for recipe A when it sounds wrong: too male → lower `FOLDLEN` + `VTL` and slightly lower `TENSION`; too clear/speechy → lower `TENSION`, raise `VELUM` slightly.
+
+#### B. Adult Male (Chest Groan / Creak / Falsetto)
+
+The adult male register sits at the *long* end of the human fold/tract
+distribution — the same chain as recipe A (same diagram, same patch),
+with deltas only. The lower f0 also buys access to phonation modes the
+female recipe can't reach cheaply: vocal fry and glottal growl.
+
+* **Module Settings (chest groan, the male default):**
+  * **`CyberlineLarynx`:** `FOLDLEN`: `17 mm` (≈178 Hz base at tension 0.6 per the pitch law — roughly half the 11.5 mm female base), `OCT`: `−0.5` (≈126 Hz ≈ B2/C3 — typical adult male modal), `TENSION`: `0.6` (fuller modal voice; drop to `0.45` for a husky/rough edge — aspiration is still audible but darker), `DRIFT`: `0.5` (more wander reads as masculine effort), `VIBRATE`: `3.5 Hz` or off (slow and lazy, if at all), `PCOUPLE`: `0.35`.
+  * **`CyberlineOralChamber`:** `VTL`: `18 cm` (formants down; the neutral 17.5 cm default is already male-neutral — go a little beyond it for the deepest readings), `VELUM`: `0.05–0.1` (male non-speech vocalisation tends to stay oral; `0.25` for humming groans).
+  * **`CyberlineLungs`:** unchanged from recipe A, but `RATE`: `4–5/min`, `MAXFLOW`: `0.25` (male exhales are slower and more conserved), `EFFORT`: `0.8`.
+* **Patch deltas:**
+  1. Same four cables as recipe A. The inverted-`VOLUME` → `PITCH` strain contour still applies — at the lower base f0 it reads as a *groan climbing into a whine*.
+  2. **Growl (optional):** feed a little of `Oral Chamber` `LIPS` back into `Larynx` `FEEDBACK` with `FEEDBACK GAIN` ≈ `0.15` — the crow-recipe chaos trick, at low depth it reads as chest roughness rather than a squawk.
+  3. Take less `NOSE` in the mix (≈10%; the female recipe's 20% reads as softness, which works against the male register here).
+* **Register variants (male-only in practice):**
+  * **Vocal fry / creak:** `TENSION`: `0.25`, larynx `PRESSURE` knob low (`0.1`), `RATE`: `3/min`, `DRIFT`: `0.6` — the period-quantized parameter uptake plus drift at very low f0 gives the irregular crackle pulse-train of fry; slow the lungs further for sustained creaks.
+  * **Falsetto:** `TENSION`: `0.85–1.0` — clean, light, and notably *less* breathy (the aspiration term `intensity·(1−√tenseness)` vanishes at high tension); add external noise into `INJECT` if a breathy head-voice is wanted. `FOLDLEN` stays at 17 mm — the pitch lift comes from tension, not anatomy.
+  * **Groan-to-falsetto transition:** CV `TENSION` from 0.5 → 0.9 with a slow envelope riding `Lungs` `FLOW` — the modal→falsetto flip at around 0.75–0.8 is abrupt, which is physically right and reads as a voice "lifting".
+* **Tuning order for recipe B:** too breathy/weak → raise `TENSION` toward 0.65 and `EFFORT`; too smooth/polite → lower `TENSION` to 0.45–0.5 and raise `DRIFT`; too clean for growl → raise `FEEDBACK GAIN` toward 0.25.
 
 ---
 
@@ -309,7 +331,8 @@ Pitch figures are approximate, computed from the Larynx pitch law (see the note 
 | **Cat (Meow)** | 7.5 mm | ~830 Hz falling to ~550 Hz | 8.5 cm | `LIPS` | Pitch fall + vowel glide |
 | **Cat (Purr)** | 7.5 mm | ~400 Hz carrier, 24–28 Hz pulsing | 8.0 cm | `LIPS` + `NOSE` | External LFO into Pressure/Tension |
 | **Primate (Chimp)** | 9 mm | ~380 Hz, rising | 11 cm | `LIPS` | Rhythmic panting (35–50 bpm) |
-| **Human F (Moan)** | 11.5 mm | ~215 Hz, rising as V empties | 15.5 cm | `LIPS` + `NOSE` | Inverted VOLUME → Pitch (strain), low TENSION (breathiness), VELUM ~0.1 |
+| **Human F (Moan)** | 11.5 mm | ~255 Hz (tension 0.4), rising as V empties | 15.5 cm | `LIPS` + `NOSE` | Inverted VOLUME → Pitch (strain), low TENSION (breathiness), VELUM ~0.1 |
+| **Human M (Chest Groan)** | 17 mm, `OCT −0.5` | ~126 Hz | 18 cm | `LIPS` | Same chain as Human F (deltas only); creak (TENSION 0.25) & falsetto (0.85+) variants, LIPS→FEEDBACK growl |
 | **Sea Lion (Bark)** | 15–18 mm | ~180–240 Hz | 15–18 cm | `LIPS` | 2–2.8 Hz bursts, feedback growl |
 | **Large Feline (Roar)** | 28–35 mm | ~70–100 Hz | 30–40 cm | `LIPS` | Heavy folds, wide tract (untested) |
 | **Elephant (Rumble)** | 45 mm | ~16–24 Hz | 55–60 cm | `NOSE` | `OCT -1`, no pitch bias, open velum |
