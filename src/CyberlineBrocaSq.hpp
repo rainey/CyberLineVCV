@@ -30,6 +30,7 @@ struct CyberlineBrocaSq : rack::engine::Module {
 		MORPH_PARAM,    // articulator slew between phonemes 0..1
 		ONSET_PARAM,    // consonant onset/glide time (same span as Broca)
 		STEP_PARAM,     // manual step button (trigger)
+		FAVOR_PARAM,    // consonant character: 0 = nasals/glides/fricatives, 1 = stops
 		NUM_PARAMS
 	};
 	enum InputIds {
@@ -119,10 +120,11 @@ struct CyberlineBrocaSq : rack::engine::Module {
 			"PHASOR (dual phase CVs)"
 		});
 		configParam(RATE_PARAM, 0.f, 1.f, 0.35f, "Internal step rate", " steps/s", 0.f, 19.5f, 0.5f);
-		configParam(VLEN_PARAM, 1.f, 16.f, 8.f, "Vowel register length", " steps");
-		configParam(CLEN_PARAM, 1.f, 16.f, 8.f, "Consonant register length", " steps");
+		configParam<SnapParamQuantity>(VLEN_PARAM, 1.f, 16.f, 8.f, "Vowel register length", " steps");
+		configParam<SnapParamQuantity>(CLEN_PARAM, 1.f, 16.f, 8.f, "Consonant register length", " steps");
 		configParam(MUTV_PARAM, 0.f, 1.f, 0.f, "Vowel mutation probability", "%", 0.f, 100.f);
 		configParam(MUTC_PARAM, 0.f, 1.f, 0.f, "Consonant mutation probability", "%", 0.f, 100.f);
+		configParam(FAVOR_PARAM, 0.f, 1.f, 0.5f, "Consonant character (nasal/glide/fricative \xE2\x86\x90\xE2\x86\x92 stop)", "%", 0.f, 100.f);
 		configParam(MORPH_PARAM, 0.f, 1.f, 0.f, "Morph (articulator slew)", "%", 0.f, 100.f);
 		configParam(ONSET_PARAM, 0.02f, 0.35f, 0.11f, "Consonant onset / glide time", " s");
 		configButton(STEP_PARAM, "Manual step");

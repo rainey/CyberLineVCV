@@ -42,15 +42,32 @@ void CyberlineBrocaSq::process(const ProcessArgs& args) {
 
 	// Mutation roll for one register; on a hit the current slot is rewritten
 	// with a random phoneme (consonant rolls may land on NONE = rest).
+	// Consonant rolls are reweighted by FAVOR_PARAM: 0 = only nasals/
+	// glides/fricatives/rests (open-ish constrictions, smooth morphs),
+	// 1 = only stops (percussive), 0.5 = uniform over all 21. Rejection
+	// sampling keeps it a pure shape change of the roll distribution.
 	auto mutate = [&](bool vowelLane, int pos) {
 		float p = vowelLane
 			? rack::math::clamp(params[MUTV_PARAM].getValue() + inputs[PV_INPUT].getVoltage() * 0.1f, 0.f, 1.f)
 			: rack::math::clamp(params[MUTC_PARAM].getValue() + inputs[PC_INPUT].getVoltage() * 0.1f, 0.f, 1.f);
 		if (p > 0.f && rack::random::uniform() < p) {
-			if (vowelLane)
+			if (vowelLane) {
 				vowelReg[pos] = (uint8_t) (rack::random::u32() % NUM_VOWELS);
-			else
-				consReg[pos] = (uint8_t) (rack::random::u32() % NUM_CONSONANTS);
+			} else {
+				float favor = rack::math::clamp(params[FAVOR_PARAM].getValue(), 0.f, 1.f);
+				float wSoft = 1.f - favor;   // manner != STOP (incl. NONE rest)
+				float wStop = favor;
+				float wMax = std::max(wSoft, wStop);
+				for (int tries = 0; tries < 64; tries++) {
+					int idx = (int) (rack::random::u32() % NUM_CONSONANTS);
+					bool isStop = CyberlineBroca::CONSONANTS[idx].manner
+						== MANNER_STOP;
+					if (rack::random::uniform() < (isStop ? wStop : wSoft) / wMax) {
+						consReg[pos] = (uint8_t) idx;
+						break;
+					}
+				}
+			}
 		}
 	};
 

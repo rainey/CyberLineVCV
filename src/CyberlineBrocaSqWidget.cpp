@@ -350,11 +350,13 @@ struct CyberlineBrocaSqWidget : rack::app::ModuleWidget {
 		nvgFillColor(vg, label);
 		text(224.f, 20.f, "TOP: VOWEL \xC2\xB7 BOTTOM: CONSONANT");
 
-		// STEP / MODE (right of grid)
+		// STEP / MODE / FAVOR / ONSET (right of grid)
 		nvgFontSize(vg, 6.4f);
 		nvgFillColor(vg, label);
 		text(185.f, 96.f, "STEP");
 		text(245.f, 100.f, "MODE");
+		text(206.f, 120.f, "FAVOR");
+		text(254.f, 120.f, "ONSET s");
 
 		// Knob row labels (knobs at KNOB_Y=200)
 		nvgFontSize(vg, 8.f);
@@ -365,10 +367,9 @@ struct CyberlineBrocaSqWidget : rack::app::ModuleWidget {
 		text(kX[2], 182.f, "V LEN");
 		nvgFillColor(vg, nvgRGB(0xf8, 0xc0, 0x78));
 		text(kX[3], 182.f, "C LEN");
-		text(kX[6], 182.f, "MUT-C");
+		text(kX[5], 182.f, "MUT-C");
 		nvgFillColor(vg, label);
 		text(kX[4], 182.f, "MORPH");
-		text(kX[5], 182.f, "ONSET s");
 
 		nvgFontSize(vg, 6.2f);
 		// Input row 1 labels
@@ -429,19 +430,23 @@ struct CyberlineBrocaSqWidget : rack::app::ModuleWidget {
 			addChild(grid);
 		}
 
-		// Right of the grid: STEP button + MODE switch
+		// Right of the grid: STEP button + MODE switch on one row, then a
+		// two-knob character column below (FAVOR + ONSET pulled out of the
+		// crowded bottom knob row)
 		addParam(rack::createParamCentered<rack::componentlibrary::VCVButton>(rack::Vec(185.f, 80.f), module, CyberlineBrocaSq::STEP_PARAM));
 		addParam(rack::createParamCentered<VerticalSnapSwitch>(rack::Vec(245.f, 80.f), module, CyberlineBrocaSq::MODE_PARAM));
+		addParam(rack::createParamCentered<RoundSmallBlackKnob>(rack::Vec(206.f, 138.f), module, CyberlineBrocaSq::FAVOR_PARAM));
+		addParam(rack::createParamCentered<RoundSmallBlackKnob>(rack::Vec(254.f, 138.f), module, CyberlineBrocaSq::ONSET_PARAM));
 
 		// Knob row (labels at y 182, knobs at KNOB_Y=200):
-		// RATE, MUT-V, VLEN, CLEN, MORPH, ONSET, MUT-C
+		// RATE, MUT-V, VLEN, CLEN, MORPH, MUT-C  (ONSET moved to the
+		// right column beside FAVOR)
 		addParam(rack::createParamCentered<RoundSmallBlackKnob>(rack::Vec(kX[0], KNOB_Y), module, CyberlineBrocaSq::RATE_PARAM));
 		addParam(rack::createParamCentered<RoundSmallBlackKnob>(rack::Vec(kX[1], KNOB_Y), module, CyberlineBrocaSq::MUTV_PARAM));
-		addParam(rack::createParamCentered<RoundSmallBlackKnob>(rack::Vec(kX[2], KNOB_Y), module, CyberlineBrocaSq::VLEN_PARAM));
-		addParam(rack::createParamCentered<RoundSmallBlackKnob>(rack::Vec(kX[3], KNOB_Y), module, CyberlineBrocaSq::CLEN_PARAM));
+		addParam(rack::createParamCentered<LenEncoderKnob>(rack::Vec(kX[2], KNOB_Y), module, CyberlineBrocaSq::VLEN_PARAM));
+		addParam(rack::createParamCentered<LenEncoderKnob>(rack::Vec(kX[3], KNOB_Y), module, CyberlineBrocaSq::CLEN_PARAM));
 		addParam(rack::createParamCentered<RoundSmallBlackKnob>(rack::Vec(kX[4], KNOB_Y), module, CyberlineBrocaSq::MORPH_PARAM));
-		addParam(rack::createParamCentered<RoundSmallBlackKnob>(rack::Vec(kX[5], KNOB_Y), module, CyberlineBrocaSq::ONSET_PARAM));
-		addParam(rack::createParamCentered<RoundSmallBlackKnob>(rack::Vec(kX[6], KNOB_Y), module, CyberlineBrocaSq::MUTC_PARAM));
+		addParam(rack::createParamCentered<RoundSmallBlackKnob>(rack::Vec(kX[5], KNOB_Y), module, CyberlineBrocaSq::MUTC_PARAM));
 
 		// Inputs row 1: CLOCK, RESET, V-PH, C-PH
 		float rIn1 = 252.f;

@@ -74,6 +74,11 @@ struct OctaveParamQuantity : rack::engine::ParamQuantity {
 	OctaveParamQuantity() { snapEnabled = true; }
 };
 
+// Generic snap ParamQuantity for integer-valued params (encoder knobs).
+struct SnapParamQuantity : rack::engine::ParamQuantity {
+	SnapParamQuantity() { snapEnabled = true; }
+};
+
 struct OctEncoderKnob : rack::Knob {
 	// -2..+2 octaves = 5 detents
 	static constexpr int NUM_DETENTS = 5;
@@ -145,6 +150,85 @@ struct OctEncoderKnob : rack::Knob {
 				std::snprintf(buf, sizeof(buf), "0");
 			else
 				std::snprintf(buf, sizeof(buf), "%+d", active - 2);
+			nvgFontFaceId(args.vg, font->handle);
+			nvgFontSize(args.vg, 8.f);
+			nvgTextAlign(args.vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
+			nvgFillColor(args.vg, nvgRGB(0xa8, 0xb4, 0xc0));
+			nvgText(args.vg, cx, cy + 0.5f, buf, NULL);
+		}
+	}
+};
+
+// 16-detent rotary encoder for register lengths (1..16 steps), same
+// visual language as OctEncoderKnob: dark cap, detent ring with the
+// active detent lit, neon pointer notch, integer readout in the cap.
+// Use with SnapParamQuantity so drags land on whole steps.
+struct LenEncoderKnob : rack::Knob {
+	static constexpr int NUM_DETENTS = 16;   // 1..16 steps
+	static constexpr float PI = 3.14159265f;
+
+	LenEncoderKnob() {
+		box.size = rack::Vec(26.f, 26.f);
+	}
+
+	void draw(const DrawArgs& args) override {
+		float cx = box.size.x * 0.5f, cy = box.size.y * 0.5f;
+		float rOuter = box.size.x * 0.5f - 1.f;
+		float minAng = -PI * 0.75f, maxAng = PI * 0.75f;
+		auto detentAng = [&](int i) {
+			return minAng + (float) i / (float) (NUM_DETENTS - 1)
+				* (maxAng - minAng);
+		};
+
+		// Bezel: dark body + rim
+		nvgBeginPath(args.vg);
+		nvgCircle(args.vg, cx, cy, rOuter);
+		nvgFillColor(args.vg, nvgRGB(0x0d, 0x0f, 0x12));
+		nvgFill(args.vg);
+		nvgStrokeWidth(args.vg, 1.f);
+		nvgStrokeColor(args.vg, nvgRGB(0x2a, 0x2e, 0x35));
+		nvgStroke(args.vg);
+
+		// Neon pointer notch at the active detent (glow pass + core pass)
+		float v = getParamQuantity() ? getParamQuantity()->getValue() : 8.f;
+		int active = (int) std::lround(rack::math::clamp(v, 1.f, 16.f)) - 1;
+		float a = detentAng(active);
+		float ux = std::sin(a), uy = -std::cos(a);
+		float x0 = cx + ux * rOuter * 0.34f, y0 = cy + uy * rOuter * 0.34f;
+		float x1 = cx + ux * rOuter * 0.55f, y1 = cy + uy * rOuter * 0.55f;
+		for (int pass = 0; pass < 2; pass++) {
+			nvgBeginPath(args.vg);
+			nvgMoveTo(args.vg, x0, y0);
+			nvgLineTo(args.vg, x1, y1);
+			if (pass == 0) {
+				nvgStrokeWidth(args.vg, 3.0f);
+				nvgStrokeColor(args.vg, nvgRGBA(0x48, 0xd8, 0xf8, 50));
+			} else {
+				nvgStrokeWidth(args.vg, 1.2f);
+				nvgStrokeColor(args.vg, nvgRGB(0x48, 0xd8, 0xf8));
+			}
+			nvgStroke(args.vg);
+		}
+
+		// Detent dots; the active one is lit
+		float rDetent = rOuter - 3.f;
+		for (int i = 0; i < NUM_DETENTS; i++) {
+			float da = detentAng(i);
+			float dx = cx + std::sin(da) * rDetent;
+			float dy = cy - std::cos(da) * rDetent;
+			nvgBeginPath(args.vg);
+			nvgCircle(args.vg, dx, dy, 1.1f);
+			nvgFillColor(args.vg, i == active
+				? nvgRGB(0x48, 0xd8, 0xf8)
+				: nvgRGB(0x44, 0x4c, 0x56));
+			nvgFill(args.vg);
+		}
+
+		// Step-count readout in the cap
+		auto font = getLabelFont();
+		if (font && font->handle >= 0) {
+			char buf[8];
+			std::snprintf(buf, sizeof(buf), "%d", active + 1);
 			nvgFontFaceId(args.vg, font->handle);
 			nvgFontSize(args.vg, 8.f);
 			nvgTextAlign(args.vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
