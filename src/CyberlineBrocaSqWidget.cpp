@@ -28,6 +28,14 @@ struct CyberlineBrocaSqWidget : rack::app::ModuleWidget {
 	// 3-position snap switch for clocking mode (Lungs VerticalSnapSwitch style).
 	struct VerticalSnapSwitch : rack::app::ParamWidget {
 		static constexpr int NumSlots = 3;
+
+		VerticalSnapSwitch() {
+			// Without a size the widget renders at 0x0: invisible and
+			// unclickable (createParamCentered uses box.size for centering
+			// and the hitbox). Same geometry as Lungs ModeSwitch.
+			box.size = rack::Vec(18.f, 34.f);
+		}
+
 		float pressY = 0.f;
 		float oldValue = 0.f;
 		float dragDeltaY = 0.f;
