@@ -76,6 +76,18 @@
         "Vocal",
         "Polyphonic"
       ]
+    },
+    {
+      "slug": "cyberline-broca-sq",
+      "name": "Broca²",
+      "description": "Broca-Squared dual phoneme Turing machine: two rotating vowel/consonant registers with independent lengths and mutation probability, clock/phasor/free stepping, and the same polyphonic Tract/Larynx CV buses as Broca",
+      "tags": [
+        "Physical modeling",
+        "Controller",
+        "Vocal",
+        "Polyphonic",
+        "Sequencer"
+      ]
     }
   ]
 }

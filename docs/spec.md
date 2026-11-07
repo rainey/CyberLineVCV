@@ -48,6 +48,7 @@ fixed filter banks.
 | `cyberline-lungs` | `CyberlineLungs` | Breath-pressure reservoir; doubles as a physically-shaped envelope generator |
 | `cyberline-heart` | `CyberlineHeart` | Elastance cardiac pump: intrinsic clock, Wiggers envelopes, ECG/beats, phonocardiogram, mass allometry |
 | `cyberline-broca` | `CyberlineBroca` | "Broca" (Broca-Brika) articulatory cortex & phoneme generator: vowel A/B morphing, consonant onset/manner engine, and polyphonic Tract/Larynx buses |
+| `cyberline-broca-sq` | `CyberlineBrocaSq` | "Broca²" dual phoneme Turing machine: two rotating vowel/consonant registers with independent lengths & mutation probability, free/clock/dual-phasor clocking, Broca-compatible poly buses |
 | `cyberline-visual1` | `CyberlineVisual1` | Audio→image visualizer: FFT band envelopes drive 8×8 DCT coefficients of a rendered image; perturb mode loads an image and lets the spectrum deform it (unregistered — see §5e) |
 | `cyberline-sagitta` | `CyberlineSagitta` | Vocal-system fluoroscopy: sagittal anatomy of the lungs→larynx→tract pipeline driven by the CV buses and a live waveguide replica (§5f) |
 
@@ -636,6 +637,26 @@ and `LARYNX POLY`).
   - Feature: Oral closure combined with full `velum` port opening (1.0), radiating resonant sound through the nasal tract.
 - **Glides / Approximants:** `/w/` (labiovelar), `/l/` (lateral), `/r/` (retroflex), `/j/` (palatal 'y').
   - Feature: Open constriction aperture, full modal voicing, smooth vocalic transitions.
+
+## 5d-bis. `cyberline-broca-sq` — Broca² (dual phoneme Turing machine)
+
+Two rotating phoneme registers — a **vowel register** (Broca's 12 vowels) and a
+**consonant register** (Broca's 21 consonants, index 0 = NONE/rest) — scanned
+like a shift-register "Turing machine": each step the read pair fires Broca's
+consonant→vowel onset gesture, and each register independently rolls its
+mutation die (`MUT-V` / `MUT-C` + P CVs); on a hit, the slot just read is
+rewritten with a random phoneme before playback continues, so loops gradually
+erode into new material. Independent lengths (1–16, `V LEN` / `C LEN` + shared
+`LEN` CV) make the pair polymetric.
+
+- **Clocking (MODE switch):**
+  - **FREE:** internal `RATE` clock (0.5–20 steps/s), shared step counter.
+  - **CLOCK:** external trigger advances the shared step; falls back to the internal clock when unpatched.
+  - **PHASOR:** independent `V-PH` / `C-PH` phase CVs (0–10 V unipolar ramp convention, same as Breath PHASOR). Each register's position is a *pure function* of its phase (`floor(phase·len)`) — stateless, so forward and backward phasors both scan (backward reads the register in reverse), and fast jumps *snap* to the new step with the normal morph old→new. Unpatched phasor follows the other's; both unpatched → internal `RATE` phasor. A register sitting inside one step makes no gesture (silence by phase).
+- **Mutation:** per step event, write-current-slot; consonant rolls may land on NONE (rests → open-vowel syllables). Context menu: *Initialize registers* (musical CV default fill) / *Randomize registers*. `RESET` zeroes both heads without touching register contents.
+- **MORPH:** articulator slew between consecutive phonemes — 0 % = Broca's crisp defaults (~4.5 ms stops / ~14 ms vowels), 100 % = heavy blend (half-formed speech).
+- **Display:** 4×4 register grid; each cell shows the slot's vowel code (top, cyan lane) and consonant code (bottom, amber lane, dim dash = NONE). Cyan/amber head markers move together in FREE/CLOCK and independently in PHASOR. Slots past a register's length dim that lane; slots past both are near-dark (unplayed).
+- **I/O:** `TRACT POLY` (9-ch) and `LARYNX POLY` (3-ch) use *identical channel maps to Broca* — a drop-in swap in the Larynx/OralChamber/Voice chain. Plus `CV.ENV`, `BURST`, `GATE` (syllable gesture; fires on every step including rests), `VOW` / `CONS` index CVs (0–10 V over each table).
 
 ## 5e. `cyberline-visual1` — Visual1 (audio→image visualizer)
 

@@ -16,6 +16,7 @@
 
 #include "../src/CyberlineLungs.hpp"
 #include "../src/CyberlineBroca.hpp"
+#include "../src/CyberlineBrocaSq.hpp"
 #include "../src/CyberlineOralChamber.hpp"
 #include "../src/CyberlineLarynx.hpp"
 #include "../src/CyberlineVoice.hpp"
@@ -782,6 +783,136 @@ static void test_poly_normalling_larynx_and_voice() {
 	CHECK(tensFull > tensAtten + 0.35f, "Larynx Tension CV attenuator trims CV modulation depth");
 }
 
+static void test_brocasq_registers_clocking_and_mutation() {
+	std::printf("--- Testing CyberlineBrocaSq: registers, clocking, mutation, phasor ---\n");
+	// Headless tests run without Rack's app context, which normally seeds the
+	// global PRNG (rack::random::init() is called by Rack/Cardinal at startup).
+	// Without it the generator is a zero-state (always returns 0), so seed here.
+	rack::random::init();
+	CyberlineBrocaSq sq;
+	rack::engine::Module::ProcessArgs args;
+	args.sampleRate = 48000.f;
+	args.sampleTime = 1.f / 48000.f;
+	sq.outputs[CyberlineBrocaSq::TRACT_POLY_OUTPUT].channels = 1;
+	sq.outputs[CyberlineBrocaSq::LARYNX_POLY_OUTPUT].channels = 1;
+
+	// ---- Register wrap at length boundaries (CLOCK mode, explicit edges) ----
+	sq.params[CyberlineBrocaSq::MODE_PARAM].setValue(1.f); // CLOCK
+	sq.params[CyberlineBrocaSq::VLEN_PARAM].setValue(4.f);
+	sq.params[CyberlineBrocaSq::CLEN_PARAM].setValue(3.f);
+	for (int i = 0; i < 16; i++) {
+		sq.vowelReg[i] = (uint8_t) i;
+		sq.consReg[i] = (uint8_t) i;
+	}
+	auto clockPulse = [&]() {
+		sq.inputs[CyberlineBrocaSq::CLOCK_INPUT].channels = 1;
+		sq.inputs[CyberlineBrocaSq::CLOCK_INPUT].setVoltage(5.f, 0);
+		sq.process(args);
+		sq.inputs[CyberlineBrocaSq::CLOCK_INPUT].setVoltage(0.f, 0);
+		sq.process(args);
+	};
+	clockPulse(); clockPulse(); clockPulse();
+	CHECK(sq.vPos == 3 && sq.cPos == 0,
+		"3 clock steps with VLEN=4/CLEN=3 -> vPos=3, cPos=0 (consonant wrapped)");
+
+	// ---- Length clamping mid-play (step stays valid) ----
+	sq.params[CyberlineBrocaSq::CLEN_PARAM].setValue(16.f);
+	sq.process(args); // next step
+	CHECK(sq.cPos >= 0 && sq.cPos < 16 && sq.vPos < 4,
+		"Length change mid-play keeps both heads in range");
+
+	// ---- Phasor mode: stateless position, forward and backward ----
+	sq.params[CyberlineBrocaSq::MODE_PARAM].setValue(2.f); // PHASOR
+	sq.params[CyberlineBrocaSq::VLEN_PARAM].setValue(4.f);
+	sq.params[CyberlineBrocaSq::CLEN_PARAM].setValue(4.f);
+	// Vowel phasor at 75% of a pass (7.5 V) -> position 3 of 4
+	sq.inputs[CyberlineBrocaSq::VPH_INPUT].channels = 1;
+	sq.inputs[CyberlineBrocaSq::VPH_INPUT].setVoltage(7.5f, 0);
+	sq.inputs[CyberlineBrocaSq::CPH_INPUT].channels = 1;
+	sq.inputs[CyberlineBrocaSq::CPH_INPUT].setVoltage(0.f, 0);
+	for (int i = 0; i < 32; i++) sq.process(args);
+	CHECK(sq.vPos == 3, "Vowel phasor at 7.5 V with VLEN=4 -> position 3 (stateless)");
+	CHECK(sq.cPos == 0, "Consonant phasor at 0 V -> position 0");
+
+	// Backward phasor: drop to 2.5 V -> position 1 (pure function, no direction state)
+	sq.inputs[CyberlineBrocaSq::VPH_INPUT].setVoltage(2.5f, 0);
+	for (int i = 0; i < 32; i++) sq.process(args);
+	CHECK(sq.vPos == 1, "Vowel phasor stepped backward to 2.5 V -> position 1 (reversal works)");
+
+	// Snap-on-jump: a jump across several thresholds fires one gesture
+	int gesturesBefore = sq.onsetActive ? 1 : 0;
+	(void) gesturesBefore;
+	sq.onsetPhase = 1.f;
+	sq.onsetActive = false;
+	sq.inputs[CyberlineBrocaSq::VPH_INPUT].setVoltage(9.5f, 0);
+	for (int i = 0; i < 32; i++) sq.process(args);
+	CHECK(sq.vPos == 3, "Phasor jump 2.5 V -> 9.5 V snaps to the new step (one gesture, no sweep)");
+
+	// Unpatched consonant phasor follows the vowel phasor
+	sq.inputs[CyberlineBrocaSq::CPH_INPUT].channels = 0;
+	// (simulate unpatched by clearing voltage / channels)
+	sq.inputs[CyberlineBrocaSq::CPH_INPUT].voltages[0] = 0.f;
+	sq.process(args);
+	CHECK(sq.cPos == sq.vPos,
+		"Unpatched consonant phasor follows the vowel phasor (fallback rule)");
+
+	// ---- Mutation: at 0% probability registers never change ----
+	sq.params[CyberlineBrocaSq::MODE_PARAM].setValue(1.f); // CLOCK
+	sq.params[CyberlineBrocaSq::MUTV_PARAM].setValue(0.f);
+	sq.params[CyberlineBrocaSq::MUTC_PARAM].setValue(0.f);
+	uint8_t v0 = sq.vowelReg[0], c0 = sq.consReg[0];
+	for (int i = 0; i < 40; i++) clockPulse();
+	CHECK(sq.vowelReg[0] == v0 && sq.consReg[0] == c0,
+		"MUT-V / MUT-C at 0% leave the registers untouched after many steps");
+
+	// ---- Mutation: at 100% probability registers keep changing ----
+	sq.params[CyberlineBrocaSq::MUTV_PARAM].setValue(1.f);
+	sq.params[CyberlineBrocaSq::MUTC_PARAM].setValue(1.f);
+	int changed = 0;
+	for (int i = 0; i < 20; i++) {
+		clockPulse();
+		if (sq.vowelReg[sq.vPos] != v0 || sq.consReg[sq.cPos] != c0)
+			changed++;
+		v0 = sq.vowelReg[sq.vPos];
+		c0 = sq.consReg[sq.cPos];
+	}
+	CHECK(changed > 12, "MUT-V / MUT-C at 100% mutate the slots on most steps");
+
+	// ---- Output conventions match Broca (channel counts & vowel geometry) ----
+	CHECK(sq.outputs[CyberlineBrocaSq::TRACT_POLY_OUTPUT].getChannels() == 9,
+		"BrocaSq TRACT POLY bus has 9 channels (same convention as Broca)");
+	CHECK(sq.outputs[CyberlineBrocaSq::LARYNX_POLY_OUTPUT].getChannels() == 3,
+		"BrocaSq LARYNX POLY bus has 3 channels (same convention as Broca)");
+
+	// VOW CV tracks the vowel index (0-10 V over 12)
+	sq.params[CyberlineBrocaSq::MUTV_PARAM].setValue(0.f);
+	sq.params[CyberlineBrocaSq::MUTC_PARAM].setValue(0.f);
+	for (int i = 0; i < 16; i++) sq.vowelReg[i] = 7; // OO everywhere
+	for (int i = 0; i < (int) (0.2f * args.sampleRate); i++) sq.process(args);
+	float vowCv = sq.outputs[CyberlineBrocaSq::VOWCV_OUTPUT].getVoltage();
+	CHECK(std::fabs(vowCv - 7.f * (10.f / 11.f)) < 0.2f,
+		"VOW CV reports the current vowel index scaled 0-10 V over 12");
+
+	// RESET zeroes the heads without rewriting registers
+	for (int i = 0; i < 16; i++) sq.vowelReg[i] = 7;
+	sq.inputs[CyberlineBrocaSq::RESET_INPUT].channels = 1;
+	sq.inputs[CyberlineBrocaSq::RESET_INPUT].setVoltage(5.f, 0);
+	sq.process(args);
+	sq.inputs[CyberlineBrocaSq::RESET_INPUT].setVoltage(0.f, 0);
+	sq.process(args);
+	CHECK(sq.vPos == 0 && sq.cPos == 0 && sq.vowelReg[0] == 7,
+		"RESET zeroes both heads and preserves register contents");
+
+	// GATE pulses on the syllable gesture
+	clockPulse();
+	float gateMax = 0.f;
+	for (int i = 0; i < (int) (0.05f * args.sampleRate); i++) {
+		sq.process(args);
+		gateMax = std::max(gateMax, sq.outputs[CyberlineBrocaSq::GATE_OUTPUT].getVoltage());
+	}
+	CHECK(gateMax > 5.f, "GATE output pulses with the syllable gesture");
+}
+
 int main() {
 	std::printf("=========================================\n");
 	std::printf("Running Cyberline Module Integration Tests\n");
@@ -797,6 +928,7 @@ int main() {
 	test_quality_global_and_override();
 	test_tract_settled_early_out_bitexact();
 	test_poly_normalling_larynx_and_voice();
+	test_brocasq_registers_clocking_and_mutation();
 
 	std::printf("=========================================\n");
 	std::printf("Results: %d passed, %d failed\n", g_passCount, g_failCount);
