@@ -82,20 +82,28 @@ void CyberlineBrocaSq::process(const ProcessArgs& args) {
 		consLockMask ^= (1u << editPos);
 	lkcWas = lkc;
 
-	// Utility buttons: copy-left / fill / copy-right (momentary). Copy
-	// also moves the editor to the copied-to cell, so repeated taps walk
-	// the pair across the register (and the selection highlight follows).
-	if (params[COPYL_BUT_PARAM].getValue() > 0.f) {
+	// Utility buttons: copy-left / fill / copy-right. Edge-detected
+	// (fire on press only — a click copies exactly once; the param stays
+	// held until mouse-up but repeat-fire is suppressed). "Hold to walk"
+	// is done by repeated clicks, which also moves the editor each time.
+	bool copyl = params[COPYL_BUT_PARAM].getValue() > 0.f;
+	if (copyl && !copylWas) {
 		copyCell(-1);
 		editPos = (editPos + REG_LEN - 1) % REG_LEN;
 		params[EDIT_POS_PARAM].setValue((float) editPos);   // keep the CELL encoder on the moved selection
 	}
-	if (params[COPYR_BUT_PARAM].getValue() > 0.f) {
+	copylWas = copyl;
+	bool copyr = params[COPYR_BUT_PARAM].getValue() > 0.f;
+	if (copyr && !copyrWas) {
 		copyCell(+1);
 		editPos = (editPos + 1) % REG_LEN;
 		params[EDIT_POS_PARAM].setValue((float) editPos);
 	}
-	if (params[FILL_BUT_PARAM].getValue() > 0.f) fillCells();
+	copyrWas = copyr;
+	bool fillB = params[FILL_BUT_PARAM].getValue() > 0.f;
+	if (fillB && !fillWas)
+		fillCells();
+	fillWas = fillB;
 
 	// Editor indicator lights (lock state of the selected cell, armed flag)
 	lights[LKV_LIGHT].setBrightness(((vowelLockMask >> editPos) & 1u) ? 1.f : 0.f);

@@ -100,6 +100,9 @@ struct CyberlineBrocaSq : rack::engine::Module {
 	bool editButWas = false;
 	bool lkvWas = false;
 	bool lkcWas = false;
+	bool copylWas = false;
+	bool copyrWas = false;
+	bool fillWas = false;
 
 	// ---- Clocking state ----
 	int mode = MODE_FREE;
