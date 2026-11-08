@@ -40,13 +40,63 @@ void CyberlineBrocaSq::process(const ProcessArgs& args) {
 	bool anyGesture = false;
 	auto fireGesture = [&]() { onsetActive = true; onsetPhase = 0.f; anyGesture = true; };
 
+	// ---- 0. Register editor state machine ----
+	// POS encoder (wraps) -> editPos. EDIT button toggles armed state.
+	// Arming initializes the V/C encoders from the cell's stored phonemes;
+	// moving POS while armed re-loads them. While armed the edited pair
+	// is written from the encoders every block and locked from mutation.
+	int newEditPos = (int) rack::math::clamp(std::round(params[EDIT_POS_PARAM].getValue()), 0.f, (float) (REG_LEN - 1));
+	bool posChanged = newEditPos != editPos;
+	bool wantArm = false;
+	bool editBut = params[EDIT_BUT_PARAM].getValue() > 0.f;
+	if (editBut && !editButWas)
+		wantArm = true;
+	editButWas = editBut;
+	if (wantArm)
+		editActive = !editActive;
+	if (newEditPos != editPos) {
+		editPos = newEditPos;
+		// Cell change while armed: show the new cell on the encoders
+		if (editActive) {
+			params[EDIT_V_PARAM].setValue((float) vowelReg[editPos]);
+			params[EDIT_C_PARAM].setValue((float) consReg[editPos]);
+		}
+	}
+	if (editActive && wantArm) {
+		// Just armed: load the V/C encoders with the cell's phonemes
+		params[EDIT_V_PARAM].setValue((float) vowelReg[editPos]);
+		params[EDIT_C_PARAM].setValue((float) consReg[editPos]);
+	}
+	if (editActive) {
+		// Live-write the edited pair (the widgets are the source of truth)
+		vowelReg[editPos] = (uint8_t) rack::math::clamp((int) std::lround(params[EDIT_V_PARAM].getValue()), 0, NUM_VOWELS - 1);
+		consReg[editPos] = (uint8_t) rack::math::clamp((int) std::lround(params[EDIT_C_PARAM].getValue()), 0, NUM_CONSONANTS - 1);
+	}
+	// LK-V / LK-C toggle the persistent mutation lock at editPos
+	bool lkv = params[LKV_BUT_PARAM].getValue() > 0.f;
+	if (lkv && !lkvWas)
+		vowelLockMask ^= (1u << editPos);
+	lkvWas = lkv;
+	bool lkc = params[LKC_BUT_PARAM].getValue() > 0.f;
+	if (lkc && !lkcWas)
+		consLockMask ^= (1u << editPos);
+	lkcWas = lkc;
+
 	// Mutation roll for one register; on a hit the current slot is rewritten
 	// with a random phoneme (consonant rolls may land on NONE = rest).
 	// Consonant rolls are reweighted by FAVOR_PARAM: 0 = only nasals/
-	// glides/fricatives/rests (open-ish constrictions, smooth morphs),
-	// 1 = only stops (percussive), 0.5 = uniform over all 21. Rejection
-	// sampling keeps it a pure shape change of the roll distribution.
+	// glides/rests (continuants, smooth morphs), 1 = fricatives + stops
+	// (noisy/percussive), 0.5 = uniform over all 21. Rejection sampling
+	// keeps it a pure shape change of the roll distribution.
+	// Per-lane mutation locks: a locked cell is never rewritten. While
+	// the editor is armed, the edited cell pair is locked too.
 	auto mutate = [&](bool vowelLane, int pos) {
+		if (editActive && pos == editPos)
+			return;
+		if (vowelLane
+			? ((vowelLockMask >> pos) & 1u)
+			: ((consLockMask >> pos) & 1u))
+			return;
 		float p = vowelLane
 			? rack::math::clamp(params[MUTV_PARAM].getValue() + inputs[PV_INPUT].getVoltage() * 0.1f, 0.f, 1.f)
 			: rack::math::clamp(params[MUTC_PARAM].getValue() + inputs[PC_INPUT].getVoltage() * 0.1f, 0.f, 1.f);
@@ -55,14 +105,16 @@ void CyberlineBrocaSq::process(const ProcessArgs& args) {
 				vowelReg[pos] = (uint8_t) (rack::random::u32() % NUM_VOWELS);
 			} else {
 				float favor = rack::math::clamp(params[FAVOR_PARAM].getValue(), 0.f, 1.f);
-				float wSoft = 1.f - favor;   // manner != STOP (incl. NONE rest)
-				float wStop = favor;
+				float wSoft = 1.f - favor;   // NONE + nasals + glides
+				float wStop = favor;         // fricatives + stops
 				float wMax = std::max(wSoft, wStop);
 				for (int tries = 0; tries < 64; tries++) {
 					int idx = (int) (rack::random::u32() % NUM_CONSONANTS);
-					bool isStop = CyberlineBroca::CONSONANTS[idx].manner
-						== MANNER_STOP;
-					if (rack::random::uniform() < (isStop ? wStop : wSoft) / wMax) {
+					bool isNoisy = CyberlineBroca::CONSONANTS[idx].manner
+						== MANNER_FRICATIVE
+						|| CyberlineBroca::CONSONANTS[idx].manner
+							== MANNER_STOP;
+					if (rack::random::uniform() < (isNoisy ? wStop : wSoft) / wMax) {
 						consReg[pos] = (uint8_t) idx;
 						break;
 					}
@@ -321,6 +373,10 @@ void CyberlineBrocaSq::process(const ProcessArgs& args) {
 	activeConsonant = consReg[cPos];
 	activeCVMix = cvMix;
 	activeBurst = burstGate;
+	telEditPos = editPos;
+	telEditActive = editActive;
+	telVLocks = vowelLockMask;
+	telCLocks = consLockMask;
 
 	cpuMeter.frameEnd(measure, args.sampleRate);
 }

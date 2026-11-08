@@ -30,7 +30,13 @@ struct CyberlineBrocaSq : rack::engine::Module {
 		MORPH_PARAM,    // articulator slew between phonemes 0..1
 		ONSET_PARAM,    // consonant onset/glide time (same span as Broca)
 		STEP_PARAM,     // manual step button (trigger)
-		FAVOR_PARAM,    // consonant character: 0 = nasals/glides/fricatives, 1 = stops
+		FAVOR_PARAM,    // consonant character: 0 = nasal/glide/fricative, 1 = stop
+		EDIT_POS_PARAM, // register editor: cell index 0..15 (wrapping encoder)
+		EDIT_V_PARAM,   // register editor: vowel index 0..11 at editPos (wrapping)
+		EDIT_C_PARAM,   // register editor: consonant index 0..20 at editPos (wrapping)
+		EDIT_BUT_PARAM, // register editor: arm/disarm button (momentary)
+		LKV_BUT_PARAM,  // toggle vowel mutation lock at editPos (momentary)
+		LKC_BUT_PARAM,  // toggle consonant mutation lock at editPos (momentary)
 		NUM_PARAMS
 	};
 	enum InputIds {
@@ -73,6 +79,22 @@ struct CyberlineBrocaSq : rack::engine::Module {
 	uint8_t vowelReg[REG_LEN] = {0, 2, 4, 7, 2, 4, 9, 0, 4, 7, 11, 2, 7, 4, 2, 0};
 	uint8_t consReg[REG_LEN]  = {0, 11, 0, 13, 0, 2, 0, 15, 11, 0, 8, 0, 6, 0, 19, 0};
 
+	// ---- Per-cell mutation locks (bit i = cell i frozen) ----
+	// Persisted; toggled via the LK-V / LK-C buttons at the editor position.
+	uint32_t vowelLockMask = 0;
+	uint32_t consLockMask = 0;
+
+	// ---- Register editor state ----
+	// editActive is runtime-only (auto-armed by dragging the V/C edit
+	// encoders, or toggled by the EDIT button). While armed, the edited
+	// cell pair is written from the V/C encoder params and locked from
+	// mutation.
+	int editPos = 0;
+	bool editActive = false;
+	bool editButWas = false;
+	bool lkvWas = false;
+	bool lkcWas = false;
+
 	// ---- Clocking state ----
 	int mode = MODE_FREE;
 	int step = 0;            // shared step counter (FREE/CLOCK modes)
@@ -104,6 +126,10 @@ struct CyberlineBrocaSq : rack::engine::Module {
 	int telVPos = 0;
 	int telCPos = 0;
 	int telMode = MODE_FREE;
+	int telEditPos = 0;
+	bool telEditActive = false;
+	uint32_t telVLocks = 0;
+	uint32_t telCLocks = 0;
 	int activeVowel = 0;
 	int activeConsonant = 0;
 	float activeCVMix = 0.f;
@@ -124,7 +150,13 @@ struct CyberlineBrocaSq : rack::engine::Module {
 		configParam<SnapParamQuantity>(CLEN_PARAM, 1.f, 16.f, 8.f, "Consonant register length", " steps");
 		configParam(MUTV_PARAM, 0.f, 1.f, 0.f, "Vowel mutation probability", "%", 0.f, 100.f);
 		configParam(MUTC_PARAM, 0.f, 1.f, 0.f, "Consonant mutation probability", "%", 0.f, 100.f);
-		configParam(FAVOR_PARAM, 0.f, 1.f, 0.5f, "Consonant character (nasal/glide/fricative \xE2\x86\x90\xE2\x86\x92 stop)", "%", 0.f, 100.f);
+		configParam(FAVOR_PARAM, 0.f, 1.f, 0.5f, "Consonant character (nasal/glide \xE2\x86\x90\xE2\x86\x92 fricative/stop)", "%", 0.f, 100.f);
+		configParam<SnapParamQuantity>(EDIT_POS_PARAM, 0.f, 15.f, 0.f, "Editor cell");
+		configParam<SnapParamQuantity>(EDIT_V_PARAM, 0.f, 11.f, 0.f, "Editor vowel");
+		configParam<SnapParamQuantity>(EDIT_C_PARAM, 0.f, 20.f, 0.f, "Editor consonant");
+		configButton(EDIT_BUT_PARAM, "Edit registers (arm/disarm)");
+		configButton(LKV_BUT_PARAM, "Lock/unlock vowel cell from mutation");
+		configButton(LKC_BUT_PARAM, "Lock/unlock consonant cell from mutation");
 		configParam(MORPH_PARAM, 0.f, 1.f, 0.f, "Morph (articulator slew)", "%", 0.f, 100.f);
 		configParam(ONSET_PARAM, 0.02f, 0.35f, 0.11f, "Consonant onset / glide time", " s");
 		configButton(STEP_PARAM, "Manual step");
@@ -193,6 +225,9 @@ struct CyberlineBrocaSq : rack::engine::Module {
 		curVoicing = 1.0f;
 		curPressure = 0.8f;
 		activeBurst = 0.f;
+		vowelLockMask = consLockMask = 0;
+		editActive = false;
+		editPos = 0;
 		initRegisters();
 	}
 
@@ -208,6 +243,8 @@ struct CyberlineBrocaSq : rack::engine::Module {
 		}
 		json_object_set_new(rootJ, "vowelReg", vJ);
 		json_object_set_new(rootJ, "consReg", cJ);
+		json_object_set_new(rootJ, "vowelLocks", json_integer(vowelLockMask));
+		json_object_set_new(rootJ, "consLocks", json_integer(consLockMask));
 		return rootJ;
 	}
 
@@ -226,6 +263,10 @@ struct CyberlineBrocaSq : rack::engine::Module {
 				if (e) consReg[i] = (uint8_t) rack::math::clamp((int) json_integer_value(e), 0, NUM_CONSONANTS - 1);
 			}
 		}
+		json_t* vlJ = json_object_get(rootJ, "vowelLocks");
+		if (vlJ) vowelLockMask = (uint32_t) json_integer_value(vlJ) & 0xffffu;
+		json_t* clJ = json_object_get(rootJ, "consLocks");
+		if (clJ) consLockMask = (uint32_t) json_integer_value(clJ) & 0xffffu;
 	}
 };
 

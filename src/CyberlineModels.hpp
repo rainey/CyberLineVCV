@@ -6,6 +6,7 @@
 #include <cstdio>
 #include <cstdint>
 #include <cmath>
+#include <functional>
 
 // The per-plugin instance pointer (defined in plugin.cpp at global scope;
 // JayBird's build renames the token to pluginInstance__cyberline via
@@ -236,6 +237,125 @@ struct LenEncoderKnob : rack::Knob {
 			nvgText(args.vg, cx, cy + 0.5f, buf, NULL);
 		}
 	}
+};
+
+// Infinite (wrapping) detent encoder: vertical drag steps through the
+// detents one at a time and wraps at both edges (last -> first and
+// vice versa), so the control behaves like a rotary encoder rather
+// than a clamped knob. Dots are drawn only for small detent counts
+// (21 detents would be visually dense); the neon pointer notch always
+// shows the active position. Pair with SnapParamQuantity. When
+// autoArmFn is set, starting a drag arms the register editor (auto-arm
+// is only wanted on the V/C encoders, not POS).
+struct WrapEncoderKnob : rack::Knob {
+	int numDetents;
+	float minVal;
+	static constexpr float STEP_PX = 14.f;   // drag px per detent
+	std::function<void()> autoArmFn;
+
+	WrapEncoderKnob(int detents, float minV = 0.f) {
+		numDetents = detents;
+		minVal = minV;
+		box.size = rack::Vec(26.f, 26.f);
+	}
+
+	void onDragStart(const rack::event::DragStart& e) override {
+		Knob::onDragStart(e);
+		if (e.button != GLFW_MOUSE_BUTTON_LEFT)
+			return;
+		if (autoArmFn)
+			autoArmFn();
+		dragAccum = 0.f;
+	}
+
+	void onDragMove(const rack::event::DragMove& e) override {
+		// Displace from the base Knob's linear drag; we step discretely
+		dragAccum += e.mouseDelta.x - e.mouseDelta.y;
+		auto* pq = getParamQuantity();
+		if (!pq)
+			return;
+		while (dragAccum >= STEP_PX) {
+			float v = std::round(pq->getValue());
+			pq->setValue(v + 1.f > minVal + numDetents - 1 ? minVal : v + 1.f);
+			dragAccum -= STEP_PX;
+		}
+		while (dragAccum <= -STEP_PX) {
+			float v = std::round(pq->getValue());
+			pq->setValue(v - 1.f < minVal ? minVal + numDetents - 1 : v - 1.f);
+			dragAccum += STEP_PX;
+		}
+	}
+
+	void draw(const DrawArgs& args) override {
+		float cx = box.size.x * 0.5f, cy = box.size.y * 0.5f;
+		float rOuter = box.size.x * 0.5f - 1.f;
+
+		// Bezel: dark body + rim
+		nvgBeginPath(args.vg);
+		nvgCircle(args.vg, cx, cy, rOuter);
+		nvgFillColor(args.vg, nvgRGB(0x0d, 0x0f, 0x12));
+		nvgFill(args.vg);
+		nvgStrokeWidth(args.vg, 1.f);
+		nvgStrokeColor(args.vg, nvgRGB(0x2a, 0x2e, 0x35));
+		nvgStroke(args.vg);
+
+		// Neon pointer notch at 12 o'clock — an infinite encoder has no
+		// absolute angle, the pointer just marks the shaft
+		for (int pass = 0; pass < 2; pass++) {
+			nvgBeginPath(args.vg);
+			nvgMoveTo(args.vg, cx, cy - rOuter * 0.30f);
+			nvgLineTo(args.vg, cx, cy - rOuter * 0.58f);
+			if (pass == 0) {
+				nvgStrokeWidth(args.vg, 3.0f);
+				nvgStrokeColor(args.vg, nvgRGBA(0x48, 0xd8, 0xf8, 50));
+			} else {
+				nvgStrokeWidth(args.vg, 1.2f);
+				nvgStrokeColor(args.vg, nvgRGB(0x48, 0xd8, 0xf8));
+			}
+			nvgStroke(args.vg);
+		}
+
+		// Detent dots around the ring, active one lit (small counts only)
+		float v = getParamQuantity() ? getParamQuantity()->getValue() : minVal;
+		int active = (int) std::lround(rack::math::clamp(v, minVal, minVal + numDetents - 1)) - (int) minVal;
+		if (numDetents <= 16) {
+			float minAng = -3.14159265f * 0.75f, maxAng = 3.14159265f * 0.75f;
+			float rDetent = rOuter - 3.f;
+			for (int i = 0; i < numDetents; i++) {
+				float da = minAng + (float) i / (float) (numDetents - 1) * (maxAng - minAng);
+				float dx = cx + std::sin(da) * rDetent;
+				float dy = cy - std::cos(da) * rDetent;
+				nvgBeginPath(args.vg);
+				nvgCircle(args.vg, dx, dy, 1.1f);
+				nvgFillColor(args.vg, i == active
+					? nvgRGB(0x48, 0xd8, 0xf8)
+					: nvgRGB(0x44, 0x4c, 0x56));
+				nvgFill(args.vg);
+			}
+		} else {
+			// Dense ring: plain tick ring, active shown by the readout
+			nvgBeginPath(args.vg);
+			nvgCircle(args.vg, cx, cy, rOuter - 3.f);
+			nvgStrokeWidth(args.vg, 1.f);
+			nvgStrokeColor(args.vg, nvgRGB(0x3a, 0x42, 0x4e));
+			nvgStroke(args.vg);
+		}
+
+		// Value readout in the cap
+		auto font = getLabelFont();
+		if (font && font->handle >= 0) {
+			char buf[8];
+			std::snprintf(buf, sizeof(buf), "%d", active + (int) minVal);
+			nvgFontFaceId(args.vg, font->handle);
+			nvgFontSize(args.vg, 8.f);
+			nvgTextAlign(args.vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
+			nvgFillColor(args.vg, nvgRGB(0xa8, 0xb4, 0xc0));
+			nvgText(args.vg, cx, cy + 0.5f, buf, NULL);
+		}
+	}
+
+private:
+	float dragAccum = 0.f;
 };
 
 extern rack::plugin::Model* modelCyberlineLarynx;

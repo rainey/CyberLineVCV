@@ -166,6 +166,10 @@ struct CyberlineBrocaSqWidget : rack::app::ModuleWidget {
 			int cLen = module ? module->telCLen : 8;
 			int vPos = module ? module->telVPos : 0;
 			int cPos = module ? module->telCPos : 0;
+			bool edOn = module && module->telEditActive;
+			int edPos = module ? module->telEditPos : -1;
+			uint32_t vLocks = module ? module->telVLocks : 0;
+			uint32_t cLocks = module ? module->telCLocks : 0;
 
 			float gap = 3.f;
 			float cw = (w - gap * 3.f) / 4.f;
@@ -231,11 +235,36 @@ struct CyberlineBrocaSqWidget : rack::app::ModuleWidget {
 					nvgFillColor(vg, nvgRGB(0xf4, 0xb0, 0x48));
 					nvgFill(vg);
 				}
+
+				// Mutation-lock markers (violet, right edge; upper half =
+				// vowel lock, lower half = consonant lock)
+				if (vLocks & (1u << k)) {
+					nvgBeginPath(vg);
+					nvgCircle(vg, x + cw - 4.f, cy - 3.5f, 1.8f);
+					nvgFillColor(vg, nvgRGB(0x9b, 0x6d, 0xff));
+					nvgFill(vg);
+				}
+				if (cLocks & (1u << k)) {
+					nvgBeginPath(vg);
+					nvgCircle(vg, x + cw - 4.f, cy + 3.5f, 1.8f);
+					nvgFillColor(vg, nvgRGB(0x9b, 0x6d, 0xff));
+					nvgFill(vg);
+				}
+
+				// Editor highlight: neon mint outline around the cell
+				// being edited (armed state)
+				if (edOn && k == edPos) {
+					nvgBeginPath(vg);
+					nvgRoundedRect(vg, x - 1.f, y - 1.f, cw + 2.f, chh + 2.f, 4.f);
+					nvgStrokeWidth(vg, 1.5f);
+					nvgStrokeColor(vg, nvgRGB(0x58, 0xe0, 0xa8));
+					nvgStroke(vg);
+				}
 			}
 		}
 	};
 
-	static void drawPanel(const rack::widget::Widget::DrawArgs& args, float panelW) {
+	static void drawPanel(const rack::widget::Widget::DrawArgs& args, float panelW, CyberlineBrocaSq* module) {
 		NVGcontext* vg = args.vg;
 		NVGcolor bg = nvgRGB(0x13, 0x14, 0x1a);
 		NVGcolor edge = nvgRGB(0x2a, 0x2e, 0x38);
@@ -342,21 +371,57 @@ struct CyberlineBrocaSqWidget : rack::app::ModuleWidget {
 			nvgText(vg, x, y, s, NULL);
 		};
 
-		// Grid HUD title + lane legend (vowel codes top, consonant codes bottom)
+		// Grid HUD title; lane legend moved under the grid
 		nvgFontSize(vg, 7.5f);
 		nvgFillColor(vg, nvgRGB(0x88, 0xe4, 0xfc));
 		text(90.f, 20.f, "REGISTER GRID");
-		nvgFontSize(vg, 6.4f);
-		nvgFillColor(vg, label);
-		text(224.f, 20.f, "TOP: VOWEL \xC2\xB7 BOTTOM: CONSONANT");
 
-		// STEP / MODE / FAVOR / ONSET (right of grid)
+		// Right column: register editor + character knobs + MODE.
+		// Columns x: 178 (preview/EDIT), 218 & 250 (encoders), 276 (MODE)
 		nvgFontSize(vg, 6.4f);
 		nvgFillColor(vg, label);
-		text(185.f, 96.f, "STEP");
-		text(245.f, 100.f, "MODE");
-		text(206.f, 120.f, "FAVOR");
-		text(254.f, 120.f, "ONSET s");
+		text(218.f, 26.f, "V SEL");
+		text(250.f, 26.f, "C SEL");
+		text(276.f, 26.f, "MODE");
+		text(218.f, 62.f, "LK-V");
+		text(250.f, 62.f, "LK-C");
+		text(178.f, 92.f, "EDIT");
+		text(218.f, 92.f, "CELL");
+		text(206.f, 140.f, "FAVOR");
+		text(252.f, 140.f, "ONSET s");
+
+		// Register edit preview: the pair currently under the editor,
+		// drawn like an enlarged grid cell at (178, 42) size 28
+		{
+			int ep = module ? module->editPos : 0;
+			bool ea = module && module->editActive;
+			uint8_t pv = module ? module->vowelReg[ep] : 0;
+			uint8_t pc = module ? module->consReg[ep] : 0;
+			float px = 164.f, py = 28.f, ps = 28.f;
+			nvgBeginPath(vg);
+			nvgRoundedRect(vg, px, py, ps, ps, 3.f);
+			nvgFillColor(vg, nvgRGB(0x11, 0x14, 0x1c));
+			nvgFill(vg);
+			nvgStrokeWidth(vg, ea ? 1.4f : 0.9f);
+			nvgStrokeColor(vg, ea ? nvgRGB(0x58, 0xe0, 0xa8) : nvgRGB(0x2c, 0x32, 0x40));
+			nvgStroke(vg);
+			auto pfont = getLabelFont();
+			if (pfont && pfont->handle >= 0) {
+				nvgFontFaceId(vg, pfont->handle);
+				nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_TOP);
+				nvgFontSize(vg, 8.5f);
+				nvgFillColor(vg, nvgRGBA(0x8c, 0xe4, 0xfc, ea ? 240 : 150));
+				nvgText(vg, px + ps * 0.5f, py + 3.f,
+					CyberlineBroca::VOWELS[pv].code, NULL);
+				nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_BOTTOM);
+				nvgFontSize(vg, pc == 0 ? 7.5f : 8.5f);
+				nvgFillColor(vg, pc == 0
+					? nvgRGBA(0x70, 0x7c, 0x88, 170)
+					: nvgRGBA(0xf4, 0xb0, 0x48, ea ? 240 : 150));
+				nvgText(vg, px + ps * 0.5f, py + ps - 2.5f,
+					CyberlineBroca::CONSONANTS[pc].code, NULL);
+			}
+		}
 
 		// Knob row labels (knobs at KNOB_Y=200)
 		nvgFontSize(vg, 8.f);
@@ -370,6 +435,12 @@ struct CyberlineBrocaSqWidget : rack::app::ModuleWidget {
 		text(kX[5], 182.f, "MUT-C");
 		nvgFillColor(vg, label);
 		text(kX[4], 182.f, "MORPH");
+		text(kX[6], 182.f, "STEP");
+
+		// Lane legend (moved under the grid to free the editor area)
+		nvgFontSize(vg, 6.2f);
+		nvgFillColor(vg, label);
+		text(90.f, 172.f, "TOP: VOWEL \xC2\xB7 BOTTOM: CONSONANT");
 
 		nvgFontSize(vg, 6.2f);
 		// Input row 1 labels
@@ -430,13 +501,30 @@ struct CyberlineBrocaSqWidget : rack::app::ModuleWidget {
 			addChild(grid);
 		}
 
-		// Right of the grid: STEP button + MODE switch on one row, then a
-		// two-knob character column below (FAVOR + ONSET pulled out of the
-		// crowded bottom knob row)
-		addParam(rack::createParamCentered<rack::componentlibrary::VCVButton>(rack::Vec(185.f, 80.f), module, CyberlineBrocaSq::STEP_PARAM));
-		addParam(rack::createParamCentered<VerticalSnapSwitch>(rack::Vec(245.f, 80.f), module, CyberlineBrocaSq::MODE_PARAM));
-		addParam(rack::createParamCentered<RoundSmallBlackKnob>(rack::Vec(206.f, 138.f), module, CyberlineBrocaSq::FAVOR_PARAM));
-		addParam(rack::createParamCentered<RoundSmallBlackKnob>(rack::Vec(254.f, 138.f), module, CyberlineBrocaSq::ONSET_PARAM));
+		// Right of the grid: register editor (see layout comment in
+		// drawPanel) + the character column, then STEP lands in the free
+		// knob-row slot and MODE goes to the top-right corner.
+		auto* editVEnc = new WrapEncoderKnob(12);
+		editVEnc->autoArmFn = [m = module]() { if (m) m->editActive = true; };
+		editVEnc->box.pos = rack::Vec(218.f, 44.f) - editVEnc->box.size * 0.5f;
+		addParam(editVEnc);
+
+		auto* editCEnc = new WrapEncoderKnob(21);
+		editCEnc->autoArmFn = [m = module]() { if (m) m->editActive = true; };
+		editCEnc->box.pos = rack::Vec(250.f, 44.f) - editCEnc->box.size * 0.5f;
+		addParam(editCEnc);
+
+		addParam(rack::createParamCentered<VerticalSnapSwitch>(rack::Vec(276.f, 44.f), module, CyberlineBrocaSq::MODE_PARAM));
+		addParam(rack::createParamCentered<rack::componentlibrary::VCVButton>(rack::Vec(218.f, 76.f), module, CyberlineBrocaSq::LKV_BUT_PARAM));
+		addParam(rack::createParamCentered<rack::componentlibrary::VCVButton>(rack::Vec(250.f, 76.f), module, CyberlineBrocaSq::LKC_BUT_PARAM));
+		addParam(rack::createParamCentered<rack::componentlibrary::VCVButton>(rack::Vec(178.f, 108.f), module, CyberlineBrocaSq::EDIT_BUT_PARAM));
+
+		auto* editPosEnc = new WrapEncoderKnob(16);
+		editPosEnc->box.pos = rack::Vec(218.f, 108.f) - editPosEnc->box.size * 0.5f;
+		addParam(editPosEnc);
+
+		addParam(rack::createParamCentered<RoundSmallBlackKnob>(rack::Vec(206.f, 158.f), module, CyberlineBrocaSq::FAVOR_PARAM));
+		addParam(rack::createParamCentered<RoundSmallBlackKnob>(rack::Vec(252.f, 158.f), module, CyberlineBrocaSq::ONSET_PARAM));
 
 		// Knob row (labels at y 182, knobs at KNOB_Y=200):
 		// RATE, MUT-V, VLEN, CLEN, MORPH, MUT-C  (ONSET moved to the
@@ -447,6 +535,7 @@ struct CyberlineBrocaSqWidget : rack::app::ModuleWidget {
 		addParam(rack::createParamCentered<LenEncoderKnob>(rack::Vec(kX[3], KNOB_Y), module, CyberlineBrocaSq::CLEN_PARAM));
 		addParam(rack::createParamCentered<RoundSmallBlackKnob>(rack::Vec(kX[4], KNOB_Y), module, CyberlineBrocaSq::MORPH_PARAM));
 		addParam(rack::createParamCentered<RoundSmallBlackKnob>(rack::Vec(kX[5], KNOB_Y), module, CyberlineBrocaSq::MUTC_PARAM));
+		addParam(rack::createParamCentered<rack::componentlibrary::VCVButton>(rack::Vec(kX[6], KNOB_Y), module, CyberlineBrocaSq::STEP_PARAM));
 
 		// Inputs row 1: CLOCK, RESET, V-PH, C-PH
 		float rIn1 = 252.f;
@@ -491,7 +580,7 @@ struct CyberlineBrocaSqWidget : rack::app::ModuleWidget {
 	}
 
 	void draw(const DrawArgs& args) override {
-		drawPanel(args, PANEL_W);
+		drawPanel(args, PANEL_W, static_cast<CyberlineBrocaSq*>(module));
 		ModuleWidget::draw(args);
 		drawCpuMeterText(args, static_cast<CyberlineBrocaSq*>(module));
 	}
