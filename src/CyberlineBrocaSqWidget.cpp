@@ -11,10 +11,53 @@
 
 namespace cyberline {
 
+// =====================================================================================
+// BROCA² LAYOUT — all widget positions live here. Edit these freely; the
+// constructor and drawPanel only reference these constants. Panel is 300 px
+// wide (20 HP) x 380 px tall (RACK_GRID_HEIGHT); y must leave room for the
+// three jack rows (in1 y=252, in2 y=294, out y=338) and screw margins.
+// =====================================================================================
+namespace Layout {
+	// 4x4 register grid HUD (left side)
+	constexpr float GRID_X = 22.f,  GRID_Y = 24.f,  GRID_S = 136.f;
+
+	// Register editor (right column)
+	constexpr float PREVIEW_X = 164.f, PREVIEW_Y = 28.f, PREVIEW_S = 28.f;
+	constexpr float ENC_V_X = 218.f,  ENC_V_Y = 44.f;    // V SEL (12 detents)
+	constexpr float ENC_C_X = 250.f,  ENC_C_Y = 44.f;    // C SEL (21 detents)
+	constexpr float MODE_X = 276.f,   MODE_Y = 44.f;
+	constexpr float BTN_LKV_X = 218.f, BTN_LKV_Y = 76.f; // lock vowel
+	constexpr float BTN_LKC_X = 250.f, BTN_LKC_Y = 76.f; // lock consonant
+	constexpr float BTN_EDIT_X = 178.f, BTN_EDIT_Y = 108.f;
+	constexpr float ENC_CELL_X = 218.f, ENC_CELL_Y = 108.f;
+	constexpr float BTN_COPYL_X = 178.f, BTN_COPYR_X = 258.f, BTN_FILL_X = 218.f;
+	constexpr float UTIL_Y = 148.f;                       // copy/fill row
+	constexpr float FAVOR_X = 206.f, FAVOR_Y = 166.f;
+	constexpr float ONSET_X = 252.f, ONSET_Y = 166.f;
+
+	// Bottom knob row (y = KNOB_Y, labels 18 px above)
+	constexpr float KNOB_Y = 200.f;
+	constexpr float kX[7] = {30.f, 70.f, 110.f, 150.f, 190.f, 230.f, 270.f};
+
+	// Jack rows
+	constexpr float IN1_Y = 252.f, IN2_Y = 294.f, OUT_Y = 338.f;
+	constexpr float inX[4] = {30.f, 68.f, 106.f, 144.f};
+	constexpr float outX[7] = {26.f, 64.f, 102.f, 140.f, 178.f, 220.f, 262.f};
+
+	// Label anchors (text draws are at these exact coords, matching the
+	// widgets they name)
+	constexpr float EDITOR_LABEL_Y1 = 26.f;   // V SEL / C SEL / MODE
+	constexpr float EDITOR_LABEL_Y2 = 62.f;   // LK-V / LK-C
+	constexpr float EDITOR_LABEL_Y3 = 92.f;   // EDIT / CELL
+	constexpr float UTIL_LABEL_Y = 134.f;     // CPY arrows / FILL
+	constexpr float CHAR_LABEL_Y = 150.f;     // FAVOR / ONSET s
+	constexpr float KNOB_LABEL_Y = 182.f;
+}
+
 struct CyberlineBrocaSqWidget : rack::app::ModuleWidget {
 	static constexpr float PANEL_W = 20 * 15.f; // 300 px (20 HP)
-	static constexpr float KNOB_Y = 200.f;
-	static constexpr float kX[7] = {30.f, 70.f, 110.f, 150.f, 190.f, 230.f, 270.f};
+	static constexpr float KNOB_Y = Layout::KNOB_Y;
+	static constexpr float kX[7] = {Layout::kX[0], Layout::kX[1], Layout::kX[2], Layout::kX[3], Layout::kX[4], Layout::kX[5], Layout::kX[6]};
 
 	static void strokeNeon(NVGcontext* vg, NVGcolor col, float coreW = 1.2f, float glowW = 3.4f, int glowAlpha = 50) {
 		nvgStrokeWidth(vg, glowW);
@@ -150,10 +193,34 @@ struct CyberlineBrocaSqWidget : rack::app::ModuleWidget {
 
 	// Momentary utility button drawn as a small square key (grid-cell
 	// visual language): dark plate, thin rim, cyan dot flash while held.
-	// Engine edge-detects in process(); nothing else needed here.
+	// Momentary semantics are implemented here: ParamWidget has no
+	// click-to-set behavior of its own (Switch does, via onDragStart/
+	// onDragEnd); press sets the param to max, release back to min, and
+	// the engine edge-detects in process().
 	struct SqButton : rack::app::ParamWidget {
 		SqButton() {
 			box.size = rack::Vec(18.f, 18.f);
+		}
+
+		void onButton(const rack::event::Button& e) override {
+			ParamWidget::onButton(e);
+			if (e.button != GLFW_MOUSE_BUTTON_LEFT || !module)
+				return;
+			auto* pq = getParamQuantity();
+			if (!pq)
+				return;
+			if (e.action == GLFW_PRESS && (e.mods & RACK_MOD_MASK) == 0) {
+				pq->setValue(pq->getMaxValue());
+				e.consume(this);
+			}
+		}
+
+		void onDragEnd(const rack::event::DragEnd& e) override {
+			ParamWidget::onDragEnd(e);
+			if (e.button != GLFW_MOUSE_BUTTON_LEFT)
+				return;
+			if (auto* pq = getParamQuantity())
+				pq->setValue(pq->getMinValue());
 		}
 
 		void draw(const DrawArgs& args) override {
@@ -324,7 +391,7 @@ struct CyberlineBrocaSqWidget : rack::app::ModuleWidget {
 		nvgStrokeColor(vg, nvgRGBA(0x9b, 0x6d, 0xff, 130));
 		nvgStroke(vg);
 
-		float rIn1 = 252.f, rIn2 = 294.f, rOut = 338.f;
+		float rIn1 = Layout::IN1_Y, rIn2 = Layout::IN2_Y, rOut = Layout::OUT_Y;
 
 		// Chamfered wireframe brackets around both input rows
 		for (float rIn : {rIn1, rIn2}) {
@@ -381,7 +448,7 @@ struct CyberlineBrocaSqWidget : rack::app::ModuleWidget {
 		drawPortRing(144.f, rIn2, neonMint,  false, false);
 		// Outputs: TRACT POLY (violet, poly), LARYNX POLY (coral, poly),
 		// CVENV (cyan), BURST (amber), GATE (mint), VOW CV (cyan), CONS CV (amber)
-		float outX[7] = {26.f, 64.f, 102.f, 140.f, 178.f, 220.f, 262.f};
+		float outX[7] = {Layout::outX[0], Layout::outX[1], Layout::outX[2], Layout::outX[3], Layout::outX[4], Layout::outX[5], Layout::outX[6]};
 		drawPortRing(outX[0], rOut, neonViolet, true, true);
 		drawPortRing(outX[1], rOut, neonCoral,  true, true);
 		drawPortRing(outX[2], rOut, neonCyan,   true, false);
@@ -409,18 +476,18 @@ struct CyberlineBrocaSqWidget : rack::app::ModuleWidget {
 		// Columns x: 178 (preview/EDIT), 218 & 250 (encoders), 276 (MODE)
 		nvgFontSize(vg, 6.4f);
 		nvgFillColor(vg, label);
-		text(218.f, 26.f, "V SEL");
-		text(250.f, 26.f, "C SEL");
-		text(276.f, 26.f, "MODE");
-		text(218.f, 62.f, "LK-V");
-		text(250.f, 62.f, "LK-C");
-		text(178.f, 92.f, "EDIT");
-		text(218.f, 92.f, "CELL");
-		text(178.f, 134.f, "\xE2\x86\x90 CPY");
-		text(218.f, 134.f, "FILL");
-		text(258.f, 134.f, "CPY \xE2\x86\x92");
-		text(206.f, 150.f, "FAVOR");
-		text(252.f, 150.f, "ONSET s");
+		text(Layout::ENC_V_X, Layout::EDITOR_LABEL_Y1, "V SEL");
+		text(Layout::ENC_C_X, Layout::EDITOR_LABEL_Y1, "C SEL");
+		text(Layout::MODE_X, Layout::EDITOR_LABEL_Y1, "MODE");
+		text(Layout::BTN_LKV_X, Layout::EDITOR_LABEL_Y2, "LK-V");
+		text(Layout::BTN_LKC_X, Layout::EDITOR_LABEL_Y2, "LK-C");
+		text(Layout::BTN_EDIT_X, Layout::EDITOR_LABEL_Y3, "EDIT");
+		text(Layout::ENC_CELL_X, Layout::EDITOR_LABEL_Y3, "CELL");
+		text(Layout::BTN_COPYL_X, Layout::UTIL_LABEL_Y, "\xE2\x86\x90 CPY");
+		text(Layout::BTN_FILL_X, Layout::UTIL_LABEL_Y, "FILL");
+		text(Layout::BTN_COPYR_X, Layout::UTIL_LABEL_Y, "CPY \xE2\x86\x92");
+		text(Layout::FAVOR_X, Layout::CHAR_LABEL_Y, "FAVOR");
+		text(Layout::ONSET_X, Layout::CHAR_LABEL_Y, "ONSET s");
 
 		// Register edit preview: the pair currently under the editor,
 		// drawn like an enlarged grid cell at (178, 42) size 28
@@ -529,8 +596,8 @@ struct CyberlineBrocaSqWidget : rack::app::ModuleWidget {
 		// 4x4 register grid HUD (22..156)
 		{
 			auto grid = new RegisterGrid(module);
-			grid->box.pos = rack::Vec(22.f, 24.f);
-			grid->box.size = rack::Vec(136.f, 136.f);
+			grid->box.pos = rack::Vec(Layout::GRID_X, Layout::GRID_Y);
+			grid->box.size = rack::Vec(Layout::GRID_S, Layout::GRID_S);
 			addChild(grid);
 		}
 
@@ -546,44 +613,43 @@ struct CyberlineBrocaSqWidget : rack::app::ModuleWidget {
 		editVEnc->module = module;
 		editVEnc->paramId = CyberlineBrocaSq::EDIT_V_PARAM;
 		editVEnc->autoArmFn = [m = module]() { if (m) m->editActive = true; };
-		editVEnc->box.pos = rack::Vec(218.f, 44.f) - editVEnc->box.size * 0.5f;
+		editVEnc->box.pos = rack::Vec(Layout::ENC_V_X, Layout::ENC_V_Y) - editVEnc->box.size * 0.5f;
 		addParam(editVEnc);
 
 		auto* editCEnc = new WrapEncoderKnob(21);
 		editCEnc->module = module;
 		editCEnc->paramId = CyberlineBrocaSq::EDIT_C_PARAM;
 		editCEnc->autoArmFn = [m = module]() { if (m) m->editActive = true; };
-		editCEnc->box.pos = rack::Vec(250.f, 44.f) - editCEnc->box.size * 0.5f;
+		editCEnc->box.pos = rack::Vec(Layout::ENC_C_X, Layout::ENC_C_Y) - editCEnc->box.size * 0.5f;
 		addParam(editCEnc);
 
-		addParam(rack::createParamCentered<VerticalSnapSwitch>(rack::Vec(276.f, 44.f), module, CyberlineBrocaSq::MODE_PARAM));
-		addParam(rack::createParamCentered<rack::componentlibrary::VCVButton>(rack::Vec(218.f, 76.f), module, CyberlineBrocaSq::LKV_BUT_PARAM));
-		addParam(rack::createParamCentered<rack::componentlibrary::VCVButton>(rack::Vec(250.f, 76.f), module, CyberlineBrocaSq::LKC_BUT_PARAM));
-		addParam(rack::createParamCentered<rack::componentlibrary::VCVButton>(rack::Vec(178.f, 108.f), module, CyberlineBrocaSq::EDIT_BUT_PARAM));
+		addParam(rack::createParamCentered<VerticalSnapSwitch>(rack::Vec(Layout::MODE_X, Layout::MODE_Y), module, CyberlineBrocaSq::MODE_PARAM));
+		addParam(rack::createParamCentered<rack::componentlibrary::VCVButton>(rack::Vec(Layout::BTN_LKV_X, Layout::BTN_LKV_Y), module, CyberlineBrocaSq::LKV_BUT_PARAM));
+		addParam(rack::createParamCentered<rack::componentlibrary::VCVButton>(rack::Vec(Layout::BTN_LKC_X, Layout::BTN_LKC_Y), module, CyberlineBrocaSq::LKC_BUT_PARAM));
+		addParam(rack::createParamCentered<rack::componentlibrary::VCVButton>(rack::Vec(Layout::BTN_EDIT_X, Layout::BTN_EDIT_Y), module, CyberlineBrocaSq::EDIT_BUT_PARAM));
 		// Lock/edit indicator lights (drawn after the buttons so the dot
 		// sits on top): green = that lane's cell is locked, yellow =
 		// editor armed
 		addChild(rack::createLightCentered<rack::componentlibrary::SmallLight<rack::componentlibrary::GreenLight>>(
-			rack::Vec(218.f, 76.f), module, CyberlineBrocaSq::LKV_LIGHT));
+			rack::Vec(Layout::BTN_LKV_X, Layout::BTN_LKV_Y), module, CyberlineBrocaSq::LKV_LIGHT));
 		addChild(rack::createLightCentered<rack::componentlibrary::SmallLight<rack::componentlibrary::GreenLight>>(
-			rack::Vec(250.f, 76.f), module, CyberlineBrocaSq::LKC_LIGHT));
+			rack::Vec(Layout::BTN_LKC_X, Layout::BTN_LKC_Y), module, CyberlineBrocaSq::LKC_LIGHT));
 		addChild(rack::createLightCentered<rack::componentlibrary::SmallLight<rack::componentlibrary::YellowLight>>(
-			rack::Vec(178.f, 108.f), module, CyberlineBrocaSq::EDIT_LIGHT));
+			rack::Vec(Layout::BTN_EDIT_X, Layout::BTN_EDIT_Y), module, CyberlineBrocaSq::EDIT_LIGHT));
 
 		auto* editPosEnc = new WrapEncoderKnob(16);
 		editPosEnc->module = module;
 		editPosEnc->paramId = CyberlineBrocaSq::EDIT_POS_PARAM;
-		editPosEnc->box.pos = rack::Vec(218.f, 108.f) - editPosEnc->box.size * 0.5f;
+		editPosEnc->box.pos = rack::Vec(Layout::ENC_CELL_X, Layout::ENC_CELL_Y) - editPosEnc->box.size * 0.5f;
 		addParam(editPosEnc);
 
-		// Utility row: copy-left / fill / copy-right (LED-style buttons
-		// with cyan dot like the Cyberline button look)
-		addParam(rack::createParamCentered<SqButton>(rack::Vec(178.f, 148.f), module, CyberlineBrocaSq::COPYL_BUT_PARAM));
-		addParam(rack::createParamCentered<SqButton>(rack::Vec(218.f, 148.f), module, CyberlineBrocaSq::FILL_BUT_PARAM));
-		addParam(rack::createParamCentered<SqButton>(rack::Vec(258.f, 148.f), module, CyberlineBrocaSq::COPYR_BUT_PARAM));
+		// Utility row: copy-left / fill / copy-right (square-key buttons)
+		addParam(rack::createParamCentered<SqButton>(rack::Vec(Layout::BTN_COPYL_X, Layout::UTIL_Y), module, CyberlineBrocaSq::COPYL_BUT_PARAM));
+		addParam(rack::createParamCentered<SqButton>(rack::Vec(Layout::BTN_FILL_X, Layout::UTIL_Y), module, CyberlineBrocaSq::FILL_BUT_PARAM));
+		addParam(rack::createParamCentered<SqButton>(rack::Vec(Layout::BTN_COPYR_X, Layout::UTIL_Y), module, CyberlineBrocaSq::COPYR_BUT_PARAM));
 
-		addParam(rack::createParamCentered<RoundSmallBlackKnob>(rack::Vec(206.f, 166.f), module, CyberlineBrocaSq::FAVOR_PARAM));
-		addParam(rack::createParamCentered<RoundSmallBlackKnob>(rack::Vec(252.f, 166.f), module, CyberlineBrocaSq::ONSET_PARAM));
+		addParam(rack::createParamCentered<RoundSmallBlackKnob>(rack::Vec(Layout::FAVOR_X, Layout::FAVOR_Y), module, CyberlineBrocaSq::FAVOR_PARAM));
+		addParam(rack::createParamCentered<RoundSmallBlackKnob>(rack::Vec(Layout::ONSET_X, Layout::ONSET_Y), module, CyberlineBrocaSq::ONSET_PARAM));
 
 		// Knob row (labels at y 182, knobs at KNOB_Y=200):
 		// RATE, MUT-V, VLEN, CLEN, MORPH, MUT-C  (ONSET moved to the
@@ -597,21 +663,21 @@ struct CyberlineBrocaSqWidget : rack::app::ModuleWidget {
 		addParam(rack::createParamCentered<rack::componentlibrary::VCVButton>(rack::Vec(kX[6], KNOB_Y), module, CyberlineBrocaSq::STEP_PARAM));
 
 		// Inputs row 1: CLOCK, RESET, V-PH, C-PH
-		float rIn1 = 252.f;
-		addInput(rack::createInputCentered<PJ301MPort>(rack::Vec(30.f,  rIn1), module, CyberlineBrocaSq::CLOCK_INPUT));
-		addInput(rack::createInputCentered<PJ301MPort>(rack::Vec(68.f,  rIn1), module, CyberlineBrocaSq::RESET_INPUT));
-		addInput(rack::createInputCentered<PJ301MPort>(rack::Vec(106.f, rIn1), module, CyberlineBrocaSq::VPH_INPUT));
-		addInput(rack::createInputCentered<PJ301MPort>(rack::Vec(144.f, rIn1), module, CyberlineBrocaSq::CPH_INPUT));
+		float rIn1 = Layout::IN1_Y;
+		addInput(rack::createInputCentered<PJ301MPort>(rack::Vec(Layout::inX[0],  rIn1), module, CyberlineBrocaSq::CLOCK_INPUT));
+		addInput(rack::createInputCentered<PJ301MPort>(rack::Vec(Layout::inX[1],  rIn1), module, CyberlineBrocaSq::RESET_INPUT));
+		addInput(rack::createInputCentered<PJ301MPort>(rack::Vec(Layout::inX[2], rIn1), module, CyberlineBrocaSq::VPH_INPUT));
+		addInput(rack::createInputCentered<PJ301MPort>(rack::Vec(Layout::inX[3], rIn1), module, CyberlineBrocaSq::CPH_INPUT));
 		// Inputs row 2: P-V, P-C, MORPH, LEN
-		float rIn2 = 294.f;
-		addInput(rack::createInputCentered<PJ301MPort>(rack::Vec(30.f,  rIn2), module, CyberlineBrocaSq::PV_INPUT));
-		addInput(rack::createInputCentered<PJ301MPort>(rack::Vec(68.f,  rIn2), module, CyberlineBrocaSq::PC_INPUT));
-		addInput(rack::createInputCentered<PJ301MPort>(rack::Vec(106.f, rIn2), module, CyberlineBrocaSq::MORPH_INPUT));
-		addInput(rack::createInputCentered<PJ301MPort>(rack::Vec(144.f, rIn2), module, CyberlineBrocaSq::LEN_INPUT));
+		float rIn2 = Layout::IN2_Y;
+		addInput(rack::createInputCentered<PJ301MPort>(rack::Vec(Layout::inX[0],  rIn2), module, CyberlineBrocaSq::PV_INPUT));
+		addInput(rack::createInputCentered<PJ301MPort>(rack::Vec(Layout::inX[1],  rIn2), module, CyberlineBrocaSq::PC_INPUT));
+		addInput(rack::createInputCentered<PJ301MPort>(rack::Vec(Layout::inX[2], rIn2), module, CyberlineBrocaSq::MORPH_INPUT));
+		addInput(rack::createInputCentered<PJ301MPort>(rack::Vec(Layout::inX[3], rIn2), module, CyberlineBrocaSq::LEN_INPUT));
 
 		// Outputs
-		float outX[7] = {26.f, 64.f, 102.f, 140.f, 178.f, 220.f, 262.f};
-		float rOut = 338.f;
+		float outX[7] = {Layout::outX[0], Layout::outX[1], Layout::outX[2], Layout::outX[3], Layout::outX[4], Layout::outX[5], Layout::outX[6]};
+		float rOut = Layout::OUT_Y;
 		addOutput(rack::createOutputCentered<PJ301MPort>(rack::Vec(outX[0], rOut), module, CyberlineBrocaSq::TRACT_POLY_OUTPUT));
 		addOutput(rack::createOutputCentered<PJ301MPort>(rack::Vec(outX[1], rOut), module, CyberlineBrocaSq::LARYNX_POLY_OUTPUT));
 		addOutput(rack::createOutputCentered<PJ301MPort>(rack::Vec(outX[2], rOut), module, CyberlineBrocaSq::CVENV_OUTPUT));
