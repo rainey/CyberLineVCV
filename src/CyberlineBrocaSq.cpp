@@ -82,9 +82,19 @@ void CyberlineBrocaSq::process(const ProcessArgs& args) {
 		consLockMask ^= (1u << editPos);
 	lkcWas = lkc;
 
-	// Utility buttons: copy-left / fill / copy-right (momentary)
-	if (params[COPYL_BUT_PARAM].getValue() > 0.f) copyCell(-1);
-	if (params[COPYR_BUT_PARAM].getValue() > 0.f) copyCell(+1);
+	// Utility buttons: copy-left / fill / copy-right (momentary). Copy
+	// also moves the editor to the copied-to cell, so repeated taps walk
+	// the pair across the register (and the selection highlight follows).
+	if (params[COPYL_BUT_PARAM].getValue() > 0.f) {
+		copyCell(-1);
+		editPos = (editPos + REG_LEN - 1) % REG_LEN;
+		params[EDIT_POS_PARAM].setValue((float) editPos);   // keep the CELL encoder on the moved selection
+	}
+	if (params[COPYR_BUT_PARAM].getValue() > 0.f) {
+		copyCell(+1);
+		editPos = (editPos + 1) % REG_LEN;
+		params[EDIT_POS_PARAM].setValue((float) editPos);
+	}
 	if (params[FILL_BUT_PARAM].getValue() > 0.f) fillCells();
 
 	// Editor indicator lights (lock state of the selected cell, armed flag)
