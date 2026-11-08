@@ -148,6 +148,35 @@ struct CyberlineBrocaSqWidget : rack::app::ModuleWidget {
 		}
 	};
 
+	// Momentary utility button drawn as a small square key (grid-cell
+	// visual language): dark plate, thin rim, cyan dot flash while held.
+	// Engine edge-detects in process(); nothing else needed here.
+	struct SqButton : rack::app::ParamWidget {
+		SqButton() {
+			box.size = rack::Vec(18.f, 18.f);
+		}
+
+		void draw(const DrawArgs& args) override {
+			float s = box.size.x;
+			bool on = getParamQuantity() && getParamQuantity()->getValue() > 0.f;
+			nvgBeginPath(args.vg);
+			nvgRoundedRect(args.vg, 0, 0, s, s, 3.f);
+			nvgFillColor(args.vg, nvgRGB(0x11, 0x14, 0x1c));
+			nvgFill(args.vg);
+			nvgStrokeWidth(args.vg, on ? 1.2f : 0.8f);
+			nvgStrokeColor(args.vg, on
+				? nvgRGB(0x58, 0xe0, 0xa8)
+				: nvgRGB(0x2c, 0x32, 0x40));
+			nvgStroke(args.vg);
+			nvgBeginPath(args.vg);
+			nvgCircle(args.vg, s * 0.5f, s * 0.5f, on ? 2.6f : 1.8f);
+			nvgFillColor(args.vg, on
+				? nvgRGB(0x58, 0xe0, 0xa8)
+				: nvgRGB(0x44, 0x4c, 0x56));
+			nvgFill(args.vg);
+		}
+	};
+
 	// 4x4 register grid: each cell shows the vowel code (top, cyan lane) and
 	// consonant code (bottom, amber lane) of one slot; per-lane dimming past
 	// that register's length, cyan/amber head markers at the active slots.
@@ -251,13 +280,13 @@ struct CyberlineBrocaSqWidget : rack::app::ModuleWidget {
 					nvgFill(vg);
 				}
 
-				// Editor highlight: neon mint outline around the cell
-				// being edited (armed state)
-				if (edOn && k == edPos) {
+				// Editor selection: neon mint outline around the selected
+				// cell — bright while the editor is armed, dim otherwise
+				if (k == edPos) {
 					nvgBeginPath(vg);
 					nvgRoundedRect(vg, x - 1.f, y - 1.f, cw + 2.f, chh + 2.f, 4.f);
-					nvgStrokeWidth(vg, 1.5f);
-					nvgStrokeColor(vg, nvgRGB(0x58, 0xe0, 0xa8));
+					nvgStrokeWidth(vg, edOn ? 1.5f : 1.f);
+					nvgStrokeColor(vg, nvgRGBA(0x58, 0xe0, 0xa8, edOn ? 255 : 70));
 					nvgStroke(vg);
 				}
 			}
@@ -387,8 +416,11 @@ struct CyberlineBrocaSqWidget : rack::app::ModuleWidget {
 		text(250.f, 62.f, "LK-C");
 		text(178.f, 92.f, "EDIT");
 		text(218.f, 92.f, "CELL");
-		text(206.f, 140.f, "FAVOR");
-		text(252.f, 140.f, "ONSET s");
+		text(178.f, 134.f, "\xE2\x86\x90 CPY");
+		text(218.f, 134.f, "FILL");
+		text(258.f, 134.f, "CPY \xE2\x86\x92");
+		text(206.f, 150.f, "FAVOR");
+		text(252.f, 150.f, "ONSET s");
 
 		// Register edit preview: the pair currently under the editor,
 		// drawn like an enlarged grid cell at (178, 42) size 28
@@ -402,8 +434,9 @@ struct CyberlineBrocaSqWidget : rack::app::ModuleWidget {
 			nvgRoundedRect(vg, px, py, ps, ps, 3.f);
 			nvgFillColor(vg, nvgRGB(0x11, 0x14, 0x1c));
 			nvgFill(vg);
-			nvgStrokeWidth(vg, ea ? 1.4f : 0.9f);
-			nvgStrokeColor(vg, ea ? nvgRGB(0x58, 0xe0, 0xa8) : nvgRGB(0x2c, 0x32, 0x40));
+			nvgStrokeWidth(vg, ea ? 1.4f : 1.f);
+			nvgStrokeColor(vg, ea ? nvgRGB(0x58, 0xe0, 0xa8)
+				: nvgRGBA(0x58, 0xe0, 0xa8, 70));
 			nvgStroke(vg);
 			auto pfont = getLabelFont();
 			if (pfont && pfont->handle >= 0) {
@@ -543,8 +576,14 @@ struct CyberlineBrocaSqWidget : rack::app::ModuleWidget {
 		editPosEnc->box.pos = rack::Vec(218.f, 108.f) - editPosEnc->box.size * 0.5f;
 		addParam(editPosEnc);
 
-		addParam(rack::createParamCentered<RoundSmallBlackKnob>(rack::Vec(206.f, 158.f), module, CyberlineBrocaSq::FAVOR_PARAM));
-		addParam(rack::createParamCentered<RoundSmallBlackKnob>(rack::Vec(252.f, 158.f), module, CyberlineBrocaSq::ONSET_PARAM));
+		// Utility row: copy-left / fill / copy-right (LED-style buttons
+		// with cyan dot like the Cyberline button look)
+		addParam(rack::createParamCentered<SqButton>(rack::Vec(178.f, 148.f), module, CyberlineBrocaSq::COPYL_BUT_PARAM));
+		addParam(rack::createParamCentered<SqButton>(rack::Vec(218.f, 148.f), module, CyberlineBrocaSq::FILL_BUT_PARAM));
+		addParam(rack::createParamCentered<SqButton>(rack::Vec(258.f, 148.f), module, CyberlineBrocaSq::COPYR_BUT_PARAM));
+
+		addParam(rack::createParamCentered<RoundSmallBlackKnob>(rack::Vec(206.f, 166.f), module, CyberlineBrocaSq::FAVOR_PARAM));
+		addParam(rack::createParamCentered<RoundSmallBlackKnob>(rack::Vec(252.f, 166.f), module, CyberlineBrocaSq::ONSET_PARAM));
 
 		// Knob row (labels at y 182, knobs at KNOB_Y=200):
 		// RATE, MUT-V, VLEN, CLEN, MORPH, MUT-C  (ONSET moved to the

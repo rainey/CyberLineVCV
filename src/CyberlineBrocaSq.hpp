@@ -37,6 +37,9 @@ struct CyberlineBrocaSq : rack::engine::Module {
 		EDIT_BUT_PARAM, // register editor: arm/disarm button (momentary)
 		LKV_BUT_PARAM,  // toggle vowel mutation lock at editPos (momentary)
 		LKC_BUT_PARAM,  // toggle consonant mutation lock at editPos (momentary)
+		COPYL_BUT_PARAM,// copy the edited pair to the left neighbor cell
+		FILL_BUT_PARAM, // fill the whole register with the edited pair
+		COPYR_BUT_PARAM,// copy the edited pair to the right neighbor cell
 		NUM_PARAMS
 	};
 	enum InputIds {
@@ -160,6 +163,9 @@ struct CyberlineBrocaSq : rack::engine::Module {
 		configButton(EDIT_BUT_PARAM, "Edit registers (arm/disarm)");
 		configButton(LKV_BUT_PARAM, "Lock/unlock vowel cell from mutation");
 		configButton(LKC_BUT_PARAM, "Lock/unlock consonant cell from mutation");
+		configButton(COPYL_BUT_PARAM, "Copy cell to left neighbor");
+		configButton(FILL_BUT_PARAM, "Fill register with cell");
+		configButton(COPYR_BUT_PARAM, "Copy cell to right neighbor");
 		configParam(MORPH_PARAM, 0.f, 1.f, 0.f, "Morph (articulator slew)", "%", 0.f, 100.f);
 		configParam(ONSET_PARAM, 0.02f, 0.35f, 0.11f, "Consonant onset / glide time", " s");
 		configButton(STEP_PARAM, "Manual step");
@@ -207,6 +213,28 @@ struct CyberlineBrocaSq : rack::engine::Module {
 			vowelReg[i] = (uint8_t) (rack::random::u32() % NUM_VOWELS);
 			// NONE allowed: consonant rolls may land on rests (index 0)
 			consReg[i] = (uint8_t) (rack::random::u32() % NUM_CONSONANTS);
+		}
+	}
+
+	// ---- Register editor utilities ----
+	// Copy the edited pair to the neighbor cell (left/right, wrapping);
+	// locked target cells are respected (copy does not overwrite them).
+	void copyCell(int dir) {
+		int dst = (editPos + dir + REG_LEN) % REG_LEN;
+		if (!((vowelLockMask >> dst) & 1u))
+			vowelReg[dst] = vowelReg[editPos];
+		if (!((consLockMask >> dst) & 1u))
+			consReg[dst] = consReg[editPos];
+	}
+
+	// Fill the whole register with the edited pair (skipping locked
+	// cells so user-locked content survives).
+	void fillCells() {
+		for (int i = 0; i < REG_LEN; i++) {
+			if (!((vowelLockMask >> i) & 1u))
+				vowelReg[i] = vowelReg[editPos];
+			if (!((consLockMask >> i) & 1u))
+				consReg[i] = consReg[editPos];
 		}
 	}
 

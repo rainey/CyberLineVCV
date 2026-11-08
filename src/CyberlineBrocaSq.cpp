@@ -82,6 +82,11 @@ void CyberlineBrocaSq::process(const ProcessArgs& args) {
 		consLockMask ^= (1u << editPos);
 	lkcWas = lkc;
 
+	// Utility buttons: copy-left / fill / copy-right (momentary)
+	if (params[COPYL_BUT_PARAM].getValue() > 0.f) copyCell(-1);
+	if (params[COPYR_BUT_PARAM].getValue() > 0.f) copyCell(+1);
+	if (params[FILL_BUT_PARAM].getValue() > 0.f) fillCells();
+
 	// Editor indicator lights (lock state of the selected cell, armed flag)
 	lights[LKV_LIGHT].setBrightness(((vowelLockMask >> editPos) & 1u) ? 1.f : 0.f);
 	lights[LKC_LIGHT].setBrightness(((consLockMask >> editPos) & 1u) ? 1.f : 0.f);
