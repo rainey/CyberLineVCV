@@ -82,35 +82,30 @@ void CyberlineBrocaSq::process(const ProcessArgs& args) {
 		consLockMask ^= (1u << editPos);
 	lkcWas = lkc;
 
-	// Utility buttons: copy-left / fill / copy-right. Fill fires on the
-	// rising edge. Copy repeats while held ("hold to walk") but only
-	// steps when the copy actually changes the destination cell — once
-	// the neighbor already holds this pair, walking stops (the stroke
-	// has saturated). Crossing a saturated stretch: turn CELL by hand,
-	// or use FILL. A single click on a differing neighbor = copy + move,
-	// exactly once, because after the move the gate is false.
+	// Utility buttons: copy-left / fill / copy-right. A press copies
+	// immediately (instant feedback), and *while held* the copy repeats
+	// on every sequence advance — clock steps in FREE/CLOCK, phasor
+	// segment crossings in PHASOR — so a held button paints the register
+	// in sync with the musical grid. FILL is rising-edge one-shot.
+	// copyHoldDir is consumed by the clocking block below.
+	auto doCopyStep = [&](int dir) {
+		copyCell(dir);
+		editPos = (editPos + dir + REG_LEN) % REG_LEN;
+		params[EDIT_POS_PARAM].setValue((float) editPos);   // keep the CELL encoder on the moved selection
+	};
+	copyHoldDir = 0;
 	bool copyl = params[COPYL_BUT_PARAM].getValue() > 0.f;
-	if (copyl) {
-		int dst = (editPos + REG_LEN - 1) % REG_LEN;
-		if (vowelReg[dst] != vowelReg[editPos]
-			|| consReg[dst] != consReg[editPos]) {
-			copyCell(-1);
-			editPos = dst;
-			params[EDIT_POS_PARAM].setValue((float) editPos);   // keep the CELL encoder on the moved selection
-		}
-	}
+	if (copyl && !copylWas)
+		doCopyStep(-1);
 	copylWas = copyl;
 	bool copyr = params[COPYR_BUT_PARAM].getValue() > 0.f;
-	if (copyr) {
-		int dst = (editPos + 1) % REG_LEN;
-		if (vowelReg[dst] != vowelReg[editPos]
-			|| consReg[dst] != consReg[editPos]) {
-			copyCell(+1);
-			editPos = dst;
-			params[EDIT_POS_PARAM].setValue((float) editPos);
-		}
-	}
+	if (copyr && !copyrWas)
+		doCopyStep(+1);
 	copyrWas = copyr;
+	if (copyl)
+		copyHoldDir = -1;
+	else if (copyr)
+		copyHoldDir = +1;
 	bool fillB = params[FILL_BUT_PARAM].getValue() > 0.f;
 	if (fillB && !fillWas)
 		fillCells();
@@ -206,6 +201,9 @@ void CyberlineBrocaSq::process(const ProcessArgs& args) {
 			cPos = ((step % cLen) + cLen) % cLen;
 			mutate(true, vPos);
 			mutate(false, cPos);
+			// Held copy button paints one cell per sequence advance
+			if (copyHoldDir != 0)
+				doCopyStep(copyHoldDir);
 			fireGesture();
 		}
 	} else {
@@ -233,14 +231,20 @@ void CyberlineBrocaSq::process(const ProcessArgs& args) {
 		int vNew = (int) std::fmin(vPhase * vLen, vLen - 1);
 		int cNew = (int) std::fmin(cPhase * cLen, cLen - 1);
 
-		if (vNew != vPos) {
+		bool vCross = (vNew != vPos), cCross = (cNew != cPos);
+		if (vCross) {
 			vPos = vNew;
 			mutate(true, vPos);
 			anyGesture = true;
 		}
-		if (cNew != cPos) {
+		if (cCross) {
 			cPos = cNew;
 			mutate(false, cPos);
+			anyGesture = true;
+		}
+		// Held copy button paints one cell per phasor segment crossing
+		if (copyHoldDir != 0 && (vCross || cCross)) {
+			doCopyStep(copyHoldDir);
 			anyGesture = true;
 		}
 		if (stepRising) {

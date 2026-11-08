@@ -103,6 +103,7 @@ struct CyberlineBrocaSq : rack::engine::Module {
 	bool copylWas = false;
 	bool copyrWas = false;
 	bool fillWas = false;
+	int copyHoldDir = 0;   // 0 = none; -1/+1 while a copy button is held
 
 	// ---- Clocking state ----
 	int mode = MODE_FREE;
