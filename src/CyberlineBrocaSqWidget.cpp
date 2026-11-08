@@ -504,12 +504,21 @@ struct CyberlineBrocaSqWidget : rack::app::ModuleWidget {
 		// Right of the grid: register editor (see layout comment in
 		// drawPanel) + the character column, then STEP lands in the free
 		// knob-row slot and MODE goes to the top-right corner.
+		// NOTE: ModuleWidget::addParam() is just addChild() — unlike
+		// createParamCentered it does NOT set module/paramId, so the
+		// hand-constructed encoder widgets must set them explicitly
+		// (unset module made drags no-ops and right-click segfault the
+		// context menu's unchecked pq->getString()).
 		auto* editVEnc = new WrapEncoderKnob(12);
+		editVEnc->module = module;
+		editVEnc->paramId = CyberlineBrocaSq::EDIT_V_PARAM;
 		editVEnc->autoArmFn = [m = module]() { if (m) m->editActive = true; };
 		editVEnc->box.pos = rack::Vec(218.f, 44.f) - editVEnc->box.size * 0.5f;
 		addParam(editVEnc);
 
 		auto* editCEnc = new WrapEncoderKnob(21);
+		editCEnc->module = module;
+		editCEnc->paramId = CyberlineBrocaSq::EDIT_C_PARAM;
 		editCEnc->autoArmFn = [m = module]() { if (m) m->editActive = true; };
 		editCEnc->box.pos = rack::Vec(250.f, 44.f) - editCEnc->box.size * 0.5f;
 		addParam(editCEnc);
@@ -518,8 +527,19 @@ struct CyberlineBrocaSqWidget : rack::app::ModuleWidget {
 		addParam(rack::createParamCentered<rack::componentlibrary::VCVButton>(rack::Vec(218.f, 76.f), module, CyberlineBrocaSq::LKV_BUT_PARAM));
 		addParam(rack::createParamCentered<rack::componentlibrary::VCVButton>(rack::Vec(250.f, 76.f), module, CyberlineBrocaSq::LKC_BUT_PARAM));
 		addParam(rack::createParamCentered<rack::componentlibrary::VCVButton>(rack::Vec(178.f, 108.f), module, CyberlineBrocaSq::EDIT_BUT_PARAM));
+		// Lock/edit indicator lights (drawn after the buttons so the dot
+		// sits on top): green = that lane's cell is locked, yellow =
+		// editor armed
+		addChild(rack::createLightCentered<rack::componentlibrary::SmallLight<rack::componentlibrary::GreenLight>>(
+			rack::Vec(218.f, 76.f), module, CyberlineBrocaSq::LKV_LIGHT));
+		addChild(rack::createLightCentered<rack::componentlibrary::SmallLight<rack::componentlibrary::GreenLight>>(
+			rack::Vec(250.f, 76.f), module, CyberlineBrocaSq::LKC_LIGHT));
+		addChild(rack::createLightCentered<rack::componentlibrary::SmallLight<rack::componentlibrary::YellowLight>>(
+			rack::Vec(178.f, 108.f), module, CyberlineBrocaSq::EDIT_LIGHT));
 
 		auto* editPosEnc = new WrapEncoderKnob(16);
+		editPosEnc->module = module;
+		editPosEnc->paramId = CyberlineBrocaSq::EDIT_POS_PARAM;
 		editPosEnc->box.pos = rack::Vec(218.f, 108.f) - editPosEnc->box.size * 0.5f;
 		addParam(editPosEnc);
 

@@ -82,6 +82,11 @@ void CyberlineBrocaSq::process(const ProcessArgs& args) {
 		consLockMask ^= (1u << editPos);
 	lkcWas = lkc;
 
+	// Editor indicator lights (lock state of the selected cell, armed flag)
+	lights[LKV_LIGHT].setBrightness(((vowelLockMask >> editPos) & 1u) ? 1.f : 0.f);
+	lights[LKC_LIGHT].setBrightness(((consLockMask >> editPos) & 1u) ? 1.f : 0.f);
+	lights[EDIT_LIGHT].setBrightness(editActive ? 1.f : 0.f);
+
 	// Mutation roll for one register; on a hit the current slot is rewritten
 	// with a random phoneme (consonant rolls may land on NONE = rest).
 	// Consonant rolls are reweighted by FAVOR_PARAM: 0 = only nasals/

@@ -61,6 +61,9 @@ struct CyberlineBrocaSq : rack::engine::Module {
 		NUM_OUTPUTS
 	};
 	enum LightIds {
+		LKV_LIGHT,      // green: vowel cell at editPos is mutation-locked
+		LKC_LIGHT,      // green: consonant cell at editPos is mutation-locked
+		EDIT_LIGHT,     // yellow: register editor armed
 		NUM_LIGHTS
 	};
 
