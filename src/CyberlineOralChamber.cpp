@@ -93,7 +93,10 @@ void CyberlineOralChamber::process(const ProcessArgs& args) {
 		float cp = params[CONSTRPOS_PARAM].getValue() + cpCv;
 		float cwNorm = rack::math::clamp(params[CONSTRW_PARAM].getValue() + cwCv, 0.f, 10.f) * 0.1f;
 		float cw = CyberlineTract::mapConstrWidth(cwNorm);
-		float fr = rack::math::clamp(params[FRIC_PARAM].getValue() + frCv * 0.1f, 0.f, 1.f);
+		float airDrive = (inputs[TONGUEX_INPUT].getChannels() >= 8 && !inputs[FRIC_INPUT].isConnected())
+			? rack::math::clamp(inputs[TONGUEX_INPUT].getVoltage(7) * 0.1f, 0.f, 1.f)
+			: 1.f;
+		float fr = rack::math::clamp(params[FRIC_PARAM].getValue() + frCv * 0.1f, 0.f, 1.f) * airDrive;
 		float cpos = (cp <= 0.01f) ? -1.f
 			: tract.bladeStart + rack::math::clamp(cp, 0.f, 10.f) / 10.f
 				* (tract.n - tract.bladeStart);

@@ -50,6 +50,7 @@ struct CyberlineTract {
 	int decim = 1;           // host samples per waveguide step when host rate is very high
 	int decimCounter = 0;
 	float lipPrev = 0.f, lipCur = 0.f, nosePrev = 0.f, noseCur = 0.f;
+	float lastTurbulenceNoise = 0.f;
 	bool initialized = false;
 	bool transientsEnabled = true;
 	// LOW quality: decouple reflection-coefficient refresh from the audio
@@ -171,6 +172,7 @@ struct CyberlineTract {
 		lastNoseOutput = 0.f;
 		decimCounter = 0;
 		lipPrev = lipCur = nosePrev = noseCur = 0.f;
+		lastTurbulenceNoise = 0.f;
 		initialized = false;
 		silenceCounter = 0;
 		reflCounter = 0;
@@ -388,7 +390,7 @@ struct CyberlineTract {
 			float d = constrictionDiameterAt(constrPos);
 			float thinness = std::fmax(0.f, std::fmin(8.f * (0.7f - d), 1.f));
 			float openness = std::fmax(0.f, std::fmin(30.f * (d - 0.3f), 1.f));
-			float amt = 0.66f * noise * fricativeAmount * thinness * openness;
+			float amt = 0.32f * noise * fricativeAmount * thinness * openness;
 			addTurbulence(amt, constrPos);
 		}
 
@@ -546,31 +548,36 @@ struct CyberlineTract {
 			calculateReflectionsPublic();
 		}
 
+		// High-pass pre-emphasis filter on turbulence noise to suppress low-frequency
+		// waveguide resonant ringing ("squish") and deliver clean consonant sibilance.
+		float turbNoise = noise - 0.82f * lastTurbulenceNoise;
+		lastTurbulenceNoise = noise;
+
 		if (oversample == 2) {
 			if (fadeActive) {
 				float l0 = (float) fadePos / (float) REFL_FADE;
 				float l1 = (float) (fadePos + 1) / (float) REFL_FADE;
 				fadePos++;
-				step(source, inject, injectPos, noise, l0);
-				return step(source, inject, injectPos, noise, l1);
+				step(source, inject, injectPos, turbNoise, l0);
+				return step(source, inject, injectPos, turbNoise, l1);
 			}
-			step(source, inject, injectPos, noise, 0.5f);
-			return step(source, inject, injectPos, noise, 1.0f);
+			step(source, inject, injectPos, turbNoise, 0.5f);
+			return step(source, inject, injectPos, turbNoise, 1.0f);
 		}
 		if (decim == 1) {
 			if (fadeActive) {
 				float l = (float) (2 * fadePos + 1) / (2.f * REFL_FADE);
 				fadePos++;
-				return step(source, inject, injectPos, noise, l);
+				return step(source, inject, injectPos, turbNoise, l);
 			}
-			return step(source, inject, injectPos, noise, 1.0f);
+			return step(source, inject, injectPos, turbNoise, 1.0f);
 		}
 		// Very high host rate: step the waveguide once every `decim` samples and
 		// linearly interpolate between consecutive outputs.
 		if (decimCounter == 0) {
 			lipPrev = lipCur;
 			nosePrev = noseCur;
-			lipCur = step(source, inject, injectPos, noise, 1.0f);
+			lipCur = step(source, inject, injectPos, turbNoise, 1.0f);
 			noseCur = lastNoseOutput;
 		}
 		float f = (float) (decimCounter + 1) / (float) decim;

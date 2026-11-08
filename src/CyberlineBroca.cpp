@@ -167,16 +167,16 @@ void CyberlineBroca::process(const ProcessArgs& args) {
 		if (cons.manner == MANNER_STOP) {
 			// Plosive articulation:
 			// - When triggered: [0..0.55] = full occlusion (CWID = 0),
-			//   [0.55..0.85] = release burst through turbulence window (CWID ~ 4.8 + FRIC burst),
-			//   [0.85..1.0] = open into vowel.
+			//   [0.55..0.68] = crisp release burst (~10-15 ms burst window + calibrated FRIC burst),
+			//   [0.68..1.0] = release into vowel.
 			// - When swept manually via C/V MORPH: cvMix > 0.65 = occlusion,
-			//   0.25..0.65 = burst release window, < 0.25 = vowel.
+			//   0.38..0.65 = burst release window, < 0.38 = vowel.
 			bool inClosure = onsetActive
 				? (onsetPhase < 0.55f)
 				: (cvMix > 0.65f);
 			bool inBurst = onsetActive
-				? (onsetPhase >= 0.55f && onsetPhase < 0.88f)
-				: (cvMix >= 0.22f && cvMix <= 0.65f);
+				? (onsetPhase >= 0.55f && onsetPhase < 0.68f)
+				: (cvMix >= 0.38f && cvMix <= 0.65f);
 
 			if (inClosure) {
 				tgtCwid = 0.0f;
@@ -188,13 +188,13 @@ void CyberlineBroca::process(const ProcessArgs& args) {
 				tgtPress = cons.voiced ? 0.65f : 0.15f;
 			} else if (inBurst) {
 				tgtCwid = 4.8f; // passes squarely through [0.3, 0.7] cm turbulence window
-				tgtFric = cons.fricative;
+				tgtFric = cons.fricative * 0.45f;
 				tgtVoic = cons.voicing;
 				tgtPress = cons.pressure;
 				burstGate = 1.f;
 			} else {
 				tgtCwid = broca_lerpf(vowCwid, 4.8f, cvMix);
-				tgtFric = cons.fricative * cvMix;
+				tgtFric = 0.0f;
 				tgtVoic = broca_lerpf(vowVoic, cons.voicing, cvMix);
 				tgtPress = broca_lerpf(vowPress, cons.pressure, cvMix);
 			}

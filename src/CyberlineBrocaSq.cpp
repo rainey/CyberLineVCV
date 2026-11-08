@@ -316,8 +316,8 @@ void CyberlineBrocaSq::process(const ProcessArgs& args) {
 				? (onsetPhase < 0.55f)
 				: (cvMix > 0.65f);
 			bool inBurst = onsetActive
-				? (onsetPhase >= 0.55f && onsetPhase < 0.88f)
-				: (cvMix >= 0.22f && cvMix <= 0.65f);
+				? (onsetPhase >= 0.55f && onsetPhase < 0.68f)
+				: (cvMix >= 0.38f && cvMix <= 0.65f);
 
 			if (inClosure) {
 				tgtCwid = 0.0f;
@@ -327,13 +327,13 @@ void CyberlineBrocaSq::process(const ProcessArgs& args) {
 				tgtPress = cons.voiced ? 0.65f : 0.15f;
 			} else if (inBurst) {
 				tgtCwid = 4.8f;
-				tgtFric = cons.fricative;
+				tgtFric = cons.fricative * 0.45f;
 				tgtVoic = cons.voicing;
 				tgtPress = cons.pressure;
 				burstGate = 1.f;
 			} else {
 				tgtCwid = sq_lerpf(vowCwid, 4.8f, cvMix);
-				tgtFric = cons.fricative * cvMix;
+				tgtFric = 0.0f;
 				tgtVoic = sq_lerpf(vowVoic, cons.voicing, cvMix);
 				tgtPress = sq_lerpf(vowPress, cons.pressure, cvMix);
 			}
