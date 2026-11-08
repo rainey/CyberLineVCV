@@ -82,22 +82,33 @@ void CyberlineBrocaSq::process(const ProcessArgs& args) {
 		consLockMask ^= (1u << editPos);
 	lkcWas = lkc;
 
-	// Utility buttons: copy-left / fill / copy-right. Edge-detected
-	// (fire on press only — a click copies exactly once; the param stays
-	// held until mouse-up but repeat-fire is suppressed). "Hold to walk"
-	// is done by repeated clicks, which also moves the editor each time.
+	// Utility buttons: copy-left / fill / copy-right. Fill fires on the
+	// rising edge. Copy repeats while held ("hold to walk") but only
+	// steps when the copy actually changes the destination cell — once
+	// the neighbor already holds this pair, walking stops (the stroke
+	// has saturated). Crossing a saturated stretch: turn CELL by hand,
+	// or use FILL. A single click on a differing neighbor = copy + move,
+	// exactly once, because after the move the gate is false.
 	bool copyl = params[COPYL_BUT_PARAM].getValue() > 0.f;
-	if (copyl && !copylWas) {
-		copyCell(-1);
-		editPos = (editPos + REG_LEN - 1) % REG_LEN;
-		params[EDIT_POS_PARAM].setValue((float) editPos);   // keep the CELL encoder on the moved selection
+	if (copyl) {
+		int dst = (editPos + REG_LEN - 1) % REG_LEN;
+		if (vowelReg[dst] != vowelReg[editPos]
+			|| consReg[dst] != consReg[editPos]) {
+			copyCell(-1);
+			editPos = dst;
+			params[EDIT_POS_PARAM].setValue((float) editPos);   // keep the CELL encoder on the moved selection
+		}
 	}
 	copylWas = copyl;
 	bool copyr = params[COPYR_BUT_PARAM].getValue() > 0.f;
-	if (copyr && !copyrWas) {
-		copyCell(+1);
-		editPos = (editPos + 1) % REG_LEN;
-		params[EDIT_POS_PARAM].setValue((float) editPos);
+	if (copyr) {
+		int dst = (editPos + 1) % REG_LEN;
+		if (vowelReg[dst] != vowelReg[editPos]
+			|| consReg[dst] != consReg[editPos]) {
+			copyCell(+1);
+			editPos = dst;
+			params[EDIT_POS_PARAM].setValue((float) editPos);
+		}
 	}
 	copyrWas = copyr;
 	bool fillB = params[FILL_BUT_PARAM].getValue() > 0.f;
