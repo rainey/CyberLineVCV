@@ -1075,6 +1075,51 @@ static void test_vtl_band_clamp() {
 		"VTL CV at the Full band still clamps to the physical 6 cm floor");
 }
 
+static void test_crispness_control() {
+	std::printf("--- Testing Crispness (Turbulence Pre-Emphasis) Knob & CV ---\n");
+	rack::engine::Module::ProcessArgs args;
+	args.sampleRate = 48000.f;
+	args.sampleTime = 1.f / 48000.f;
+
+	// Oral Chamber test
+	CyberlineOralChamber oc;
+	CHECK(std::fabs(oc.params[CyberlineOralChamber::CRISP_PARAM].getValue() - 0.82f) < 0.001f,
+		"Oral Chamber default CRISP_PARAM is 0.82");
+	for (int i = 0; i < 16; i++) oc.process(args);
+	CHECK(std::fabs(oc.tract.turbulenceHp - 0.82f) < 0.001f,
+		"Oral Chamber tract.turbulenceHp initialized to 0.82");
+
+	oc.params[CyberlineOralChamber::CRISP_PARAM].setValue(0.25f);
+	for (int i = 0; i < 16; i++) oc.process(args);
+	CHECK(std::fabs(oc.tract.turbulenceHp - 0.25f) < 0.001f,
+		"Oral Chamber tract.turbulenceHp follows CRISP_PARAM knob");
+
+	oc.inputs[CyberlineOralChamber::CRISP_INPUT].channels = 1;
+	oc.inputs[CyberlineOralChamber::CRISP_INPUT].setVoltage(5.0f); // +0.5
+	for (int i = 0; i < 16; i++) oc.process(args);
+	CHECK(std::fabs(oc.tract.turbulenceHp - 0.75f) < 0.001f,
+		"Oral Chamber tract.turbulenceHp sums with CRISP_INPUT CV");
+
+	// Voice test
+	CyberlineVoice voice;
+	CHECK(std::fabs(voice.params[CyberlineVoice::V_CRISP_PARAM].getValue() - 0.82f) < 0.001f,
+		"Voice default V_CRISP_PARAM is 0.82");
+	for (int i = 0; i < 16; i++) voice.process(args);
+	CHECK(std::fabs(voice.tract.turbulenceHp - 0.82f) < 0.001f,
+		"Voice tract.turbulenceHp initialized to 0.82");
+
+	voice.params[CyberlineVoice::V_CRISP_PARAM].setValue(0.50f);
+	for (int i = 0; i < 16; i++) voice.process(args);
+	CHECK(std::fabs(voice.tract.turbulenceHp - 0.50f) < 0.001f,
+		"Voice tract.turbulenceHp follows V_CRISP_PARAM knob");
+
+	voice.inputs[CyberlineVoice::V_CRISP_INPUT].channels = 1;
+	voice.inputs[CyberlineVoice::V_CRISP_INPUT].setVoltage(-3.0f); // -0.3
+	for (int i = 0; i < 16; i++) voice.process(args);
+	CHECK(std::fabs(voice.tract.turbulenceHp - 0.20f) < 0.001f,
+		"Voice tract.turbulenceHp sums with V_CRISP_INPUT CV");
+}
+
 int main() {
 	std::printf("=========================================\n");
 	std::printf("Running Cyberline Module Integration Tests\n");
@@ -1093,6 +1138,7 @@ int main() {
 	test_brocasq_registers_clocking_and_mutation();
 	test_range_presets();
 	test_vtl_band_clamp();
+	test_crispness_control();
 
 	std::printf("=========================================\n");
 	std::printf("Results: %d passed, %d failed\n", g_passCount, g_failCount);

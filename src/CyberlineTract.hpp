@@ -51,6 +51,7 @@ struct CyberlineTract {
 	int decimCounter = 0;
 	float lipPrev = 0.f, lipCur = 0.f, nosePrev = 0.f, noseCur = 0.f;
 	float lastTurbulenceNoise = 0.f;
+	float turbulenceHp = 0.82f;
 	bool initialized = false;
 	bool transientsEnabled = true;
 	// LOW quality: decouple reflection-coefficient refresh from the audio
@@ -173,6 +174,7 @@ struct CyberlineTract {
 		decimCounter = 0;
 		lipPrev = lipCur = nosePrev = noseCur = 0.f;
 		lastTurbulenceNoise = 0.f;
+		turbulenceHp = 0.82f;
 		initialized = false;
 		silenceCounter = 0;
 		reflCounter = 0;
@@ -550,7 +552,8 @@ struct CyberlineTract {
 
 		// High-pass pre-emphasis filter on turbulence noise to suppress low-frequency
 		// waveguide resonant ringing ("squish") and deliver clean consonant sibilance.
-		float turbNoise = noise - 0.82f * lastTurbulenceNoise;
+		// Controlled by turbulenceHp (0 = raw broadband white noise, 1 = max high-pass).
+		float turbNoise = noise - turbulenceHp * lastTurbulenceNoise;
 		lastTurbulenceNoise = noise;
 
 		if (oversample == 2) {

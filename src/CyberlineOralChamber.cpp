@@ -111,6 +111,12 @@ void CyberlineOralChamber::process(const ProcessArgs& args) {
 		tract.muscleSpeed = 2.f + params[SPEED_PARAM].getValue() * 38.f;
 		tract.wallDamping = params[WALL_PARAM].getValue();
 
+		float crispCv = inputs[CRISP_INPUT].isConnected()
+			? inputs[CRISP_INPUT].getVoltage()
+			: 0.f;
+		tract.turbulenceHp = rack::math::clamp(
+			params[CRISP_PARAM].getValue() + crispCv * 0.1f, 0.f, 1.f);
+
 		tract.applyConstriction();
 	}
 

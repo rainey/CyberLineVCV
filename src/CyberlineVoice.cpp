@@ -117,6 +117,11 @@ void CyberlineVoice::process(const ProcessArgs& args) {
 		}
 
 		tract.muscleSpeed = 2.f + params[V_SPEED_PARAM].getValue() * 38.f;
+		float crispCv = inputs[V_CRISP_INPUT].isConnected()
+			? inputs[V_CRISP_INPUT].getVoltage()
+			: 0.f;
+		tract.turbulenceHp = rack::math::clamp(
+			params[V_CRISP_PARAM].getValue() + crispCv * 0.1f, 0.f, 1.f);
 		tract.applyConstriction();
 	}
 

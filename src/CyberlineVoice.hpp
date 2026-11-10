@@ -27,6 +27,7 @@ struct CyberlineVoice : rack::engine::Module {
 		V_TONGUEY_PARAM,
 		V_VELUM_PARAM,
 		V_SPEED_PARAM,
+		V_CRISP_PARAM,
 		V_QUALITY_PARAM,   // 0 = HIGH pinned, 1 = LOW pinned, 2 = FOLLOW GLOBAL (default); context-menu toggled
 		NUM_PARAMS
 	};
@@ -37,6 +38,7 @@ struct CyberlineVoice : rack::engine::Module {
 		V_TONGUEX_INPUT,
 		V_TONGUEY_INPUT,
 		V_VELUM_INPUT,
+		V_CRISP_INPUT,
 		NUM_INPUTS
 	};
 	enum OutputIds {
@@ -76,6 +78,7 @@ struct CyberlineVoice : rack::engine::Module {
 		configParam(V_TONGUEY_PARAM, 0.f, 10.f, 5.f, "Tongue constriction");
 		configParam(V_VELUM_PARAM, 0.f, 1.f, 0.01f, "Velum");
 		configParam(V_SPEED_PARAM, 0.f, 1.f, 0.5f, "Muscle speed");
+		configParam(V_CRISP_PARAM, 0.f, 1.f, 0.82f, "Fricative crispness", "%", 0.f, 100.f);
 		configParam(V_QUALITY_PARAM, 0.f, 2.f, 2.f, "Quality override (context menu)");
 		configInput(V_PITCH_INPUT, "Pitch (1 V/oct)");
 		configInput(V_TENSION_INPUT, "Tension (0-10 V) / 2-3 ch Larynx Poly Bus (Ch 1: TENS, Ch 2: PRESS, Ch 3: VOICING)");
@@ -83,6 +86,7 @@ struct CyberlineVoice : rack::engine::Module {
 		configInput(V_TONGUEX_INPUT, "Tongue X (0-10 V) / 8-9 ch Tract+Voice Poly Bus (Ch 1-6: Tract, Ch 7-8: Tension/Pressure, Ch 9: Voicing)");
 		configInput(V_TONGUEY_INPUT, "Tongue Y (0-10 V)");
 		configInput(V_VELUM_INPUT, "Velum (0-10 V)");
+		configInput(V_CRISP_INPUT, "Fricative crispness CV (0-10 V)");
 		configOutput(V_LIPS_OUTPUT, "Lips");
 		configOutput(V_NOSE_OUTPUT, "Nose");
 		configOutput(V_VOICED_OUTPUT, "Source (pre-tract)");

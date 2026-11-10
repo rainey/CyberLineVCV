@@ -20,6 +20,7 @@ struct CyberlineOralChamber : rack::engine::Module {
 		INJPOS_PARAM,
 		SPEED_PARAM,
 		WALL_PARAM,
+		CRISP_PARAM,
 		QUALITY_PARAM,  // 0 = HIGH pinned, 1 = LOW pinned, 2 = FOLLOW GLOBAL (default); context-menu toggled
 		NUM_PARAMS
 	};
@@ -34,6 +35,7 @@ struct CyberlineOralChamber : rack::engine::Module {
 		FRIC_INPUT,
 		INJPOS_INPUT,
 		VTL_INPUT,
+		CRISP_INPUT,
 		NUM_INPUTS
 	};
 	enum OutputIds {
@@ -70,6 +72,7 @@ struct CyberlineOralChamber : rack::engine::Module {
 		configParam(INJPOS_PARAM, 0.f, 10.f, 0.f, "Injection position");
 		configParam(SPEED_PARAM, 0.f, 1.f, 0.5f, "Muscle speed");
 		configParam(WALL_PARAM, 0.98f, 1.f, 0.999f, "Wall damping");
+		configParam(CRISP_PARAM, 0.f, 1.f, 0.82f, "Fricative crispness", "%", 0.f, 100.f);
 		configInput(SOURCE_INPUT, "Source (audio)");
 		configInput(INJECT_INPUT, "Inject (audio)");
 		configInput(TONGUEX_INPUT, "Tongue X (0-10 V) / 6-ch Tract Poly Bus (TNGX, TNGY, VEL, CPOS, CWID, FRIC)");
@@ -80,6 +83,7 @@ struct CyberlineOralChamber : rack::engine::Module {
 		configInput(FRIC_INPUT, "Fricative (0-10 V)");
 		configInput(INJPOS_INPUT, "Injection position CV");
 		configInput(VTL_INPUT, "Tract length CV (5.4 cm/V, ±10 V)");
+		configInput(CRISP_INPUT, "Fricative crispness CV (0-10 V)");
 		configOutput(LIPS_OUTPUT, "Lips");
 		configOutput(NOSE_OUTPUT, "Nose");
 		configOutput(SHAPE_OUTPUT, "Shape scan (CV)");

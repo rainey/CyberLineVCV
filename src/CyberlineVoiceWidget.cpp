@@ -378,7 +378,7 @@ struct CyberlineVoiceWidget : rack::app::ModuleWidget {
 		drawHollowPortRing(c2, rIn1, neonCyan, false);
 		drawHollowPortRing(c3, rIn1, neonCoral, false);
 		// Row 5 TNGX/POLY bus entry ring (neon violet)
-		drawHollowPortRing(c1, rIn2, nvgRGB(0x9b, 0x6d, 0xff), false);
+		drawHollowPortRing(k4[0], rIn2, nvgRGB(0x9b, 0x6d, 0xff), false);
 
 		// Row 6 Outputs: LIPS (magenta), NOSE (cyan), SOURCE (coral)
 		drawHollowPortRing(c1, rOut, neonMag, true);
@@ -406,13 +406,16 @@ struct CyberlineVoiceWidget : rack::app::ModuleWidget {
 		nvgFillColor(vg, nvgRGB(0xd8, 0xb8, 0xff));
 		text(k4[3], 141, "VTL cm");
 
-		// Row 3 (Tract Articulators): TNG X, TNG Y, VELUM, MUSCLE
+		float k5[5] = {28.f, 74.f, 120.f, 166.f, 212.f};
+
+		// Row 3 (Tract Articulators): TNG X, TNG Y, VELUM, CRISP, MUSCLE
 		nvgFillColor(vg, nvgRGB(0xd8, 0xb8, 0xff));
-		text(k4[0], 185, "TNG X");   text(k4[1], 185, "TNG Y");
+		text(k5[0], 185, "TNG X");   text(k5[1], 185, "TNG Y");
 		nvgFillColor(vg, nvgRGB(0x88, 0xe4, 0xfc));
-		text(k4[2], 185, "VELUM");
+		text(k5[2], 185, "VELUM");
 		nvgFillColor(vg, label);
-		text(k4[3], 185, "MUSCLE");
+		text(k5[3], 185, "CRISP");
+		text(k5[4], 185, "MUSCLE");
 
 		// Row 4 (Glottis CV Inputs): PITCH, PRESS, TENS/POLY (+ VOX LED at x=158)
 		nvgFillColor(vg, nvgRGB(0xff, 0x88, 0xcc));
@@ -426,12 +429,14 @@ struct CyberlineVoiceWidget : rack::app::ModuleWidget {
 		text(158.f, 240, "VOX");
 		nvgFontSize(vg, 8.f);
 
-		// Row 5 (Articulator CV Inputs): TNGX/POLY, TNGY CV, VELUM CV
+		// Row 5 (Articulator CV Inputs): TNGX/POLY, TNGY CV, VELUM CV, CRISP CV
 		nvgFillColor(vg, nvgRGB(0xd8, 0xb8, 0xff));
-		text(c1, 276, "TNGX/POLY");
-		text(c2, 276, "TNGY CV");
+		text(k4[0], 276, "TNGX/POLY");
+		text(k4[1], 276, "TNGY CV");
 		nvgFillColor(vg, nvgRGB(0x88, 0xe4, 0xfc));
-		text(c3, 276, "VELUM CV");
+		text(k4[2], 276, "VELUM CV");
+		nvgFillColor(vg, label);
+		text(k4[3], 276, "CRISP CV");
 
 		// Row 6 (Outputs): LIPS, NOSE, SOURCE
 		nvgFillColor(vg, nvgRGB(0xff, 0x88, 0xcc));
@@ -503,11 +508,14 @@ struct CyberlineVoiceWidget : rack::app::ModuleWidget {
 		addParam(rack::createParamCentered<RoundSmallBlackKnob>(rack::Vec(k4[2], rKnob2), module, CyberlineVoice::V_FB_PARAM));
 		addParam(rack::createParamCentered<VVtlKnob>(rack::Vec(k4[3], rKnob2), module, CyberlineVoice::V_VTL_PARAM));
 
-		// Row 3: TNG X, TNG Y, VELUM, MUSCLE
-		addParam(rack::createParamCentered<RoundSmallBlackKnob>(rack::Vec(k4[0], rKnob3), module, CyberlineVoice::V_TONGUEX_PARAM));
-		addParam(rack::createParamCentered<RoundSmallBlackKnob>(rack::Vec(k4[1], rKnob3), module, CyberlineVoice::V_TONGUEY_PARAM));
-		addParam(rack::createParamCentered<RoundSmallBlackKnob>(rack::Vec(k4[2], rKnob3), module, CyberlineVoice::V_VELUM_PARAM));
-		addParam(rack::createParamCentered<RoundSmallBlackKnob>(rack::Vec(k4[3], rKnob3), module, CyberlineVoice::V_SPEED_PARAM));
+		float k5[5] = {28.f, 74.f, 120.f, 166.f, 212.f};
+
+		// Row 3: TNG X, TNG Y, VELUM, CRISP, MUSCLE
+		addParam(rack::createParamCentered<RoundSmallBlackKnob>(rack::Vec(k5[0], rKnob3), module, CyberlineVoice::V_TONGUEX_PARAM));
+		addParam(rack::createParamCentered<RoundSmallBlackKnob>(rack::Vec(k5[1], rKnob3), module, CyberlineVoice::V_TONGUEY_PARAM));
+		addParam(rack::createParamCentered<RoundSmallBlackKnob>(rack::Vec(k5[2], rKnob3), module, CyberlineVoice::V_VELUM_PARAM));
+		addParam(rack::createParamCentered<RoundSmallBlackKnob>(rack::Vec(k5[3], rKnob3), module, CyberlineVoice::V_CRISP_PARAM));
+		addParam(rack::createParamCentered<RoundSmallBlackKnob>(rack::Vec(k5[4], rKnob3), module, CyberlineVoice::V_SPEED_PARAM));
 
 		// Voicing light cleanly positioned between PRESS and TENS inputs
 		addChild(rack::createLightCentered<rack::componentlibrary::SmallLight<rack::componentlibrary::RedLight>>(
@@ -518,10 +526,11 @@ struct CyberlineVoiceWidget : rack::app::ModuleWidget {
 		addInput(rack::createInputCentered<PJ301MPort>(rack::Vec(c2, rIn1), module, CyberlineVoice::V_PRESSURE_INPUT));
 		addInput(rack::createInputCentered<PJ301MPort>(rack::Vec(c3, rIn1), module, CyberlineVoice::V_TENSION_INPUT));
 
-		// Row 5: TNGX CV, TNGY CV, VELUM CV
-		addInput(rack::createInputCentered<PJ301MPort>(rack::Vec(c1, rIn2), module, CyberlineVoice::V_TONGUEX_INPUT));
-		addInput(rack::createInputCentered<PJ301MPort>(rack::Vec(c2, rIn2), module, CyberlineVoice::V_TONGUEY_INPUT));
-		addInput(rack::createInputCentered<PJ301MPort>(rack::Vec(c3, rIn2), module, CyberlineVoice::V_VELUM_INPUT));
+		// Row 5: TNGX, TNGY, VELUM, CRISP
+		addInput(rack::createInputCentered<PJ301MPort>(rack::Vec(k4[0], rIn2), module, CyberlineVoice::V_TONGUEX_INPUT));
+		addInput(rack::createInputCentered<PJ301MPort>(rack::Vec(k4[1], rIn2), module, CyberlineVoice::V_TONGUEY_INPUT));
+		addInput(rack::createInputCentered<PJ301MPort>(rack::Vec(k4[2], rIn2), module, CyberlineVoice::V_VELUM_INPUT));
+		addInput(rack::createInputCentered<PJ301MPort>(rack::Vec(k4[3], rIn2), module, CyberlineVoice::V_CRISP_INPUT));
 
 		// Row 6: LIPS, NOSE, SOURCE
 		addOutput(rack::createOutputCentered<PJ301MPort>(rack::Vec(c1, rOut), module, CyberlineVoice::V_LIPS_OUTPUT));

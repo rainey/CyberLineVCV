@@ -134,3 +134,4 @@ Because Broca and Broca² step forward per trigger, you can simulate a closed sy
 | **Stressed vs. unstressed syllables** | Modulate `ONSET` CV ($40\text{ ms}$ for short; $150\text{ ms}$ for stressed). |
 | **Breath-driven realism** | Gate Larynx/Voice with [`CyberlineLungs`](../src/CyberlineLungs.hpp) `PRESSURE_OUTPUT`. |
 | **Snappy plosives without mud** | Keep `SPEED` knob on Oral Chamber / Voice $\ge$ 2:00 ($30\text{--}38\text{ cm/s}$). |
+| **Consonant timbre (squishy vs. crisp)** | Adjust `CRISP` knob ($0\%$ = warm/squishy tube resonance, $82\%$ = calibrated speech, $100\%$ = airy sibilance). |

@@ -378,25 +378,31 @@ struct CyberlineOralChamberWidget : rack::app::ModuleWidget {
 		text(c1, 93, "VTL cm");
 		nvgFillColor(vg, label);
 		text(c2, 93, "WALL");     text(c3, 93, "MUSCLE");
-		// Row 2 knobs: TNG X, TNG Y, VELUM
+		// Row 2 knobs: TNG X, TNG Y, VELUM, CRISP
 		nvgFillColor(vg, nvgRGB(0xd8, 0xb8, 0xff));
-		text(c1, 141, "TNG X");   text(c2, 141, "TNG Y");
+		text(k4[0], 141, "TNG X");   text(k4[1], 141, "TNG Y");
 		nvgFillColor(vg, nvgRGB(0x88, 0xe4, 0xfc));
-		text(c3, 141, "VELUM");
+		text(k4[2], 141, "VELUM");
+		nvgFillColor(vg, label);
+		text(k4[3], 141, "CRISP");
 		// Row 3 knobs: C.POS, C.WIDTH, FRIC, INJ POS
 		nvgFillColor(vg, label);
 		text(k4[0], 185, "C.POS"); text(k4[1], 185, "C.WIDTH"); text(k4[2], 185, "FRIC");
 		nvgFillColor(vg, nvgRGB(0x88, 0xe4, 0xfc));
 		text(k4[3], 185, "INJ POS");
 
-		// Row 4 inputs: SRC, VTL CV, INJPOS CV, INJECT
+		float in5[5] = {28.f, 74.f, 120.f, 166.f, 212.f};
+
+		// Row 4 inputs: SRC, VTL CV, INJPOS CV, INJECT, CRISP CV
 		nvgFillColor(vg, nvgRGB(0xf8, 0x82, 0x88));
-		text(k4[0], 230, "SRC");
+		text(in5[0], 230, "SRC");
 		nvgFillColor(vg, nvgRGB(0xb8, 0x98, 0xff));
-		text(k4[1], 230, "VTL CV");
+		text(in5[1], 230, "VTL CV");
 		nvgFillColor(vg, nvgRGB(0x88, 0xe4, 0xfc));
-		text(k4[2], 230, "INJPOS CV");
-		text(k4[3], 230, "INJECT");
+		text(in5[2], 230, "INJPOS CV");
+		text(in5[3], 230, "INJECT");
+		nvgFillColor(vg, label);
+		text(in5[4], 230, "CRISP CV");
 
 		// Row 5 articulation CV inputs: TNGX/POLY, TNGY, VEL, CPOS, CWID, FRIC
 		nvgFontSize(vg, 6.2f);
@@ -464,10 +470,11 @@ struct CyberlineOralChamberWidget : rack::app::ModuleWidget {
 		addParam(rack::createParamCentered<RoundSmallBlackKnob>(rack::Vec(c2, rKnob1), module, CyberlineOralChamber::WALL_PARAM));
 		addParam(rack::createParamCentered<RoundBlackKnob>(rack::Vec(c3, rKnob1), module, CyberlineOralChamber::SPEED_PARAM));
 
-		// Row 2: TNG X, TNG Y, VELUM
-		addParam(rack::createParamCentered<RoundSmallBlackKnob>(rack::Vec(c1, rKnob2), module, CyberlineOralChamber::TONGUEX_PARAM));
-		addParam(rack::createParamCentered<RoundSmallBlackKnob>(rack::Vec(c2, rKnob2), module, CyberlineOralChamber::TONGUEY_PARAM));
-		addParam(rack::createParamCentered<RoundSmallBlackKnob>(rack::Vec(c3, rKnob2), module, CyberlineOralChamber::VELUM_PARAM));
+		// Row 2: TNG X, TNG Y, VELUM, CRISP
+		addParam(rack::createParamCentered<RoundSmallBlackKnob>(rack::Vec(k4[0], rKnob2), module, CyberlineOralChamber::TONGUEX_PARAM));
+		addParam(rack::createParamCentered<RoundSmallBlackKnob>(rack::Vec(k4[1], rKnob2), module, CyberlineOralChamber::TONGUEY_PARAM));
+		addParam(rack::createParamCentered<RoundSmallBlackKnob>(rack::Vec(k4[2], rKnob2), module, CyberlineOralChamber::VELUM_PARAM));
+		addParam(rack::createParamCentered<RoundSmallBlackKnob>(rack::Vec(k4[3], rKnob2), module, CyberlineOralChamber::CRISP_PARAM));
 
 		// Row 3: C.POS, C.WIDTH, FRIC, INJ POS
 		addParam(rack::createParamCentered<RoundSmallBlackKnob>(rack::Vec(k4[0], rKnob3), module, CyberlineOralChamber::CONSTRPOS_PARAM));
@@ -475,11 +482,14 @@ struct CyberlineOralChamberWidget : rack::app::ModuleWidget {
 		addParam(rack::createParamCentered<RoundSmallBlackKnob>(rack::Vec(k4[2], rKnob3), module, CyberlineOralChamber::FRIC_PARAM));
 		addParam(rack::createParamCentered<RoundSmallBlackKnob>(rack::Vec(k4[3], rKnob3), module, CyberlineOralChamber::INJPOS_PARAM));
 
-		// Row 4: SRC, VTL CV, INJPOS CV, INJECT
-		addInput(rack::createInputCentered<PJ301MPort>(rack::Vec(k4[0], rIn1), module, CyberlineOralChamber::SOURCE_INPUT));
-		addInput(rack::createInputCentered<PJ301MPort>(rack::Vec(k4[1], rIn1), module, CyberlineOralChamber::VTL_INPUT));
-		addInput(rack::createInputCentered<PJ301MPort>(rack::Vec(k4[2], rIn1), module, CyberlineOralChamber::INJPOS_INPUT));
-		addInput(rack::createInputCentered<PJ301MPort>(rack::Vec(k4[3], rIn1), module, CyberlineOralChamber::INJECT_INPUT));
+		float in5[5] = {28.f, 74.f, 120.f, 166.f, 212.f};
+
+		// Row 4: SRC, VTL CV, INJPOS CV, INJECT, CRISP CV
+		addInput(rack::createInputCentered<PJ301MPort>(rack::Vec(in5[0], rIn1), module, CyberlineOralChamber::SOURCE_INPUT));
+		addInput(rack::createInputCentered<PJ301MPort>(rack::Vec(in5[1], rIn1), module, CyberlineOralChamber::VTL_INPUT));
+		addInput(rack::createInputCentered<PJ301MPort>(rack::Vec(in5[2], rIn1), module, CyberlineOralChamber::INJPOS_INPUT));
+		addInput(rack::createInputCentered<PJ301MPort>(rack::Vec(in5[3], rIn1), module, CyberlineOralChamber::INJECT_INPUT));
+		addInput(rack::createInputCentered<PJ301MPort>(rack::Vec(in5[4], rIn1), module, CyberlineOralChamber::CRISP_INPUT));
 
 		// Row 5: 6 articulation CV inputs
 		addInput(rack::createInputCentered<PJ301MPort>(rack::Vec(cvX[0], rIn2), module, CyberlineOralChamber::TONGUEX_INPUT));
