@@ -913,6 +913,168 @@ static void test_brocasq_registers_clocking_and_mutation() {
 	CHECK(gateMax > 5.f, "GATE output pulses with the syllable gesture");
 }
 
+static void test_range_presets() {
+	std::printf("--- Testing range presets: inhale-max & size bands ---\n");
+	rack::random::init();
+
+	// ---- applyParamRange: clamp into band, never widen beyond full ----
+	{
+		CyberlineLungs lungs;
+		auto* pq = lungs.paramQuantities[CyberlineLungs::INHALE_PARAM];
+		float inhaleV = lungs.params[CyberlineLungs::INHALE_PARAM].getValue();
+		lungs.params[CyberlineLungs::INHALE_PARAM].setValue(0.4f);
+		applyParamRange(pq, 0.05f, 0.5f);
+		CHECK(pq->getMaxValue() == 0.5f, "Inhale-max 0.5 s sets max to 0.5");
+		CHECK(std::fabs(lungs.params[CyberlineLungs::INHALE_PARAM].getValue() - 0.4f) < 0.001f, "Value inside band survives the re-range");
+		// Value outside the band is pulled in
+		lungs.params[CyberlineLungs::INHALE_PARAM].setValue(2.f);
+		applyParamRange(pq, 0.05f, 0.5f);
+		CHECK(std::fabs(lungs.params[CyberlineLungs::INHALE_PARAM].getValue() - 0.5f) < 0.001f, "Value above the band is clamped to the band max");
+		(void) inhaleV;
+		// Never widen beyond the module's configured full range
+		applyParamRange(pq, 0.f, 100.f);
+		CHECK(pq->getMinValue() >= 0.05f && pq->getMaxValue() <= 5.f,
+			"applyParamRange never widens beyond the configured full range");
+	}
+
+	// ---- Lungs persistence round-trip (inhaleMax) ----
+	{
+		CyberlineLungs lungs;
+		applyParamRange(lungs.paramQuantities[CyberlineLungs::INHALE_PARAM], 0.05f, 0.5f);
+		json_t* rootJ = lungs.dataToJson();
+		std::string saved = json_dumps(rootJ, 0);
+		json_decref(rootJ);
+
+		CyberlineLungs lungs2;   // fresh module at full range
+		json_error_t err;
+		json_t* load = json_loads(saved.c_str(), 0, &err);
+		CHECK(load != nullptr, "inhaleMax JSON round-trips");
+		lungs2.dataFromJson(load);
+		json_decref(load);
+		auto* pq = lungs2.paramQuantities[CyberlineLungs::INHALE_PARAM];
+		CHECK(std::fabs(pq->getMaxValue() - 0.5f) < 0.01f,
+			"Fresh module restores the 0.5 s inhale max from JSON");
+	}
+
+	// ---- Larynx size band: apply, clamp, persist, restore ----
+	{
+		CyberlineLarynx larynx;
+		applyParamRange(larynx.paramQuantities[CyberlineLarynx::FOLDLEN_PARAM],
+			SIZE_BANDS[BAND_HUMAN].foldLo, SIZE_BANDS[BAND_HUMAN].foldHi);
+		auto* pq = larynx.paramQuantities[CyberlineLarynx::FOLDLEN_PARAM];
+		CHECK(pq->getMinValue() == 3.f && pq->getMaxValue() == 19.f,
+			"Larynx Human band = 3-19 mm");
+		larynx.params[CyberlineLarynx::FOLDLEN_PARAM].setValue(40.f);
+		applyParamRange(larynx.paramQuantities[CyberlineLarynx::FOLDLEN_PARAM],
+			SIZE_BANDS[BAND_HUMAN].foldLo, SIZE_BANDS[BAND_HUMAN].foldHi);
+		CHECK(std::fabs(larynx.params[CyberlineLarynx::FOLDLEN_PARAM].getValue() - 19.f) < 0.001f,
+			"Fold length above the Human band clamps to 19 mm");
+
+		json_t* rootJ = larynx.dataToJson();
+		std::string saved = json_dumps(rootJ, 0);
+		json_decref(rootJ);
+		CyberlineLarynx larynx2;
+		json_error_t err;
+		json_t* load = json_loads(saved.c_str(), 0, &err);
+		larynx2.dataFromJson(load);
+		json_decref(load);
+		CHECK(larynx2.paramQuantities[CyberlineLarynx::FOLDLEN_PARAM]->getMaxValue() == 19.f,
+			"Larynx restores the Human band max from JSON");
+		CHECK(deriveBandIndex(&larynx2, CyberlineLarynx::FOLDLEN_PARAM, 0) == BAND_HUMAN,
+			"deriveBandIndex recognizes the restored Human band");
+	}
+
+	// ---- Voice: one band drives both knobs ----
+	{
+		CyberlineVoice voice;
+		int band = BAND_MEDIUM;
+		applyParamRange(voice.paramQuantities[CyberlineVoice::V_FOLDLEN_PARAM],
+			SIZE_BANDS[band].foldLo, SIZE_BANDS[band].foldHi);
+		applyParamRange(voice.paramQuantities[CyberlineVoice::V_VTL_PARAM],
+			SIZE_BANDS[band].vtlLo, SIZE_BANDS[band].vtlHi);
+		auto* fold = voice.paramQuantities[CyberlineVoice::V_FOLDLEN_PARAM];
+		auto* vtl = voice.paramQuantities[CyberlineVoice::V_VTL_PARAM];
+		CHECK(fold->getMinValue() == 5.f && fold->getMaxValue() == 12.f,
+			"Voice Medium band FOLD = 5-12 mm");
+		CHECK(vtl->getMinValue() == 10.f && vtl->getMaxValue() == 18.f,
+			"Voice Medium band VTL = 10-18 cm");
+
+		json_t* rootJ = voice.dataToJson();
+		std::string saved = json_dumps(rootJ, 0);
+		json_decref(rootJ);
+		CyberlineVoice voice2;
+		json_error_t err;
+		json_t* load = json_loads(saved.c_str(), 0, &err);
+		voice2.dataFromJson(load);
+		json_decref(load);
+		auto* fold2 = voice2.paramQuantities[CyberlineVoice::V_FOLDLEN_PARAM];
+		auto* vtl2 = voice2.paramQuantities[CyberlineVoice::V_VTL_PARAM];
+		CHECK(fold2->getMaxValue() == 12.f && vtl2->getMaxValue() == 18.f,
+			"Voice JSON restore applies the band to BOTH anatomy knobs");
+	}
+
+	// ---- OralChamber band ----
+	{
+		CyberlineOralChamber oc;
+		applyParamRange(oc.paramQuantities[CyberlineOralChamber::VTL_PARAM],
+			SIZE_BANDS[BAND_XL].vtlLo, SIZE_BANDS[BAND_XL].vtlHi);
+		CHECK(oc.paramQuantities[CyberlineOralChamber::VTL_PARAM]->getMinValue() == 25.f,
+			"OralChamber XL band VTL floor = 25 cm");
+	}
+
+	// ---- PHASOR split scales with the preset (engine reads raw seconds) ----
+	{
+		CyberlineLungs lungs;
+		lungs.inputs[CyberlineLungs::GATE_INPUT].channels = 1;
+		applyParamRange(lungs.paramQuantities[CyberlineLungs::INHALE_PARAM], 0.05f, 0.5f);
+		lungs.params[CyberlineLungs::INHALE_PARAM].setValue(0.5f);  // now the max
+		lungs.params[CyberlineLungs::MODE_PARAM].setValue(3.f);     // PHASOR
+		rack::engine::Module::ProcessArgs args;
+		args.sampleRate = 48000.f;
+		args.sampleTime = 1.f / 48000.f;
+		// Physics runs on a 32-sample tick; warm up so probes land on it.
+		// With a held phase, flow decays to 0 (steady volume), so probe the
+		// volume against the expected stateless mapping instead of the
+		// inhaling/exhaling flags.
+		auto probePhase = [&](float phase) {
+			lungs.inputs[CyberlineLungs::GATE_INPUT].setVoltage(phase * 10.f, 0);
+			for (int i = 0; i < 64; i++) lungs.process(args);
+			return lungs.volume;
+		};
+		float vBelow = probePhase(0.04f);   // fill region (< split 0.1)
+		float vAbove = probePhase(0.90f);   // drain region, near empty
+		// Fill mapping: volume = depth·(phase/split) = 0.7·(0.04/0.10) = 0.28
+		CHECK(std::fabs(vBelow - 0.28f) < 0.02f,
+			"PHASOR fill fraction follows the narrowed inhale max (0.5 s = 10% split)");
+		CHECK(vAbove < 0.1f,
+			"PHASOR drain region still extends past the narrowed split");
+	}
+}
+
+static void test_vtl_band_clamp() {
+	std::printf("--- Testing OralChamber VTL: CV clamp follows the size band ---\n");
+	CyberlineOralChamber oc;
+	oc.inputs[CyberlineOralChamber::VTL_INPUT].channels = 1;
+	applyParamRange(oc.paramQuantities[CyberlineOralChamber::VTL_PARAM],
+		SIZE_BANDS[BAND_HUMAN].vtlLo, SIZE_BANDS[BAND_HUMAN].vtlHi);
+	oc.params[CyberlineOralChamber::VTL_PARAM].setValue(15.f);
+	rack::engine::Module::ProcessArgs args;
+	args.sampleRate = 48000.f;
+	args.sampleTime = 1.f / 48000.f;
+	oc.inputs[CyberlineOralChamber::VTL_INPUT].setVoltage(10.f, 0); // +54 cm raw
+	for (int i = 0; i < 20000; i++) oc.process(args);
+	CHECK(oc.vtlCm <= SIZE_BANDS[BAND_HUMAN].vtlHi + 0.01f,
+		"VTL CV is clamped to the selected band's ceiling (Human 21 cm), not 60 cm");
+
+	CyberlineOralChamber oc2;
+	oc2.inputs[CyberlineOralChamber::VTL_INPUT].channels = 1;
+	oc2.params[CyberlineOralChamber::VTL_PARAM].setValue(17.5f);
+	oc2.inputs[CyberlineOralChamber::VTL_INPUT].setVoltage(-2.f, 0); // -10.8 cm raw
+	for (int i = 0; i < 20000; i++) oc2.process(args);
+	CHECK(oc2.vtlCm >= 6.f - 0.01f,
+		"VTL CV at the Full band still clamps to the physical 6 cm floor");
+}
+
 int main() {
 	std::printf("=========================================\n");
 	std::printf("Running Cyberline Module Integration Tests\n");
@@ -929,6 +1091,8 @@ int main() {
 	test_tract_settled_early_out_bitexact();
 	test_poly_normalling_larynx_and_voice();
 	test_brocasq_registers_clocking_and_mutation();
+	test_range_presets();
+	test_vtl_band_clamp();
 
 	std::printf("=========================================\n");
 	std::printf("Results: %d passed, %d failed\n", g_passCount, g_failCount);

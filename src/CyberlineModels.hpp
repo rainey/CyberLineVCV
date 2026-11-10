@@ -4,6 +4,7 @@
 #include "CyberlineQuality.hpp"
 #include <rack.hpp>
 #include <cstdio>
+#include <string>
 #include <cstdint>
 #include <cmath>
 #include <functional>
@@ -358,8 +359,81 @@ private:
 	float dragAccum = 0.f;
 };
 
-extern rack::plugin::Model* modelCyberlineLarynx;
-extern rack::plugin::Model* modelCyberlineLungs;
+// ---- Range presets (Inhale-max & size bands) ----
+// The Lungs INHALE knob and the anatomy knobs (FOLDLEN / VTL) offer
+// right-click submenus that narrow the knob's range to a physical band.
+// Narrowing only clamps the existing ParamQuantity min/max (never widening
+// beyond the module's configured full range), and the current value is
+// pulled inside. The chosen band index persists in the patch via
+// dataToJson; on load, Rack restores params first and then calls
+// dataFromJson, so re-applying the range there is safe and deterministic.
+
+// Clamp-and-apply a [lo, hi] band to a ParamQuantity. Full band = the
+// module's original configured range (no-op re-apply is harmless).
+// NOTE: uses the raw engine Param for the current value, NOT
+// ParamQuantity::getValue() — the latter routes through APP->engine and is
+// unavailable in headless contexts (tests, no host). In the live app both
+// paths agree; the raw read is safe because the quantity's param pointer is
+// the same object the engine uses.
+inline void applyParamRange(rack::engine::ParamQuantity* pq, float lo, float hi) {
+	if (!pq)
+		return;
+	float fullLo = pq->getMinValue(), fullHi = pq->getMaxValue();
+	lo = rack::math::clamp(lo, fullLo, fullHi);
+	hi = rack::math::clamp(hi, lo, fullHi);
+	pq->minValue = lo;
+	pq->maxValue = hi;
+	rack::engine::Param* p = pq->getParam();
+	if (p) {
+		float v = p->getValue();
+		if (v < lo || v > hi)
+			p->setValue(rack::math::clamp(v, lo, hi));
+	}
+}
+
+// ---- Inhale-max presets for the Lungs INHALE knob ----
+// The knob's seconds are read raw by the engine (CYCLE ratio, TRIG seconds,
+// PHASOR split = raw/5 s), so narrowing the max narrows every reachable
+// ratio/time span consistently — exactly what "I always want short inhales"
+// calls for.
+static constexpr float INHALE_MAX_CHOICES[] = {5.f, 2.f, 1.f, 0.5f};
+static constexpr const char* INHALE_MAX_LABELS[] = {
+	"5 s (Full)", "2 s", "1 s", "0.5 s"};
+
+// Short range-label formatter ("2", "0.5", "17.5" — no trailing zeros).
+inline std::string formatMm(float v) {
+	char buf[12];
+	std::snprintf(buf, sizeof(buf), "%g", v);
+	return buf;
+}
+
+// ---- Size bands for the anatomy knobs (FOLDLEN mm / VTL cm) ----
+// Bands follow the suite's allometric pitch law (F0 = 10^(4.01-1.43·log10 L)
+// at tension 0.6): each band maps to a physical animal-size class, and the
+// full span is the original configured range.
+struct SizeBand {
+	float foldLo, foldHi;   // mm (interpreted when band applies to FOLDLEN)
+	float vtlLo, vtlHi;     // cm (interpreted when band applies to VTL)
+	const char* name;       // short band name
+	const char* cue;        // menu-label animal cue
+	const char* examples;   // longer example list for the spec/docs
+};
+
+static constexpr SizeBand SIZE_BANDS[] = {
+	// FOLD mm,        VTL cm,      name      cue                  examples
+	{2.f,   45.f,      6.f,  60.f,  "Full",   "2-45 mm / 6-60 cm", "Full range (2-45 mm, 6-60 cm): shrew-to-elephant anatomy"},
+	{2.f,   6.f,       6.f,  12.f,  "Small",  "mouse..kitten",     "Mouse (~2 mm), bat, rat (~3 mm), guinea pig, kitten, small dog (chihuahua). Note: rodent/bird tracts sit at or below the 6 cm floor — pitch them with OCT instead"},
+	{5.f,   12.f,      10.f, 18.f,  "Medium", "cat..child",        "Cat (purr recipe), rabbit, small/medium dog, human child, marmoset; adult-female human at the top edge (11.5 mm moan recipe)"},
+	{10.f,  20.f,      15.f, 28.f,  "Large",  "human..chimp",      "Adult humans (female 11.5 mm / male 17 mm recipes), chimpanzee, medium/large dog, young deer"},
+	{16.f,  45.f,      25.f, 60.f,  "XL",     "big cat..horse",    "Deep baritone (~19-20 mm), sea lion, big dog (great dane), big cats (lion/tiger ~25-33 mm), horse (~30 mm), red-deer stag roar; elephant (without trunk) at the VTL ceiling — the recipe's nasal-trunk radiation extends beyond"},
+	{3.f,   19.f,      7.f,  21.f,  "Human",  "newborn..baritone", "Human newborn (3 mm — cry realism via OCT -2), child, adult female, deep baritone"},
+};
+static constexpr int NUM_SIZE_BANDS = (int) (sizeof(SIZE_BANDS) / sizeof(SIZE_BANDS[0]));
+// Indexes into SIZE_BANDS
+static constexpr int BAND_FULL = 0, BAND_SMALL = 1, BAND_MEDIUM = 2,
+	BAND_LARGE = 3, BAND_XL = 4, BAND_HUMAN = 5;
+
+extern rack::plugin::Model* modelCyberlineLarynx;extern rack::plugin::Model* modelCyberlineLungs;
 extern rack::plugin::Model* modelCyberlineOralChamber;
 extern rack::plugin::Model* modelCyberlineVoice;
 extern rack::plugin::Model* modelCyberlineHeart;
@@ -457,6 +531,156 @@ inline void appendQualityMenu(rack::ui::Menu* menu, rack::engine::Module* module
 	lo->value = 1.f;
 	menu->addChild(lo);
 }
+
+// ---- Range submenu items ----
+
+// A single "Inhale max" choice: clamps INHALE's max (min stays the full
+// floor), pulls the current value inside, and persists via the module's
+// json marker (written by CyberlineLungs::dataToJson / read in
+// dataFromJson).
+struct InhaleMaxItem : rack::ui::MenuItem {
+	rack::engine::Module* module = nullptr;
+	int paramId = 0;
+	float maxS = 5.f;
+
+	void onAction(const rack::event::Action& e) override {
+		MenuItem::onAction(e);
+		if (!module)
+			return;
+		applyParamRange(module->paramQuantities[paramId], 0.05f, maxS);
+	}
+};
+
+// Append the "Inhale max" submenu items to a knob's context menu.
+// curMax selects the CHECKMARK; the engine reads the range from the
+// ParamQuantity itself, so no engine change is needed for CYCLE/TRIG.
+inline void appendInhaleMaxMenu(rack::ui::Menu* menu, rack::engine::Module* module, int paramId) {
+	menu->addChild(rack::createSubmenuItem("Inhale max", "",
+		[=](rack::ui::Menu* sub) {
+			float curMax = module && module->paramQuantities[paramId]
+				? module->paramQuantities[paramId]->getMaxValue() : 5.f;
+			for (int i = 0; i < (int) (sizeof(INHALE_MAX_CHOICES) / sizeof(INHALE_MAX_CHOICES[0])); i++) {
+				auto* it = rack::createMenuItem<InhaleMaxItem>(INHALE_MAX_LABELS[i],
+					CHECKMARK(std::fabs(curMax - INHALE_MAX_CHOICES[i]) < 0.01f));
+				it->module = module;
+				it->paramId = paramId;
+				it->maxS = INHALE_MAX_CHOICES[i];
+				sub->addChild(it);
+			}
+		}));
+}
+
+// A single size-band choice for an anatomy knob. kind: 0 = FOLDLEN (mm),
+// 1 = VTL (cm). The band's lo/hi pair is read from the band table; the
+// index persists via the module's json marker ("sizeBand" / "vSizeBand").
+struct SizeBandItem : rack::ui::MenuItem {
+	rack::engine::Module* module = nullptr;
+	int paramId = 0;
+	int bandIndex = 0;
+	int kind = 0;   // 0 = FOLDLEN, 1 = VTL
+	// Optional second knob applied together (Voice: FOLD + VTL in one band).
+	// < 0 = unused.
+	int secondParamId = -1;
+	int secondKind = -1;
+
+	void onAction(const rack::event::Action& e) override {
+		MenuItem::onAction(e);
+		if (!module || bandIndex < 0 || bandIndex >= NUM_SIZE_BANDS)
+			return;
+		const SizeBand& b = SIZE_BANDS[bandIndex];
+		float lo = (kind == 0) ? b.foldLo : b.vtlLo;
+		float hi = (kind == 0) ? b.foldHi : b.vtlHi;
+		applyParamRange(module->paramQuantities[paramId], lo, hi);
+		if (secondParamId >= 0 && secondKind >= 0) {
+			float slo = (secondKind == 0) ? b.foldLo : b.vtlLo;
+			float shi = (secondKind == 0) ? b.foldHi : b.vtlHi;
+			applyParamRange(module->paramQuantities[secondParamId], slo, shi);
+		}
+	}
+};
+
+// Append the "Size range" submenu items for one anatomy knob, nested inside
+// a parent submenu ("Size range") to keep the module menu compact.
+// curBand selects the CHECKMARK (the caller reads the persisted index or
+// derives it from the current range when absent). Optional secondParamId/
+// secondKind applies a paired knob with the same band (Voice: FOLD + VTL).
+inline void appendSizeBandMenu(rack::ui::Menu* menu, rack::engine::Module* module, int paramId, int kind, int curBand, int secondParamId = -1, int secondKind = -1) {
+	menu->addChild(rack::createSubmenuItem("Size range", "",
+		[=](rack::ui::Menu* sub) {
+			for (int i = 0; i < NUM_SIZE_BANDS; i++) {
+				const SizeBand& b = SIZE_BANDS[i];
+				std::string label = std::string(b.name) + " \xC2\xB7 "
+					+ (kind == 0
+						? (std::string("") + formatMm(b.foldLo) + "-" + formatMm(b.foldHi) + " mm")
+						: (std::string("") + formatMm(b.vtlLo) + "-" + formatMm(b.vtlHi) + " cm"))
+					+ " (" + b.cue + ")";
+				auto* it = rack::createMenuItem<SizeBandItem>(label, CHECKMARK(i == curBand));
+				it->module = module;
+				it->paramId = paramId;
+				it->bandIndex = i;
+				it->kind = kind;
+				it->secondParamId = secondParamId;
+				it->secondKind = secondKind;
+				sub->addChild(it);
+			}
+			sub->addChild(new rack::ui::MenuSeparator);
+			// Example animals for the selected band, as a disabled info line
+			if (curBand >= 0 && curBand < NUM_SIZE_BANDS)
+				sub->addChild(rack::createMenuLabel(std::string("Examples: ") + SIZE_BANDS[curBand].examples));
+		}));
+}
+
+// Derive which band (if any) a knob's current range corresponds to; -1 when
+// the range is custom/absent (e.g. legacy patches before persistence).
+inline int deriveBandIndex(rack::engine::Module* module, int paramId, int kind) {
+	if (!module || !module->paramQuantities[paramId])
+		return -1;
+	float lo = module->paramQuantities[paramId]->getMinValue();
+	float hi = module->paramQuantities[paramId]->getMaxValue();
+	for (int i = 0; i < NUM_SIZE_BANDS; i++) {
+		float blo = (kind == 0) ? SIZE_BANDS[i].foldLo : SIZE_BANDS[i].vtlLo;
+		float bhi = (kind == 0) ? SIZE_BANDS[i].foldHi : SIZE_BANDS[i].vtlHi;
+		if (std::fabs(lo - blo) < 0.01f && std::fabs(hi - bhi) < 0.01f)
+			return i;
+	}
+	return -1;
+}
+
+// ---- TaperKnob: multiplicative drag for wide logarithmic spans ----
+// Stock Rack knobs move value linearly with drag distance, so a 0.05-5 s
+// range gives the bottom decade only ~9% of travel. This knob drags the
+// value multiplicatively (equal pixel distance = equal ratio change), which
+// gives every decade the same travel; the gain is tuned so speed at the top
+// of the range matches the stock feel. Scroll wheel uses the same curve;
+// shift-drag precision, double-click reset, and the context-menu value
+// field stay stock (raw units).
+struct TaperKnob : rack::Knob {
+	// Ratio change per pixel of drag (stock small-knob linear speed at
+	// max->min over ~150 px is ~2.7 units/s; ~0.5%/px feels equivalent at
+	// mid-range and gives ~3 decades over the drag span).
+	float perPixel = 0.005f;
+
+	void onDragMove(const rack::event::DragMove& e) override {
+		auto* pq = getParamQuantity();
+		if (!pq || e.button != GLFW_MOUSE_BUTTON_LEFT) {
+			Knob::onDragMove(e);
+			return;
+		}
+		float lo = pq->getMinValue(), hi = pq->getMaxValue();
+		if (lo <= 0.f || hi <= lo) {
+			// Degenerate/nonpositive span: fall back to stock behavior
+			Knob::onDragMove(e);
+			return;
+		}
+		// Vertical drag up = increase; use the log-mid mapping
+		float v = pq->getValue();
+		float norm = std::log(v / lo) / std::log(hi / lo);          // 0..1
+		norm += e.mouseDelta.y * perPixel / std::log(hi / lo);
+		norm = rack::math::clamp(norm, 0.f, 1.f);
+		pq->setValue(lo * std::pow(hi / lo, norm));
+	}
+};
+
 // Plugin-side CPU metering + percent overlay.
 //
 // Rack's stock per-module strip (cpuMeter setting) draws its percent text

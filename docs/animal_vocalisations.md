@@ -39,6 +39,28 @@ Opening the velum (**`VELUM`** knob or CV) routes acoustic energy into the secon
 - Elephant trunk acoustics (`NOSE_OUTPUT`).
 - Cat purrs and mouth-closed murmurs.
 
+### Size Bands & Presets
+The `FOLDLEN` (Larynx/Voice) and `VTL` (Voice/OralChamber) knobs carry a
+right-click **Size range** submenu that narrows the knob to a physical
+animal-size class — handy for keeping a whole patch inside one species'
+anatomy, and for regaining knob travel when you only ever need the small end.
+Bands (Full = 2–45 mm / 6–60 cm as shipped):
+
+| Band | FOLDLEN | ≈F0 | VTL | Example animals |
+|---|---|---|---|---|
+| **Small** | 2–6 mm | 790 Hz–3.8 kHz | 6–12 cm | Mouse (~2 mm), bat, rat (~3 mm), guinea pig, kitten, small dog (chihuahua); rodent/bird tracts sit at/below the 6 cm floor — pitch with `OCT` instead |
+| **Medium** | 5–12 mm | 293 Hz–1.0 kHz | 10–18 cm | Cat (purr recipe), rabbit, small/medium dog, human child, marmoset; adult-female human at the top edge (11.5 mm moan recipe) |
+| **Large** | 10–20 mm | 141–380 Hz | 15–28 cm | Adult humans (female 11.5 mm / male 17 mm recipes), chimpanzee, medium/large dog, young deer |
+| **XL** | 16–45 mm | 44–200 Hz | 25–60 cm | Deep baritone (~19–20 mm), sea lion, great dane, big cats (lion/tiger ~25–33 mm), horse (~30 mm), red-deer stag roar; elephant (without trunk) at the VTL ceiling |
+| **Human** | 3–19 mm | 152 Hz–2.1 kHz | 7–21 cm | Human newborn (3 mm — cry realism via `OCT −2`, ≈530 Hz), child, adult female, deep baritone |
+
+Recipe mapping: **Cat 1** and **Cat 2** sit in *Medium*; **Dog 2** straddles
+*Medium/Large*; **Human 4 A/B** sit inside *Large* (or the *Human* band);
+**Deer 3** and **Marine 5** are *XL*; small rodents/birds stay on *Full* with
+`OCT` placement (their tracts fall below the 6 cm waveguide floor). The band
+choice saves with the patch; selecting a band clamps the current value into
+range.
+
 ---
 
 ## 2. Modulation Needs: Internal vs. External

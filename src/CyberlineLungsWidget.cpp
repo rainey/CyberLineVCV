@@ -468,6 +468,13 @@ struct CyberlineLungsWidget : rack::app::ModuleWidget {
 		}
 	};
 
+	struct InhaleTaperKnob : TaperKnob {
+		void appendContextMenu(rack::ui::Menu* menu) override {
+			TaperKnob::appendContextMenu(menu);
+			appendInhaleMaxMenu(menu, module, paramId);
+		}
+	};
+
 	// 2-position snap switch for Inhale Pressure mode: 0 = GASP (-P suction), 1 = MUTE (0 V)
 	struct InhaleSwitch : VerticalSnapSwitch<2> {
 		InhaleSwitch() {
@@ -740,7 +747,7 @@ struct CyberlineLungsWidget : rack::app::ModuleWidget {
 
 		addParam(rack::createParamCentered<RoundBlackKnob>(rack::Vec(colL, 122), module, CyberlineLungs::RATE_PARAM));
 		addParam(rack::createParamCentered<RoundBlackKnob>(rack::Vec(colR, 122), module, CyberlineLungs::DEPTH_PARAM));
-		addParam(rack::createParamCentered<RoundSmallBlackKnob>(rack::Vec(colL, 173), module, CyberlineLungs::INHALE_PARAM));
+		addParam(rack::createParamCentered<InhaleTaperKnob>(rack::Vec(colL, 173), module, CyberlineLungs::INHALE_PARAM));
 		addParam(rack::createParamCentered<RoundSmallBlackKnob>(rack::Vec(colR, 173), module, CyberlineLungs::MAXFLOW_PARAM));
 		addParam(rack::createParamCentered<RoundSmallBlackKnob>(rack::Vec(40.f, 224), module, CyberlineLungs::EFFORT_PARAM));
 		addParam(rack::createParamCentered<InhaleSwitch>(rack::Vec(88.f, 224), module, CyberlineLungs::INHMUTE_PARAM));
@@ -766,6 +773,9 @@ struct CyberlineLungsWidget : rack::app::ModuleWidget {
 
 	void appendContextMenu(rack::ui::Menu* menu) override {
 		ModuleWidget::appendContextMenu(menu);
+		// Inhale-max submenu on the module menu (also on the knob itself below)
+		appendInhaleMaxMenu(menu, module, CyberlineLungs::INHALE_PARAM);
+		menu->addChild(new rack::ui::MenuSeparator);
 		// Lungs has no quality-dependent DSP; expose the plugin-wide global.
 		appendQualityMenu(menu, nullptr, -1);
 	}

@@ -457,6 +457,27 @@ struct CyberlineVoiceWidget : rack::app::ModuleWidget {
 		using rack::componentlibrary::RoundSmallBlackKnob;
 		using rack::componentlibrary::PJ301MPort;
 
+		// Voice anatomy knobs: a right-click Size range submenu drives BOTH
+		// FOLD mm and VTL cm with the same band (one animal, one band).
+		struct VFoldKnob : rack::componentlibrary::RoundSmallBlackKnob {
+			void appendContextMenu(rack::ui::Menu* menu) override {
+				RoundSmallBlackKnob::appendContextMenu(menu);
+				menu->addChild(new rack::ui::MenuSeparator);
+				appendSizeBandMenu(menu, module, CyberlineVoice::V_FOLDLEN_PARAM, 0,
+					deriveBandIndex(module, CyberlineVoice::V_FOLDLEN_PARAM, 0),
+					CyberlineVoice::V_VTL_PARAM, 1);
+			}
+		};
+		struct VVtlKnob : rack::componentlibrary::RoundSmallBlackKnob {
+			void appendContextMenu(rack::ui::Menu* menu) override {
+				RoundSmallBlackKnob::appendContextMenu(menu);
+				menu->addChild(new rack::ui::MenuSeparator);
+				appendSizeBandMenu(menu, module, CyberlineVoice::V_FOLDLEN_PARAM, 0,
+					deriveBandIndex(module, CyberlineVoice::V_FOLDLEN_PARAM, 0),
+					CyberlineVoice::V_VTL_PARAM, 1);
+			}
+		};
+
 		// Top hollow-wireframe fused Glottis + Tract HUD
 		{
 			auto gauge = new VoiceWireframeGauge(module);
@@ -473,14 +494,14 @@ struct CyberlineVoiceWidget : rack::app::ModuleWidget {
 		// Row 1: TENSION, PRESSURE, FOLD mm, OCT
 		addParam(rack::createParamCentered<RoundBlackKnob>(rack::Vec(k4[0], rKnob1), module, CyberlineVoice::V_TENSION_PARAM));
 		addParam(rack::createParamCentered<RoundBlackKnob>(rack::Vec(k4[1], rKnob1), module, CyberlineVoice::V_PRESSURE_PARAM));
-		addParam(rack::createParamCentered<RoundSmallBlackKnob>(rack::Vec(k4[2], rKnob1), module, CyberlineVoice::V_FOLDLEN_PARAM));
+		addParam(rack::createParamCentered<VFoldKnob>(rack::Vec(k4[2], rKnob1), module, CyberlineVoice::V_FOLDLEN_PARAM));
 		addParam(rack::createParamCentered<OctEncoderKnob>(rack::Vec(k4[3], rKnob1), module, CyberlineVoice::V_PITCHOCT_PARAM));
 
 		// Row 2: DRIFT, P-PITCH, FB GAIN, VTL cm
 		addParam(rack::createParamCentered<RoundSmallBlackKnob>(rack::Vec(k4[0], rKnob2), module, CyberlineVoice::V_DRIFT_PARAM));
 		addParam(rack::createParamCentered<RoundSmallBlackKnob>(rack::Vec(k4[1], rKnob2), module, CyberlineVoice::V_PCOUPLE_PARAM));
 		addParam(rack::createParamCentered<RoundSmallBlackKnob>(rack::Vec(k4[2], rKnob2), module, CyberlineVoice::V_FB_PARAM));
-		addParam(rack::createParamCentered<RoundSmallBlackKnob>(rack::Vec(k4[3], rKnob2), module, CyberlineVoice::V_VTL_PARAM));
+		addParam(rack::createParamCentered<VVtlKnob>(rack::Vec(k4[3], rKnob2), module, CyberlineVoice::V_VTL_PARAM));
 
 		// Row 3: TNG X, TNG Y, VELUM, MUSCLE
 		addParam(rack::createParamCentered<RoundSmallBlackKnob>(rack::Vec(k4[0], rKnob3), module, CyberlineVoice::V_TONGUEX_PARAM));
@@ -510,6 +531,11 @@ struct CyberlineVoiceWidget : rack::app::ModuleWidget {
 
 	void appendContextMenu(rack::ui::Menu* menu) override {
 		ModuleWidget::appendContextMenu(menu);
+		// One Size range submenu drives BOTH anatomy knobs (FOLD mm + VTL cm)
+		appendSizeBandMenu(menu, module, CyberlineVoice::V_FOLDLEN_PARAM, 0,
+			deriveBandIndex(module, CyberlineVoice::V_FOLDLEN_PARAM, 0),
+			CyberlineVoice::V_VTL_PARAM, 1);
+		menu->addChild(new rack::ui::MenuSeparator);
 		appendQualityMenu(menu, module, CyberlineVoice::V_QUALITY_PARAM);
 	}
 

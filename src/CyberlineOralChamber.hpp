@@ -88,6 +88,22 @@ struct CyberlineOralChamber : rack::engine::Module {
 	}
 
 	void process(const ProcessArgs& args) override;
+	// Persist the size-band choice (tract length only).
+	json_t* dataToJson() override {
+		json_t* rootJ = json_object();
+		json_object_set_new(rootJ, "vtlBand", json_integer(deriveBandIndex(this, VTL_PARAM, 1)));
+		return rootJ;
+	}
+
+	void dataFromJson(json_t* rootJ) override {
+		json_t* bJ = json_object_get(rootJ, "vtlBand");
+		if (bJ) {
+			int band = (int) json_integer_value(bJ);
+			if (band >= 0 && band < NUM_SIZE_BANDS)
+				applyParamRange(paramQuantities[VTL_PARAM], SIZE_BANDS[band].vtlLo, SIZE_BANDS[band].vtlHi);
+		}
+	}
+
 	void onReset() override {
 		tract.reset();
 		vtlCm = 17.5f;

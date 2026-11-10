@@ -89,6 +89,27 @@ struct CyberlineVoice : rack::engine::Module {
 	}
 
 	void process(const ProcessArgs& args) override;
+	// Persist the size-band choice; Voice's band drives BOTH anatomy knobs
+	// (FOLD mm and VTL cm) together — one animal, one band.
+	json_t* dataToJson() override {
+		json_t* rootJ = json_object();
+		// Both knobs always share a band (applied together), so the fold band
+		// is the authoritative marker.
+		json_object_set_new(rootJ, "foldBand", json_integer(deriveBandIndex(this, V_FOLDLEN_PARAM, 0)));
+		return rootJ;
+	}
+
+	void dataFromJson(json_t* rootJ) override {
+		json_t* bJ = json_object_get(rootJ, "foldBand");
+		if (bJ) {
+			int band = (int) json_integer_value(bJ);
+			if (band >= 0 && band < NUM_SIZE_BANDS) {
+				applyParamRange(paramQuantities[V_FOLDLEN_PARAM], SIZE_BANDS[band].foldLo, SIZE_BANDS[band].foldHi);
+				applyParamRange(paramQuantities[V_VTL_PARAM], SIZE_BANDS[band].vtlLo, SIZE_BANDS[band].vtlHi);
+			}
+		}
+	}
+
 	void onReset() override {
 		glottis.reset();
 		tract.reset();

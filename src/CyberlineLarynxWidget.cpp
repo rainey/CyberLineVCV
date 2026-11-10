@@ -370,6 +370,25 @@ struct CyberlineLarynxWidget : rack::app::ModuleWidget {
 		using rack::componentlibrary::Trimpot;
 		using rack::componentlibrary::PJ301MPort;
 
+	// Anatomy knob with a right-click Size range submenu (band table).
+	// Defined inside the widget so they can use the componentlibrary types.
+	struct FoldKnob : rack::componentlibrary::RoundSmallBlackKnob {
+		void appendContextMenu(rack::ui::Menu* menu) override {
+			RoundSmallBlackKnob::appendContextMenu(menu);
+			menu->addChild(new rack::ui::MenuSeparator);
+			appendSizeBandMenu(menu, module, paramId, 0,
+				deriveBandIndex(module, paramId, 0));
+		}
+	};
+	struct VtlSmallKnob : rack::componentlibrary::RoundSmallBlackKnob {
+		void appendContextMenu(rack::ui::Menu* menu) override {
+			RoundSmallBlackKnob::appendContextMenu(menu);
+			menu->addChild(new rack::ui::MenuSeparator);
+			appendSizeBandMenu(menu, module, paramId, 1,
+				deriveBandIndex(module, paramId, 1));
+		}
+	};
+
 		// Top laryngoscope + LF pulse telemetry display
 		{
 			auto gauge = new GlottisGauge(module);
@@ -383,7 +402,7 @@ struct CyberlineLarynxWidget : rack::app::ModuleWidget {
 
 		addParam(rack::createParamCentered<RoundBlackKnob>(rack::Vec(c1, r[0]), module, CyberlineLarynx::TENSION_PARAM));
 		addParam(rack::createParamCentered<RoundBlackKnob>(rack::Vec(c2, r[0]), module, CyberlineLarynx::PRESSURE_PARAM));
-		addParam(rack::createParamCentered<RoundSmallBlackKnob>(rack::Vec(c1, r[1]), module, CyberlineLarynx::FOLDLEN_PARAM));
+		addParam(rack::createParamCentered<FoldKnob>(rack::Vec(c1, r[1]), module, CyberlineLarynx::FOLDLEN_PARAM));
 		addParam(rack::createParamCentered<OctEncoderKnob>(rack::Vec(c2, r[1]), module, CyberlineLarynx::OCT_PARAM));
 		addParam(rack::createParamCentered<RoundSmallBlackKnob>(rack::Vec(c1, r[2]), module, CyberlineLarynx::DRIFT_PARAM));
 		addParam(rack::createParamCentered<RoundSmallBlackKnob>(rack::Vec(c2, r[2]), module, CyberlineLarynx::VIBRATE_PARAM));
@@ -402,6 +421,9 @@ struct CyberlineLarynxWidget : rack::app::ModuleWidget {
 
 	void appendContextMenu(rack::ui::Menu* menu) override {
 		ModuleWidget::appendContextMenu(menu);
+		appendSizeBandMenu(menu, module, CyberlineLarynx::FOLDLEN_PARAM, 0,
+			deriveBandIndex(module, CyberlineLarynx::FOLDLEN_PARAM, 0));
+		menu->addChild(new rack::ui::MenuSeparator);
 		appendQualityMenu(menu, module, CyberlineLarynx::QUALITY_PARAM);
 	}
 

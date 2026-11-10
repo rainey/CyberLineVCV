@@ -183,13 +183,30 @@ reimplemented from the 1985 paper, plus guards and modular control).
 | TENSION | 0.6 | 0–1 | |
 | TENS CV | 1.0 | 0–1 | attenuator trimmer for TENSION CV input |
 | PRESSURE | 0.8 | 0–1 | replaces PT's `intensity` envelope; smoothed internally |
-| FOLD LENGTH | 14 mm | 2–45 mm | vocal-fold length; allometric F0 scaling per Charlton/Fletcher mammal law (`log10 F0 = −1.43·log10 L(mm) + 4.01` at zero tension), plus mass/dim timbre effect (thicker folds = darker). Human ≈ 13–15 mm, giraffe 41 mm; keeps DRIFT/creak behavior physical at big sizes |
+| FOLD LENGTH | 14 mm | 2–45 mm | vocal-fold length; allometric F0 scaling per Charlton/Fletcher mammal law (`log10 F0 = −1.43·log10 L(mm) + 4.01` at zero tension), plus mass/dim timbre effect (thicker folds = darker). Human ≈ 13–15 mm, giraffe 41 mm; keeps DRIFT/creak behavior physical at big sizes. **Size range** (knob/module right-click): Full 2–45 mm (as shipped) · Small 2–6 · Medium 5–12 · Large 10–20 · XL 16–45 · Human 3–19 mm — see the band table below; the choice saves with the patch |
 | FREQ OCT | −2…+2 | octave offset for L1 (encoder-style knob that snaps to whole octaves; legacy fractional saved values are still rounded by the engine) | F0 clamped 20–2000 Hz after CV; below 20 Hz the LF period grows unbounded (PT silent-state bug) |
 | DRIFT | 0.3 | 0–1 | simplex wobble on F0 and tenseness (PT's `autoWobble`/vibrato noise terms), depth scaled |
 | VIBRATO RATE | 6 Hz | 0–12 | sinusoid vibrato depth fixed small; CV of pitch comes from patching |
 | FEEDBACK GAIN | 0 | 0–1 | gain on L4 injected into the glottal driving pressure (semi-coupling) |
 | P-PITCH COUPLE | 0.3 | 0–1 | how much PRESSURE bends F0 (+2–3 Hz per cmH₂O in vivo; scaled to taste) |
 | OUT LEVEL | — | — | |
+
+### Size bands (FOLDLEN / VTL presets)
+
+The Larynx `FOLD LENGTH`, Voice `FOLD mm` + `VTL cm`, and OralChamber
+`TRACT LENGTH` knobs carry a right-click **Size range** submenu. Selecting a
+band narrows the knob's range (and thus its travel) to that animal-size class,
+clamps the current value in, and saves the choice with the patch. Full always
+equals the shipped range. Voice applies the band to both anatomy knobs at
+once. F0 spans below follow the suite's pitch law at tension 0.6.
+
+| Band | FOLDLEN | ≈F0 | VTL | Example animals |
+|---|---|---|---|---|
+| **Small** | 2–6 mm | 790 Hz–3.8 kHz | 6–12 cm | Mouse (~2 mm), bat, rat (~3 mm), guinea pig, kitten, small dog (chihuahua). Rodent/bird tracts sit at or below the 6 cm floor — pitch them with `OCT` instead |
+| **Medium** | 5–12 mm | 293 Hz–1.0 kHz | 10–18 cm | Cat (purr recipe), rabbit, small/medium dog, human child, marmoset; adult-female human at the top edge (11.5 mm moan recipe) |
+| **Large** | 10–20 mm | 141–380 Hz | 15–28 cm | Adult humans (female 11.5 mm / male 17 mm recipes), chimpanzee, medium/large dog, young deer |
+| **XL** | 16–45 mm | 44–200 Hz | 25–60 cm | Deep baritone (~19–20 mm), sea lion, big dog (great dane), big cats (lion/tiger ~25–33 mm), horse (~30 mm), red-deer stag roar; elephant (without trunk) sits at the VTL ceiling — the recipe's nasal-trunk radiation extends beyond |
+| **Human** | 3–19 mm | 152 Hz–2.1 kHz | 7–21 cm | Human newborn (3 mm — cry realism via `OCT −2`, ≈530 Hz), child, adult female, deep baritone |
 
 ### DSP notes
 
@@ -240,7 +257,7 @@ branch, turbulence injection, transient pops, external-source injection.
 
 | Knob | Default | Notes |
 |---|---|---|
-| TRACT LENGTH (VTL) | 17.5 cm | section count `n = round(VTL · 2·SR / c)`; range ~6–60 cm (human→deer/koala); recomputed on change, state preserved per-section where possible |
+| TRACT LENGTH (VTL) | 17.5 cm | section count `n = round(VTL · 2·SR / c)`; range ~6–60 cm (human→deer/koala); recomputed on change, state preserved per-section where possible. **Size range** (knob/module right-click): Full 6–60 cm · Small 6–12 · Medium 10–18 · Large 15–28 · XL 25–60 · Human 7–21 cm — see the band table below; the choice saves with the patch. **The VTL CV hard clamp follows the selected band** (Human ⇒ CV cannot push past 21 cm or below 7 cm), so a narrowed band is a real commitment, not just knob ergonomics; at the Full band the physical 6–60 span applies as before |
 | TONGUE X / TONGUE Y | mid | base offsets for C3/C4 |
 | VELUM | 0.01 | closed-ish default |
 | CONSTR POS/WIDTH/FRIC | — | base offsets for C6/C7/C8 |
@@ -333,7 +350,7 @@ than from per-stage curve menus.
 | MODE | CYCLE | CYCLE (free breathing), TRIG (one-shot envelope), CLOSED (air retained after exhale — whale-style recycling), PHASOR (phase-driven; see below) |
 | RATE | 12/min | breathing rate in CYCLE mode; scales the baseline expiratory phrase duration |
 | DEPTH | 0.7 | tidal volume; in TRIG/CLOSED also sets envelope sustain *duration* (energy-limited) |
-| INHALE | 0.4 s | time to fill (quick singer catch-breath to deep yawn; 0.05–5 s). In CYCLE mode it is referenced to 12 bpm (5 s period) and scales with the breath period (`inhale = period × INHALE/5 s`, capped at 45%), so the I:E ratio holds when RATE changes; TRIG/CLOSED use absolute seconds; in PHASOR the knob maps to the cycle share (1–98%, no 45% cap — see below) |
+| INHALE | 0.4 s | time to fill (quick singer catch-breath to deep yawn; 0.05–5 s). **Drag is tapered** (multiplicative — equal knob travel = equal ratio change), so the short-inhale end (0.05–0.5 s) owns ~half the travel instead of ~9%. **Inhale max** (knob/module right-click): Full 5 s (as shipped) / 2 s / 1 s / 0.5 s — narrows the knob's range (and travel) to your working band; the current value is clamped in, and the choice saves with the patch. In CYCLE mode it is referenced to 12 bpm (5 s period) and scales with the breath period (`inhale = period × INHALE/5 s`, capped at 45%), so the I:E ratio holds when RATE changes; TRIG/CLOSED use absolute seconds; in PHASOR the knob maps to the cycle share (no 45% cap — see below). **The narrowed max applies everywhere the raw seconds are read** — in PHASOR the reachable ratio span shrinks with it (0.5 s max ⇒ 1–10% split) |
 | MAX FLOW | 0.4 | airway conductance ceiling; adjusts exhale venting from conserved sustain (0) to rapid puff (1) |
 | EFFORT | 0.65 | muscular regulation / appoggio (0 = pure exponential elastic recoil decay, 1 = regulated plateau sustain) |
 | INH MUTE | Mute | 2-position switch: Mute (0 V during inhale) vs Suction (-P / negative pressure during inhale gasp) |

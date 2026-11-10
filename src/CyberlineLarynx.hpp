@@ -64,6 +64,24 @@ struct CyberlineLarynx : rack::engine::Module {
 	}
 
 	void process(const ProcessArgs& args) override;
+	// Persist the size-band choice (Rack restores params first, then calls
+	// dataFromJson, so re-applying the range here lands after the param load).
+	json_t* dataToJson() override {
+		json_t* rootJ = json_object();
+		json_object_set_new(rootJ, "foldBand", json_integer(deriveBandIndex(this, FOLDLEN_PARAM, 0)));
+		return rootJ;
+	}
+
+	void dataFromJson(json_t* rootJ) override {
+		json_t* bJ = json_object_get(rootJ, "foldBand");
+		if (bJ) {
+			int band = (int) json_integer_value(bJ);
+			if (band >= 0 && band < NUM_SIZE_BANDS) {
+				applyParamRange(paramQuantities[FOLDLEN_PARAM], SIZE_BANDS[band].foldLo, SIZE_BANDS[band].foldHi);
+			}
+		}
+	}
+
 	void onReset() override {
 		glottis.reset();
 		lastFoldLen = -1.f;

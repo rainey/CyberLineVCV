@@ -117,6 +117,33 @@ struct CyberlineLungs : rack::engine::Module {
 	}
 
 	void onReset() override { reset(); }
+
+	// Persist the Inhale-max choice so saved patches restore the narrowed
+	// range. Rack restores params first, then calls dataFromJson — so
+	// re-applying the range here lands after the param load, deterministically.
+	json_t* dataToJson() override {
+		json_t* rootJ = json_object();
+		float maxS = paramQuantities[INHALE_PARAM]
+			? paramQuantities[INHALE_PARAM]->getMaxValue() : 5.f;
+		// Store the exact current max; restore re-clamps to the closest
+		// choice so menu/checkmark stay coherent.
+		json_object_set_new(rootJ, "inhaleMax", json_real(maxS));
+		return rootJ;
+	}
+
+	void dataFromJson(json_t* rootJ) override {
+		json_t* mJ = json_object_get(rootJ, "inhaleMax");
+		if (mJ) {
+			float maxS = (float) json_real_value(mJ);
+			// Snap to the closest preset (Full/2/1/0.5)
+			float best = 5.f, bestD = 1e9f;
+			for (float c : INHALE_MAX_CHOICES) {
+				float d = std::fabs(maxS - c);
+				if (d < bestD) { bestD = d; best = c; }
+			}
+			applyParamRange(paramQuantities[INHALE_PARAM], 0.05f, best);
+		}
+	}
 };
 
 } // namespace cyberline

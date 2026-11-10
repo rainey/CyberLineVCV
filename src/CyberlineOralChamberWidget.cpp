@@ -435,6 +435,16 @@ struct CyberlineOralChamberWidget : rack::app::ModuleWidget {
 		using rack::componentlibrary::RoundSmallBlackKnob;
 		using rack::componentlibrary::PJ301MPort;
 
+		// Tract-length knob with a right-click Size range submenu.
+		struct OCVtlKnob : rack::componentlibrary::RoundBlackKnob {
+			void appendContextMenu(rack::ui::Menu* menu) override {
+				RoundBlackKnob::appendContextMenu(menu);
+				menu->addChild(new rack::ui::MenuSeparator);
+				appendSizeBandMenu(menu, module, CyberlineOralChamber::VTL_PARAM, 1,
+					deriveBandIndex(module, CyberlineOralChamber::VTL_PARAM, 1));
+			}
+		};
+
 		// Top hollow-wireframe vocal-tract display
 		{
 			auto gauge = new TractWireframeGauge(module);
@@ -450,7 +460,7 @@ struct CyberlineOralChamberWidget : rack::app::ModuleWidget {
 		float rIn1 = 246.f, rIn2 = 292.f, rOut = 338.f;
 
 		// Row 1: VTL cm, WALL, MUSCLE
-		addParam(rack::createParamCentered<RoundBlackKnob>(rack::Vec(c1, rKnob1), module, CyberlineOralChamber::VTL_PARAM));
+		addParam(rack::createParamCentered<OCVtlKnob>(rack::Vec(c1, rKnob1), module, CyberlineOralChamber::VTL_PARAM));
 		addParam(rack::createParamCentered<RoundSmallBlackKnob>(rack::Vec(c2, rKnob1), module, CyberlineOralChamber::WALL_PARAM));
 		addParam(rack::createParamCentered<RoundBlackKnob>(rack::Vec(c3, rKnob1), module, CyberlineOralChamber::SPEED_PARAM));
 
@@ -488,6 +498,9 @@ struct CyberlineOralChamberWidget : rack::app::ModuleWidget {
 
 	void appendContextMenu(rack::ui::Menu* menu) override {
 		ModuleWidget::appendContextMenu(menu);
+		appendSizeBandMenu(menu, module, CyberlineOralChamber::VTL_PARAM, 1,
+			deriveBandIndex(module, CyberlineOralChamber::VTL_PARAM, 1));
+		menu->addChild(new rack::ui::MenuSeparator);
 		appendQualityMenu(menu, module, CyberlineOralChamber::QUALITY_PARAM);
 	}
 

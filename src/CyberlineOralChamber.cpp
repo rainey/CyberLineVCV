@@ -33,7 +33,12 @@ void CyberlineOralChamber::process(const ProcessArgs& args) {
 		// early-returns while the rounded section count is unchanged).
 		float vtlTarget = rack::math::clamp(
 			params[VTL_PARAM].getValue() + inputs[VTL_INPUT].getVoltage() * 5.4f,
-			6.f, 60.f);
+			// The hard clamp follows the selected Size range band (knob
+			// min/max), so a narrowed band (e.g. Human 7-21 cm) is a real
+			// commitment: CV cannot drive the tract outside it. Falls back
+			// to the physical 6-60 span at the Full band.
+			paramQuantities[VTL_PARAM] ? paramQuantities[VTL_PARAM]->getMinValue() : 6.f,
+			paramQuantities[VTL_PARAM] ? paramQuantities[VTL_PARAM]->getMaxValue() : 60.f);
 		float dtBlock = 16.f / args.sampleRate;
 		float vtlAlpha = 1.f - std::exp(-dtBlock / 0.005f);
 		vtlSlew += (vtlTarget - vtlSlew) * vtlAlpha;
