@@ -298,6 +298,7 @@ struct CyberlineOralChamberWidget : rack::app::ModuleWidget {
 
 		float c1 = 44.f, c2 = 120.f, c3 = 196.f;
 		float k4[4] = {34.f, 91.f, 149.f, 206.f};
+		float in5[5] = {28.f, 74.f, 120.f, 166.f, 212.f};
 		float cvX[6] = {24.f, 62.4f, 100.8f, 139.2f, 177.6f, 216.f};
 		float rKnob3 = 200.f;
 		float rIn1 = 246.f, rIn2 = 292.f, rOut = 338.f;
@@ -318,15 +319,15 @@ struct CyberlineOralChamberWidget : rack::app::ModuleWidget {
 		nvgStrokeColor(vg, nvgRGBA(0x8e, 0x62, 0xf8, 90));
 		nvgStroke(vg);
 
-		// 2. 45-degree chamfered trace linking INJ POS knob (k4[3], rKnob3) -> INJECT (k4[3], rIn1) -> INJPOS CV (k4[2], rIn1)
-		// Routed around the right side of INJECT so it never crosses the "INJECT" label text
+		// 2. 45-degree chamfered trace linking INJ POS knob (k4[3], rKnob3) -> INJECT (in5[3], rIn1) -> INJPOS CV (in5[2], rIn1)
+		// Routed cleanly to the right edge of INJECT so it never crosses label text
 		nvgBeginPath(vg);
-		nvgMoveTo(vg, k4[3] + 9.f, rKnob3 + 9.f);
-		nvgLineTo(vg, k4[3] + 15.f, rKnob3 + 15.f);
-		nvgLineTo(vg, k4[3] + 15.f, rIn1 - 5.f);
-		nvgLineTo(vg, k4[3] + 14.0f, rIn1);
-		nvgMoveTo(vg, k4[3] - 14.0f, rIn1);
-		nvgLineTo(vg, k4[2] + 14.0f, rIn1);
+		nvgMoveTo(vg, k4[3] - 9.f, rKnob3 + 9.f);
+		nvgLineTo(vg, in5[3] + 15.f, rKnob3 + 25.f);
+		nvgLineTo(vg, in5[3] + 15.f, rIn1 - 5.f);
+		nvgLineTo(vg, in5[3] + 14.0f, rIn1);
+		nvgMoveTo(vg, in5[3] - 14.0f, rIn1);
+		nvgLineTo(vg, in5[2] + 14.0f, rIn1);
 		nvgStrokeWidth(vg, 1.0f);
 		nvgStrokeColor(vg, nvgRGBA(0x48, 0xd8, 0xf8, 120));
 		nvgStroke(vg);
@@ -347,13 +348,12 @@ struct CyberlineOralChamberWidget : rack::app::ModuleWidget {
 			}
 		};
 
-		// SRC input (matches LARYNX VOICED crimson-coral)
-		drawHollowPortRing(k4[0], rIn1, neonCoral, false);
-		// VTL CV input (neon violet, matching VTL cm & tract geometry)
-		drawHollowPortRing(k4[1], rIn1, neonViolet, false);
-		// INJPOS CV & INJECT inputs (neon cyan)
-		drawHollowPortRing(k4[2], rIn1, neonCyan, false);
-		drawHollowPortRing(k4[3], rIn1, neonCyan, false);
+		// Row 4: SRC (coral), VTL CV (violet), INJPOS CV (cyan), INJECT (cyan), CRISP CV (violet)
+		drawHollowPortRing(in5[0], rIn1, neonCoral, false);
+		drawHollowPortRing(in5[1], rIn1, neonViolet, false);
+		drawHollowPortRing(in5[2], rIn1, neonCyan, false);
+		drawHollowPortRing(in5[3], rIn1, neonCyan, false);
+		drawHollowPortRing(in5[4], rIn1, nvgRGB(0xd8, 0xb8, 0xff), false);
 		// TNGX/POLY bus entry input (neon violet ring inside the articulation CV bus)
 		drawHollowPortRing(cvX[0], rIn2, neonViolet, false);
 
@@ -390,8 +390,6 @@ struct CyberlineOralChamberWidget : rack::app::ModuleWidget {
 		text(k4[0], 185, "C.POS"); text(k4[1], 185, "C.WIDTH"); text(k4[2], 185, "FRIC");
 		nvgFillColor(vg, nvgRGB(0x88, 0xe4, 0xfc));
 		text(k4[3], 185, "INJ POS");
-
-		float in5[5] = {28.f, 74.f, 120.f, 166.f, 212.f};
 
 		// Row 4 inputs: SRC, VTL CV, INJPOS CV, INJECT, CRISP CV
 		nvgFillColor(vg, nvgRGB(0xf8, 0x82, 0x88));
