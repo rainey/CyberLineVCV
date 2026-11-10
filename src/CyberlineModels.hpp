@@ -654,7 +654,7 @@ inline int deriveBandIndex(rack::engine::Module* module, int paramId, int kind) 
 // of the range matches the stock feel. Scroll wheel uses the same curve;
 // shift-drag precision, double-click reset, and the context-menu value
 // field stay stock (raw units).
-struct TaperKnob : rack::Knob {
+struct TaperKnob : rack::componentlibrary::RoundSmallBlackKnob {
 	// Ratio change per pixel of drag (stock small-knob linear speed at
 	// max->min over ~150 px is ~2.7 units/s; ~0.5%/px feels equivalent at
 	// mid-range and gives ~3 decades over the drag span).
@@ -663,13 +663,13 @@ struct TaperKnob : rack::Knob {
 	void onDragMove(const rack::event::DragMove& e) override {
 		auto* pq = getParamQuantity();
 		if (!pq || e.button != GLFW_MOUSE_BUTTON_LEFT) {
-			Knob::onDragMove(e);
+			RoundSmallBlackKnob::onDragMove(e);
 			return;
 		}
 		float lo = pq->getMinValue(), hi = pq->getMaxValue();
 		if (lo <= 0.f || hi <= lo) {
 			// Degenerate/nonpositive span: fall back to stock behavior
-			Knob::onDragMove(e);
+			RoundSmallBlackKnob::onDragMove(e);
 			return;
 		}
 		// Vertical drag up = increase; use the log-mid mapping
