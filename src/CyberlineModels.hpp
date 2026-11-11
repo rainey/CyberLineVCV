@@ -426,7 +426,7 @@ static constexpr SizeBand SIZE_BANDS[] = {
 	{5.f,   12.f,      10.f, 18.f,  "Medium", "cat..child",        "Cat (purr recipe), rabbit, small/medium dog, human child, marmoset; adult-female human at the top edge (11.5 mm moan recipe)"},
 	{10.f,  20.f,      15.f, 28.f,  "Large",  "human..chimp",      "Adult humans (female 11.5 mm / male 17 mm recipes), chimpanzee, medium/large dog, young deer"},
 	{16.f,  45.f,      25.f, 60.f,  "XL",     "big cat..horse",    "Deep baritone (~19-20 mm), sea lion, big dog (great dane), big cats (lion/tiger ~25-33 mm), horse (~30 mm), red-deer stag roar; elephant (without trunk) at the VTL ceiling — the recipe's nasal-trunk radiation extends beyond"},
-	{3.f,   19.f,      7.f,  21.f,  "Human",  "newborn..baritone", "Human newborn (3 mm — cry realism via OCT -2), child, adult female, deep baritone"},
+	{3.f,   19.f,      7.f,  22.f,  "Human",  "newborn..bass",     "Human newborn (3 mm — cry realism via OCT -2), child, adult female, deep bass"},
 };
 static constexpr int NUM_SIZE_BANDS = (int) (sizeof(SIZE_BANDS) / sizeof(SIZE_BANDS[0]));
 // Indexes into SIZE_BANDS

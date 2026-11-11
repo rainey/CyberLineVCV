@@ -1064,7 +1064,7 @@ static void test_vtl_band_clamp() {
 	oc.inputs[CyberlineOralChamber::VTL_INPUT].setVoltage(10.f, 0); // +54 cm raw
 	for (int i = 0; i < 20000; i++) oc.process(args);
 	CHECK(oc.vtlCm <= SIZE_BANDS[BAND_HUMAN].vtlHi + 0.01f,
-		"VTL CV is clamped to the selected band's ceiling (Human 21 cm), not 60 cm");
+		"VTL CV is clamped to the selected band's ceiling (Human 22 cm), not 60 cm");
 
 	CyberlineOralChamber oc2;
 	oc2.inputs[CyberlineOralChamber::VTL_INPUT].channels = 1;

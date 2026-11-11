@@ -34,7 +34,7 @@ void CyberlineOralChamber::process(const ProcessArgs& args) {
 		float vtlTarget = rack::math::clamp(
 			params[VTL_PARAM].getValue() + inputs[VTL_INPUT].getVoltage() * 5.4f,
 			// The hard clamp follows the selected Size range band (knob
-			// min/max), so a narrowed band (e.g. Human 7-21 cm) is a real
+			// min/max), so a narrowed band (e.g. Human 7-22 cm) is a real
 			// commitment: CV cannot drive the tract outside it. Falls back
 			// to the physical 6-60 span at the Full band.
 			paramQuantities[VTL_PARAM] ? paramQuantities[VTL_PARAM]->getMinValue() : 6.f,

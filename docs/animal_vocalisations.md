@@ -52,7 +52,7 @@ Bands (Full = 2–45 mm / 6–60 cm as shipped):
 | **Medium** | 5–12 mm | 293 Hz–1.0 kHz | 10–18 cm | Cat (purr recipe), rabbit, small/medium dog, human child, marmoset; adult-female human at the top edge (11.5 mm moan recipe) |
 | **Large** | 10–20 mm | 141–380 Hz | 15–28 cm | Adult humans (female 11.5 mm / male 17 mm recipes), chimpanzee, medium/large dog, young deer |
 | **XL** | 16–45 mm | 44–200 Hz | 25–60 cm | Deep baritone (~19–20 mm), sea lion, great dane, big cats (lion/tiger ~25–33 mm), horse (~30 mm), red-deer stag roar; elephant (without trunk) at the VTL ceiling |
-| **Human** | 3–19 mm | 152 Hz–2.1 kHz | 7–21 cm | Human newborn (3 mm — cry realism via `OCT −2`, ≈530 Hz), child, adult female, deep baritone |
+| **Human** | 3–19 mm | 152 Hz–2.1 kHz | 7–22 cm | Human newborn (3 mm — cry realism via `OCT −2`, ≈530 Hz), child, adult female, deep bass |
 
 Recipe mapping: **Cat 1** and **Cat 2** sit in *Medium*; **Dog 2** straddles
 *Medium/Large*; **Human 4 A/B** sit inside *Large* (or the *Human* band);

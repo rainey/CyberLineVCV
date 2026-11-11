@@ -206,7 +206,7 @@ once. F0 spans below follow the suite's pitch law at tension 0.6.
 | **Medium** | 5–12 mm | 293 Hz–1.0 kHz | 10–18 cm | Cat (purr recipe), rabbit, small/medium dog, human child, marmoset; adult-female human at the top edge (11.5 mm moan recipe) |
 | **Large** | 10–20 mm | 141–380 Hz | 15–28 cm | Adult humans (female 11.5 mm / male 17 mm recipes), chimpanzee, medium/large dog, young deer |
 | **XL** | 16–45 mm | 44–200 Hz | 25–60 cm | Deep baritone (~19–20 mm), sea lion, big dog (great dane), big cats (lion/tiger ~25–33 mm), horse (~30 mm), red-deer stag roar; elephant (without trunk) sits at the VTL ceiling — the recipe's nasal-trunk radiation extends beyond |
-| **Human** | 3–19 mm | 152 Hz–2.1 kHz | 7–21 cm | Human newborn (3 mm — cry realism via `OCT −2`, ≈530 Hz), child, adult female, deep baritone |
+| **Human** | 3–19 mm | 152 Hz–2.1 kHz | 7–22 cm | Human newborn (3 mm — cry realism via `OCT −2`, ≈530 Hz), child, adult female, deep bass |
 
 ### DSP notes
 
@@ -257,7 +257,7 @@ branch, turbulence injection, transient pops, external-source injection.
 
 | Knob | Default | Notes |
 |---|---|---|
-| TRACT LENGTH (VTL) | 17.5 cm | section count `n = round(VTL · 2·SR / c)`; range ~6–60 cm (human→deer/koala); recomputed on change, state preserved per-section where possible. **Size range** (knob/module right-click): Full 6–60 cm · Small 6–12 · Medium 10–18 · Large 15–28 · XL 25–60 · Human 7–21 cm — see the band table below; the choice saves with the patch. **The VTL CV hard clamp follows the selected band** (Human ⇒ CV cannot push past 21 cm or below 7 cm), so a narrowed band is a real commitment, not just knob ergonomics; at the Full band the physical 6–60 span applies as before |
+| TRACT LENGTH (VTL) | 17.5 cm | section count `n = round(VTL · 2·SR / c)`; range ~6–60 cm (human→deer/koala); recomputed on change, state preserved per-section where possible. **Size range** (knob/module right-click): Full 6–60 cm · Small 6–12 · Medium 10–18 · Large 15–28 · XL 25–60 · Human 7–22 cm — see the band table below; the choice saves with the patch. **The VTL CV hard clamp follows the selected band** (Human ⇒ CV cannot push past 22 cm or below 7 cm), so a narrowed band is a real commitment, not just knob ergonomics; at the Full band the physical 6–60 span applies as before |
 | TONGUE X / TONGUE Y | mid | base offsets for C3/C4 |
 | VELUM | 0.01 | closed-ish default |
 | CONSTR POS/WIDTH/FRIC | — | base offsets for C6/C7/C8 |
