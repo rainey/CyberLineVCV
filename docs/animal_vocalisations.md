@@ -5,7 +5,7 @@ The `cyberline` voice synthesis pipeline—[`CyberlineLungs`](../src/CyberlineLu
 > [!NOTE]
 > These recipes are **untested starting points**. Pitch values were computed from the Larynx's real pitch law: `F0 = 10^(4.01 − 1.43·log10(FOLDLEN_mm)) × 2^(PITCH_V + OCT) × sqrt(TENSION / 0.6)`, plus up to `PCOUPLE × 30 Hz` from pressure. Expect to tune by ear.
 
-This guide details how to configure and modulate the modules to simulate vocalisations across the mammalian range, including terrestrial mammals (cats, elephants, primates, and humans — including non-speech human vocalisations), birds (songbirds, doves/owls, corvids), and marine mammals (whales, dolphins, sea lions).
+This guide details how to configure and modulate the modules to simulate vocalisations across the mammalian range, including terrestrial mammals (cats, elephants, primates, and humans — including non-speech human vocalisations and Tuvan throat singing / overtone phonation), birds (songbirds, doves/owls, corvids), and marine mammals (whales, dolphins, sea lions).
 
 ---
 
@@ -225,6 +225,55 @@ female recipe can't reach cheaply: vocal fry and glottal growl.
   * **Groan-to-falsetto transition:** CV `TENSION` from 0.5 → 0.9 with a slow envelope riding `Lungs` `FLOW` — the modal→falsetto flip at around 0.75–0.8 is abrupt, which is physically right and reads as a voice "lifting".
 * **Tuning order for recipe B:** too breathy/weak → raise `TENSION` toward 0.65 and `EFFORT`; too smooth/polite → lower `TENSION` to 0.45–0.5 and raise `DRIFT`; too clean for growl → raise `FEEDBACK GAIN` toward 0.25.
 
+#### C. Tuvan Throat Singing & Overtone Phonation (*Sygyt, Kargyraa, Khoomei*)
+
+Tuvan throat singing (*Xöömei*) is an extended human bioacoustic technique that isolates and amplifies single vocal tract harmonics into clear musical pitches while maintaining a continuous fundamental drone. It relies on extreme vocal fold adduction, rigid acoustic cavity coupling, and (in *Kargyraa*) period-doubling subharmonic oscillation of the false (ventricular) vocal folds.
+
+```
+[ Lungs: 3-4 bpm, EFFORT 0.9 ] ──PRESSURE──▶ [ Larynx: 14-16mm, TENSION 0.9 ] ──VOICED──▶ [ Oral Chamber: 16.5cm ] ──▶ LIPS
+                                               (OCT -0.5, stable F0 ~175 Hz)               (WALL 0.9995, VELUM 0.0)
+                                                                                           (TONGUEY 8.8, tight pinch)
+[ CV Sequencer / LFO / Slider ] ──────────────────────────────────────────────────────────▶ TONGUEX (Overtone melody)
+```
+
+##### 1. Sygyt ("Whistle" — High Flute-Like Overtones)
+In *Sygyt*, a low fundamental drone (≈165–200 Hz, F3–G3) is accompanied by a piercing, whistle-like melody ringing between 1 kHz and 3.5 kHz (the 6th to 16th harmonics). 
+
+* **The Bioacoustics:**
+  * **Glottal source (hyper-adduction):** The vocal folds are held under high medial compression (`TENSION 0.88–0.95`). In the Liljencrants-Fant (LF) glottal model, high tension narrows the open quotient ($O_q < 0.25$) and sharpens the glottal closure discontinuity, creating a spectrum unusually dense in high-frequency harmonic energy.
+  * **Cavity bifurcation:** The tongue blade forms an airtight constriction against the alveolar ridge/hard palate (`TONGUEY 8.5–9.2`), dividing the Kelly-Lochbaum waveguide into two coupled resonators. The second formant ($F_2$) becomes extremely narrow and intense.
+  * **Zero nasal leakage:** The velum must be **strictly closed** (`VELUM 0.00`). Even a 2% velum opening shunts acoustic energy into the nasal branch, dampening formant $Q$ and silencing the whistle.
+  * **Rigid walls:** High wall damping (`WALL 0.9995`) simulates tensed pharyngeal and buccinator muscles, maximizing acoustic reflections.
+
+* **Module Settings:**
+  * **`CyberlineLungs`:** `RATE`: `3–4/min` (CYCLE), `DEPTH`: `0.90`, `MAXFLOW`: `0.18` (high air conservation), `EFFORT`: `0.90` (firm, unwavering subglottal pressure), `INH MUTE`: `Mute`.
+  * **`CyberlineLarynx`:** `FOLDLEN`: `15.0 mm`, `OCT`: `−0.5` (≈150–175 Hz drone, e.g. D3–F3), `TENSION`: `0.92` (critical: ultra-clean, pressed phonation with zero breathiness), `DRIFT`: `0.05` (near-zero pitch wander for a rock-solid drone), `VIBRATE`: `0.0 Hz` (no vibrato), `PCOUPLE`: `0.15`.
+  * **`CyberlineOralChamber`:** `VTL`: `16.5 cm`, `WALL`: `0.9995` (maximum acoustic Q), `VELUM`: `0.00` (zero nasal shunt), `TONGUEY`: `8.8` (extreme lingual pinch), `SPEED`: `0.35` (smooth glissando between overtones), `CRISP`: `0.90`, `FRIC`: `0.00`.
+
+* **Playing the Whistle:**
+  * Sweep `Oral Chamber` **`TONGUEX`** from `4.5` to `9.5` (manually or via CV).
+  * As `TONGUEX` sweeps from the blade forward to the tip, the high-$Q$ formant locks consecutively onto individual natural harmonics of the drone:
+    $$\text{Harmonics } 6, 7, 8, 9, 10, 12 \quad (1050\text{ Hz}, 1225\text{ Hz}, 1400\text{ Hz}, 1575\text{ Hz}, 1750\text{ Hz}, 2100\text{ Hz})$$
+  * Feeding a quantized or stepped voltage sequence into `TONGUEX_INPUT` lets you play folk melodies over the sustained fundamental drone.
+
+##### 2. Kargyraa (Deep Ventricular Subharmonic Phonation)
+*Kargyraa* produces an extraordinarily deep, rattling growl sounding an octave below the singer's natural chest voice (down to 55–80 Hz, A1–E2).
+
+* **The Bioacoustics:**
+  * **Period doubling ($f_0 / 2$):** The singer engages the **ventricular folds** (false vocal cords) situated immediately above the true vocal folds. The false folds oscillate at *half* the frequency of the true folds, opening and closing on every alternate glottal pulse.
+  * In `cyberline`, this can be emulated in two distinct ways:
+    1. **Acoustic Period-Doubling via Feedback:** In `CyberlineVoice` (or by patching `Oral Chamber` `PROBE` → `Larynx` `FEEDBACK_INPUT`), set `FB GAIN` to **`0.30–0.45`** with `TENSION` at `0.52–0.58`. The strong acoustic reflection from the tight supraglottal constriction drives the non-linear LF glottal model into period doubling, naturally generating an authentic rattling subharmonic octave!
+    2. **Allometric Scaling:** Set `FOLDLEN` to **`34–38 mm`** (mimicking large mammalian folds) with `OCT −1.0` (fundamental down to 55–65 Hz) and `TENSION 0.38–0.45` for loose, heavy fold vibration.
+  * **Oral cavity shaping:** Set `TONGUEY` to `6.5–7.5` and `TONGUEX` to `2.5–4.5` (a back-vowel /o/ or /u/ shape). This focuses the resonance into lower harmonics (the 4th to 8th partials, 250–500 Hz), producing the chest-rattling resonance characteristic of Tibetan and Tuvan low-chanting.
+
+##### 3. Khoomei (Mid-Throat Classic Drone)
+*Khoomei* is the foundational middle style: a relaxed, warm chest-voice drone (≈130–150 Hz, C3–D3) with soft, swirling overtones.
+
+* **Module Settings:**
+  * **`CyberlineLarynx`:** `FOLDLEN`: `16.5 mm`, `OCT`: `−0.5`, `TENSION`: `0.72–0.78` (moderately pressed, warm harmonic overtone tail), `DRIFT`: `0.15`.
+  * **`CyberlineOralChamber`:** `VTL`: `17.5 cm`, `WALL`: `0.999`, `VELUM`: `0.00`, `TONGUEY`: `7.5–8.2` (moderate constriction), `SPEED`: `0.4`.
+  * **Modulation:** Slowly sweep `TONGUEX` between `3.0` and `6.5` to morph the vowel between /u/ and /a/, bringing out the 4th through 9th harmonics with a warm, pastoral timbre.
+
 ---
 
 ## 4. Avian / Bird Call Patch Recipes
@@ -355,6 +404,9 @@ Pitch figures are approximate, computed from the Larynx pitch law (see the note 
 | **Primate (Chimp)** | 9 mm | ~380 Hz, rising | 11 cm | `LIPS` | Rhythmic panting (35–50 bpm) |
 | **Human F (Moan)** | 11.5 mm | ~255 Hz (tension 0.4), rising as V empties | 15.5 cm | `LIPS` + `NOSE` | Inverted VOLUME → Pitch (strain), low TENSION (breathiness), VELUM ~0.1 |
 | **Human M (Chest Groan)** | 17 mm, `OCT −0.5` | ~126 Hz | 18 cm | `LIPS` | Same chain as Human F (deltas only); creak (TENSION 0.25) & falsetto (0.85+) variants, LIPS→FEEDBACK growl |
+| **Tuvan Sygyt (Whistle)** | 15 mm, `OCT −0.5` | ~165–190 Hz drone + 1.2–3.5 kHz whistle | 16.5 cm | `LIPS` | `TENSION 0.92`, `WALL 0.9995`, `VELUM 0`, `TONGUEY 8.8`, sweep `TONGUEX` |
+| **Tuvan Kargyraa (Subharmonic)** | 17 mm (feedback) or 35 mm | ~60–80 Hz (subharmonic $f_0/2$) | 18 cm | `LIPS` | `PROBE`→`FEEDBACK` (0.35) period doubling or heavy folds, `TONGUEY 7.0` |
+| **Tuvan Khoomei (Throat Drone)** | 16.5 mm, `OCT −0.5` | ~135–150 Hz | 17.5 cm | `LIPS` | Moderate `TENSION 0.75`, `VELUM 0`, back constriction `TONGUEX 3.5`, gentle vowel glide |
 | **Sea Lion (Bark)** | 15–18 mm | ~180–240 Hz | 15–18 cm | `LIPS` | 2–2.8 Hz bursts, feedback growl |
 | **Large Feline (Roar)** | 28–35 mm | ~70–100 Hz | 30–40 cm | `LIPS` | Heavy folds, wide tract (untested) |
 | **Elephant (Rumble)** | 45 mm | ~16–24 Hz | 55–60 cm | `NOSE` | `OCT -1`, no pitch bias, open velum |
