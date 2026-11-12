@@ -538,6 +538,114 @@ struct PtBusEncode {
 	}
 };
 
+// ---- PT/CL bus-mode indicator (Broca & BrocaSq) ----
+// A small neon trombone glyph rendered on the panel: dim slate outline in
+// cyberline mode ("CL"), glowing pink when the TRACT POLY bus is re-encoded
+// for Pink Trombone ("PT"). The slide is drawn in two positions — retracted
+// in CL, extended in PT — so the indicator reads as "the trombone wakes up."
+
+// Draw the trombone at (cx, cy) as a horizontal side-profile silhouette:
+// tuning bow at left, bell flaring mid-center, long parallel slide extending
+// right, and mouthpiece at the lower tube.
+// active: false = dim outline, slide retracted ("CL"); true = pink glow, slide extended ("PT").
+inline void drawTromboneIndicator(const rack::widget::Widget::DrawArgs& args, float cx, float cy, bool active) {
+	NVGcontext* vg = args.vg;
+	auto font = getLabelFont();
+
+	// Colors: active = neon pink glow (PT); inactive = dim slate (CL)
+	NVGcolor core = active ? nvgRGB(0xf0, 0x9c, 0xd8) : nvgRGB(0x5a, 0x62, 0x6e);
+	NVGcolor glow = nvgRGBA(0xf0, 0x9c, 0xd8, active ? 65 : 0);
+	NVGcolor bellFill = active ? nvgRGBA(0xf0, 0x9c, 0xd8, 40) : nvgRGBA(0x5a, 0x62, 0x6e, 25);
+	float coreW = active ? 1.1f : 0.9f;
+	float glowW = 2.8f;
+
+	auto strokePath = [&]() {
+		if (active) {
+			nvgStrokeWidth(vg, glowW);
+			nvgStrokeColor(vg, glow);
+			nvgStroke(vg);
+		}
+		nvgStrokeWidth(vg, coreW);
+		nvgStrokeColor(vg, core);
+		nvgStroke(vg);
+	};
+
+	auto line = [&](float x0, float y0, float x1, float y1) {
+		nvgBeginPath(vg);
+		nvgMoveTo(vg, x0, y0);
+		nvgLineTo(vg, x1, y1);
+		strokePath();
+	};
+
+	float yTop = cy - 4.5f;   // upper bell/tuning branch
+	float yMid = cy - 1.2f;   // middle joint / inner slide tube
+	float yBot = cy + 1.8f;   // lower slide tube + mouthpiece
+	float slideExt = active ? 4.5f : 0.f;
+
+	// 1. Rear tuning slide (left U-bow connecting yTop and yMid)
+	nvgBeginPath(vg);
+	nvgMoveTo(vg, cx - 6.5f, yTop);
+	nvgLineTo(vg, cx - 10.5f, yTop);
+	nvgArc(vg, cx - 10.5f, (yTop + yMid) * 0.5f, (yMid - yTop) * 0.5f, -M_PI * 0.5f, -M_PI * 1.5f, NVG_CCW);
+	nvgLineTo(vg, cx - 3.5f, yMid);
+	strokePath();
+
+	// Rear brace
+	line(cx - 8.5f, yTop, cx - 8.5f, yMid);
+
+	// 2. Bell branch (top tube running right, flaring into a conical brass bell)
+	line(cx - 6.5f, yTop, cx - 1.5f, yTop);
+	nvgBeginPath(vg);
+	nvgMoveTo(vg, cx - 1.5f, yTop);
+	nvgBezierTo(vg, cx + 1.2f, yTop, cx + 2.5f, yTop - 1.8f, cx + 3.4f, yTop - 3.2f);
+	nvgLineTo(vg, cx + 3.4f, yTop + 2.4f);
+	nvgBezierTo(vg, cx + 2.5f, yTop + 1.2f, cx + 1.2f, yTop, cx - 1.5f, yTop);
+	nvgClosePath(vg);
+	nvgFillColor(vg, bellFill);
+	nvgFill(vg);
+	strokePath();
+
+	// Bell rim oval
+	nvgBeginPath(vg);
+	nvgEllipse(vg, cx + 3.5f, yTop - 0.4f, 0.8f, 2.8f);
+	strokePath();
+
+	// 3. Mouthpiece (left of main brace on yBot)
+	line(cx - 6.5f, yBot, cx - 3.5f, yBot);
+	nvgBeginPath(vg);
+	nvgMoveTo(vg, cx - 7.8f, yBot - 1.3f);
+	nvgLineTo(vg, cx - 6.3f, yBot);
+	nvgLineTo(vg, cx - 7.8f, yBot + 1.3f);
+	nvgClosePath(vg);
+	nvgFillColor(vg, core);
+	nvgFill(vg);
+
+	// 4. Main hand brace /neck支柱 (vertical struts at cx - 3.5 and cx - 1.0)
+	line(cx - 3.5f, yTop, cx - 3.5f, yBot);
+	line(cx - 1.0f, yMid, cx - 1.0f, yBot);
+
+	// 5. Long hand slide (parallel upper & lower tubes extending right + right U-bow)
+	float sRight = cx + 8.5f + slideExt;
+	line(cx - 3.5f, yMid, sRight, yMid);
+	line(cx - 3.5f, yBot, sRight, yBot);
+	// Outer slide cross-brace (moves with the slide)
+	float sBrace = cx + 3.5f + slideExt;
+	line(sBrace, yMid, sBrace, yBot);
+	// Slide bow (right U-turn)
+	nvgBeginPath(vg);
+	nvgArc(vg, sRight, (yMid + yBot) * 0.5f, (yBot - yMid) * 0.5f, -M_PI * 0.5f, M_PI * 0.5f, NVG_CW);
+	strokePath();
+
+	// 6. Mode label ("PT" / "CL")
+	if (font && font->handle >= 0) {
+		nvgFontFaceId(vg, font->handle);
+		nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_TOP);
+		nvgFontSize(vg, 6.2f);
+		nvgFillColor(vg, active ? nvgRGB(0xf4, 0xb0, 0x48) : nvgRGB(0x6a, 0x74, 0x80));
+		nvgText(vg, cx, cy + 3.8f, active ? "PT" : "CL", NULL);
+	}
+}
+
 extern rack::plugin::Model* modelCyberlineLarynx;extern rack::plugin::Model* modelCyberlineLungs;
 extern rack::plugin::Model* modelCyberlineOralChamber;
 extern rack::plugin::Model* modelCyberlineVoice;

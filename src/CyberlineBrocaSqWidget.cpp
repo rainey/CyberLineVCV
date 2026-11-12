@@ -796,28 +796,11 @@ struct CyberlineBrocaSqWidget : rack::app::ModuleWidget {
 	void draw(const DrawArgs& args) override {
 		drawPanel(args, PANEL_W, static_cast<CyberlineBrocaSq*>(module));
 		ModuleWidget::draw(args);
-		// PT/CL bus-mode badge (top-left): amber "PT" when the bus is
-		// re-encoded for Pink Trombone, dim "CL" otherwise.
+		// PT/CL bus-mode indicator: neon trombone glyph (see Broca).
+		// Bottom-right, balanced against the centered panel title.
 		{
 			auto* mod = dynamic_cast<CyberlineBrocaSq*>(module);
-			NVGcontext* vg = args.vg;
-			auto font = getLabelFont();
-			if (font && font->handle >= 0) {
-				nvgFontFaceId(vg, font->handle);
-				nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_BOTTOM);
-				nvgFontSize(vg, 8.f);
-				nvgBeginPath(vg);
-				nvgRect(vg, 22.f, 2.f, 16.f, 11.f);
-				nvgFillColor(vg, nvgRGBA(0x0b, 0x0d, 0x12, 160));
-				nvgFill(vg);
-				if (mod && mod->ptMode) {
-					nvgFillColor(vg, nvgRGB(0xf4, 0xb0, 0x48));
-					nvgText(vg, 23.f, 12.f, "PT", NULL);
-				} else {
-					nvgFillColor(vg, nvgRGB(0x6a, 0x74, 0x80));
-					nvgText(vg, 23.f, 12.f, "CL", NULL);
-				}
-			}
+			drawTromboneIndicator(args, PANEL_W - 42.f, 365.f, mod && mod->ptMode);
 		}
 		drawCpuMeterText(args, static_cast<CyberlineBrocaSq*>(module));
 	}
