@@ -672,10 +672,12 @@ struct TaperKnob : rack::componentlibrary::RoundSmallBlackKnob {
 			RoundSmallBlackKnob::onDragMove(e);
 			return;
 		}
-		// Vertical drag up = increase; use the log-mid mapping
+		// Vertical drag up = increase. Rack screen coords have y growing
+		// downward, so up-drag gives a NEGATIVE mouseDelta.y — subtract it
+		// (stock knobs do the same via (delta.x - delta.y)).
 		float v = pq->getValue();
 		float norm = std::log(v / lo) / std::log(hi / lo);          // 0..1
-		norm += e.mouseDelta.y * perPixel / std::log(hi / lo);
+		norm -= e.mouseDelta.y * perPixel / std::log(hi / lo);
 		norm = rack::math::clamp(norm, 0.f, 1.f);
 		pq->setValue(lo * std::pow(hi / lo, norm));
 	}
