@@ -256,7 +256,62 @@ struct CyberlineBrocaSqWidget : rack::app::ModuleWidget {
 	// that register's length, cyan/amber head markers at the active slots.
 	struct RegisterGrid : rack::widget::Widget {
 		CyberlineBrocaSq* module;
+		int hoverCell = -1;
 		RegisterGrid(CyberlineBrocaSq* m) : module(m) {}
+
+		// Hovered cell index, or -1 when outside the grid or on a gap
+		int cellAt(rack::math::Vec p) {
+			float gap = 3.f;
+			float cw = (box.size.x - gap * 3.f) / 4.f;
+			float chh = (box.size.y - gap * 3.f) / 4.f;
+			int col = (int) std::floor(p.x / (cw + gap));
+			int row = (int) std::floor(p.y / (chh + gap));
+			if (col < 0 || col > 3 || row < 0 || row > 3)
+				return -1;
+			float cx = col * (cw + gap), cy2 = row * (chh + gap);
+			if (p.x > cx + cw || p.y > cy2 + chh)
+				return -1;
+			return row * 4 + col;
+		}
+
+		void onHover(const rack::event::Hover& e) override {
+			Widget::onHover(e);
+			hoverCell = cellAt(e.pos);
+		}
+
+		void onLeave(const rack::event::Leave& e) override {
+			Widget::onLeave(e);
+			hoverCell = -1;
+		}
+
+		// Left-click a cell: move the editor selection there. The engine's
+		// editor state machine does the rest (moves editPos; while armed it
+		// loads the clicked cell's phonemes onto the V/C encoders). Going
+		// through EDIT_POS_PARAM (not a bare editPos write) keeps the CELL
+		// encoder in sync and participates in undo history.
+		void onButton(const rack::event::Button& e) override {
+			Widget::onButton(e);
+			if (e.button != GLFW_MOUSE_BUTTON_LEFT)
+				return;
+			if (e.action == GLFW_PRESS && module) {
+				int cell = cellAt(e.pos);
+				if (cell < 0)
+					return;
+				float oldPos = module->params[CyberlineBrocaSq::EDIT_POS_PARAM].getValue();
+				module->params[CyberlineBrocaSq::EDIT_POS_PARAM].setValue((float) cell);
+				// Undo history entry (only when the selection actually moved)
+				if (oldPos != (float) cell) {
+					auto* h = new rack::history::ParamChange;
+					h->name = "select cell";
+					h->moduleId = module->id;
+					h->paramId = CyberlineBrocaSq::EDIT_POS_PARAM;
+					h->oldValue = oldPos;
+					h->newValue = (float) cell;
+					APP->history->push(h);
+				}
+				e.consume(this);
+			}
+		}
 
 		void draw(const DrawArgs& args) override {
 			float w = box.size.x, h = box.size.y;
@@ -351,6 +406,15 @@ struct CyberlineBrocaSqWidget : rack::app::ModuleWidget {
 					nvgBeginPath(vg);
 					nvgCircle(vg, x + cw - 4.f, cy + 3.5f, 1.8f);
 					nvgFillColor(vg, nvgRGB(0x9b, 0x6d, 0xff));
+					nvgFill(vg);
+				}
+
+				// Hover highlight: faint fill lift so the target of a click
+				// reads before committing it
+				if (k == hoverCell) {
+					nvgBeginPath(vg);
+					nvgRoundedRect(vg, x, y, cw, chh, 3.f);
+					nvgFillColor(vg, nvgRGBA(0x88, 0xe4, 0xfc, 22));
 					nvgFill(vg);
 				}
 
