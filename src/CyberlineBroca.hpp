@@ -46,6 +46,12 @@ struct CyberlineBroca : rack::engine::Module {
 	// Pink Trombone poly-bus mode: TRACT POLY re-encodes to the PT-oriented
 	// 10-channel map (see PtBusEncode). Persisted with the patch.
 	bool ptMode = false;
+
+	~CyberlineBroca() {
+		// Rack does not free expander message buffers itself
+		delete (CyberlinePhonemeExpanderMsg*) rightExpander.producerMessage;
+		delete (CyberlinePhonemeExpanderMsg*) rightExpander.consumerMessage;
+	}
 	enum ParamIds {
 		VOWELA_PARAM,
 		VMORPH_PARAM,

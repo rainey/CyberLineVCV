@@ -23,6 +23,11 @@ struct CyberlineBrocaSq : rack::engine::Module {
 	// Pink Trombone poly-bus mode: TRACT POLY re-encodes to the PT-oriented
 	// 10-channel map (see PtBusEncode). Persisted with the patch.
 	bool ptMode = false;
+
+	~CyberlineBrocaSq() {
+		delete (CyberlinePhonemeExpanderMsg*) rightExpander.producerMessage;
+		delete (CyberlinePhonemeExpanderMsg*) rightExpander.consumerMessage;
+	}
 	enum ParamIds {
 		MODE_PARAM,     // clocking mode: FREE / CLOCK / PHASOR
 		RATE_PARAM,     // internal clock rate (steps/sec) in FREE mode

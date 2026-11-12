@@ -440,6 +440,17 @@ static constexpr int BAND_FULL = 0, BAND_SMALL = 1, BAND_MEDIUM = 2,
 // (LARYNX POLY is mode-invariant and unchanged). The breakout module
 // (CyberlinePtBreakout) splits this bus into PT's individual CV inputs.
 //
+// Zero-config via the expander channel: a cyberline phoneme module placed
+// directly LEFT of the breakout publishes an ExpanderMsg advertisement
+// (magic + current ptMode) on its rightExpander.producerMessage. The
+// breakout reads the neighbor's model + message and follows the advertised
+// mode automatically — no menu, no ID voltage on the bus. Rack expander
+// links follow MODULE ADJACENCY (module placement on the row), not cable
+// endpoints: move the sender module away and the breakout sees module ==
+// NULL and mutes (safe default). The sender's own bus encoding always
+// follows its own ptMode (the advertisement is read-only from the right),
+// and the menu checkmark stays as the manual control.
+//
 // Channel map (PT mode):
 //   ch0  TNGX      ±10 V  -> PT TONGUE XI  (attenuversion 1.0 => ±1 offset)
 //   ch1  TNGY      ±10 V  -> PT TONGUE YI
@@ -453,6 +464,33 @@ static constexpr int BAND_FULL = 0, BAND_SMALL = 1, BAND_MEDIUM = 2,
 //   ch9  spare     0 V
 // The same map with channels 0-4 re-encoded; TENS/PRESS/VOICING/VEL
 // channels carry identical values in both modes.
+
+// Expander advertisement published by Broca/BrocaSq (modules that own a
+// ptMode flag and a TRACT POLY bus). magic guards against reading a
+// foreign producerMessage layout after a module-swap.
+struct CyberlinePhonemeExpanderMsg {
+	uint32_t magic;     // CYBERLINE_PHONEME_MAGIC
+	bool ptMode;        // current Pink Trombone bus mode
+};
+
+static constexpr uint32_t CYBERLINE_PHONEME_MAGIC = 0xC7B2A11Eu;
+
+// Publish the phoneme-mode advertisement to the rightExpander channel.
+// Call once per process() from a module that owns ptMode. Idempotent; the
+// buffers are allocated lazily on first call and freed in the module
+// destructor (Rack does NOT free expander message buffers itself).
+inline void publishPhonemeMode(rack::engine::Module* m, bool ptMode) {
+	auto& ex = m->rightExpander;
+	if (!ex.producerMessage || !ex.consumerMessage) {
+		ex.producerMessage = new CyberlinePhonemeExpanderMsg{CYBERLINE_PHONEME_MAGIC, ptMode};
+		ex.consumerMessage = new CyberlinePhonemeExpanderMsg{CYBERLINE_PHONEME_MAGIC, ptMode};
+	}
+	auto* msg = (CyberlinePhonemeExpanderMsg*) ex.producerMessage;
+	msg->magic = CYBERLINE_PHONEME_MAGIC;
+	msg->ptMode = ptMode;
+	ex.requestMessageFlip();
+}
+
 struct PtBusEncode {
 	// Encode one frame's cyberline-channel values into PT mode channels.
 	// in:  [0]=tngX (±5), [1]=tngY (±5), [2]=vel (0-10), [3]=cpos (0-10),

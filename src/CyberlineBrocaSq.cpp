@@ -19,6 +19,7 @@ static inline float sq_wrapPhase(float ph) {
 
 void CyberlineBrocaSq::process(const ProcessArgs& args) {
 	bool measure = cpuMeter.frameStart();
+	publishPhonemeMode(this, ptMode);
 	float dt = args.sampleTime;
 
 	int vLen, cLen;

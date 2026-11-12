@@ -695,7 +695,7 @@ checkmark (persisted with the patch; Reset turns it off).
 - **Caveat:** in PT mode the cable is *not* valid for OralChamber/Voice —
   flip the checkmark back before returning to the cyberline chain.
 
-**PT Breakout** (`cyberline-pt-breakout`, 14 HP) splits the PT-mode bus into
+**PT Breakout** (`cyberline-pt-breakout`, 10 HP) splits the PT-mode bus into
 Pink Trombone's individual mono CV inputs, each labeled with its destination:
 `VOCT` (1 V/oct rel. C4), `TNG X/Y` → `TONGUE XI/YI`, `THROT X` →
 `THROAT XI`, `FR FC` → `FRICFCI`, `FR LVL` → `FRICL`, `TENSE` → `TENSEI`,
@@ -711,6 +711,19 @@ centered, attenuversions at 1.0.
   the breakout's own `TENSE` knob × the bus `VOICING` channel — voiceless
   consonants collapse PT's fold tension into breathy air; `FR LVL` =
   bus `FRIC` + bus `PRESS` boost — pressure shades fricative energy.
+- **Zero-config mode follow (expander link):** Rack cables are
+  one-directional and carry no metadata, so the bus cannot negotiate on its
+  own — instead the suite uses Rack's **expander message channel**. A
+  Broca/BrocaSq placed **directly LEFT** of the breakout (module adjacency,
+  not the cable route) publishes a magic-tagged advertisement of its current
+  `ptMode` on `rightExpander`; the breakout follows it automatically. Flip
+  the sender's menu checkmark and the breakout follows; move the sender
+  module away (`leftExpander.module == NULL`) and the breakout **mutes**
+  (safe default — a cyberline-mode bus interpreted as PT data would look
+  plausible, not obviously wrong). The `BUS OK` light: bright green = PT
+  neighbor advertising PT mode; dim = neighbor present but in cyberline
+  mode; dark = no/foreign neighbor. `VOCT` pass-through works regardless
+  (pitch is not bus data).
 
 ## 5e. `cyberline-visual1` — Visual1 (audio→image visualizer)
 

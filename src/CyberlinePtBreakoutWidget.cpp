@@ -92,6 +92,14 @@ struct CyberlinePtBreakoutWidget : rack::app::ModuleWidget {
 		drawPortRing(inX[0], rIn, neonViolet);
 		drawPortRing(inX[1], rIn, neonMint);
 
+		// BUS OK light (green) above the PT BUS jack — drawn by the
+		// registered light widget below; the ring-level dot is a static
+		// placeholder socket.
+		nvgBeginPath(vg);
+		nvgCircle(vg, inX[0] - 12.f, rIn - 12.f, 1.8f);
+		nvgFillColor(vg, nvgRGB(0x2a, 0x30, 0x38));
+		nvgFill(vg);
+
 		// Outputs row 1: VOCT (mint), TNG X (cyan), TNG Y (cyan)
 		drawPortRing(outX[0], rOut[0], neonMint);
 		drawPortRing(outX[1], rOut[0], neonCyan);
@@ -227,6 +235,8 @@ struct CyberlinePtBreakoutWidget : rack::app::ModuleWidget {
 		float inX[2] = {45.f, 105.f};
 		addInput(rack::createInputCentered<PJ301MPort>(rack::Vec(inX[0], rIn), module, CyberlinePtBreakout::BUS_INPUT));
 		addInput(rack::createInputCentered<PJ301MPort>(rack::Vec(inX[1], rIn), module, CyberlinePtBreakout::VOCT_INPUT));
+		addChild(rack::createLightCentered<rack::componentlibrary::SmallLight<rack::componentlibrary::GreenLight>>(
+			rack::Vec(inX[0] - 12.f, rIn - 12.f), module, CyberlinePtBreakout::BUSOK_LIGHT));
 
 		// Outputs (3x3 grid; row 3 has 2)
 		float outX[3] = {28.f, 75.f, 122.f};

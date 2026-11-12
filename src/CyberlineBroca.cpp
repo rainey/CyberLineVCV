@@ -52,6 +52,7 @@ static inline float broca_lerpf(float a, float b, float t) {
 
 void CyberlineBroca::process(const ProcessArgs& args) {
 	bool measure = cpuMeter.frameStart();
+	publishPhonemeMode(this, ptMode);
 	float dt = args.sampleTime;
 
 	// ---- 0. Detect SYNC / RESET and TRIG Edges ----

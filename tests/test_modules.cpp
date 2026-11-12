@@ -1193,7 +1193,7 @@ static void test_pt_mode_and_breakout() {
 		// FRIC LVL direct match, VEL/TENS/PRESS/VOIC pass through
 		CHECK(out[4] == 10.f && out[5] == 5.f && out[6] == 0.f && out[7] == 8.f && out[8] == 0.f,
 			"PT bus passes FRIC LVL, VEL, TENS, PRESS, VOICING unchanged");
-		CHECK(out[9] == 0.f, "PT bus ch10 is spare (0 V)");
+		CHECK(out[9] == 0.f, "PT bus ch10 is spare (0 V; protocol is advertised via the expander link, not the bus)");
 	}
 
 	// ---- Broca PT mode: bus re-encodes, 10 channels, persistence ----
@@ -1243,13 +1243,20 @@ static void test_pt_mode_and_breakout() {
 	// ---- PT Breakout: fan-out, fusions, law pitch ----
 	{
 		CyberlinePtBreakout brk;
+		// Simulate the expander link: a Broca directly LEFT advertising PT mode
+		CyberlineBroca neighbor;
+		neighbor.ptMode = true;
+		brk.leftExpander.module = &neighbor;
 		brk.inputs[CyberlinePtBreakout::BUS_INPUT].channels = 10;
 		float bus[10] = {6.8f, -4.f, 2.f, 3.f, 7.f, 5.f, 0.f, 8.f, 10.f, 0.f};
 		for (int c = 0; c < 10; c++)
 			brk.inputs[CyberlinePtBreakout::BUS_INPUT].setVoltage(bus[c], c);
+		neighbor.process(args);   // publishes the advertisement
 		brk.params[CyberlinePtBreakout::TENSE_PARAM].setValue(0.8f);
 		brk.params[CyberlinePtBreakout::SRC_PARAM].setValue(1.f);  // pass-through first
 		brk.process(args);
+		CHECK(brk.lights[CyberlinePtBreakout::BUSOK_LIGHT].getBrightness() > 0.5f,
+			"Breakout BUS OK lights when the left neighbor advertises PT mode");
 		CHECK(std::fabs(brk.outputs[CyberlinePtBreakout::TONGUEX_OUTPUT].getVoltage() - 6.8f) < 0.01f,
 			"Breakout fans out PT bus ch1 to TONGUE X unchanged");
 		CHECK(std::fabs(brk.outputs[CyberlinePtBreakout::THROATX_OUTPUT].getVoltage() - 2.f) < 0.01f,
@@ -1268,6 +1275,57 @@ static void test_pt_mode_and_breakout() {
 		// VEL monitor
 		CHECK(std::fabs(brk.outputs[CyberlinePtBreakout::VEL_OUTPUT].getVoltage() - 5.f) < 0.01f,
 			"Breakout VEL monitor passes ch6 (no PT sink)");
+
+		// ---- Auto-gating: neighbor absent / cyberline-mode => mute ----
+		{
+			CyberlinePtBreakout brk2;
+			brk2.inputs[CyberlinePtBreakout::BUS_INPUT].channels = 10;
+			float wrongBus[10] = {5.f, 5.f, 5.f, 5.f, 5.f, 5.f, 0.f, 5.f, 5.f, 0.f};
+			for (int c = 0; c < 10; c++)
+				brk2.inputs[CyberlinePtBreakout::BUS_INPUT].setVoltage(wrongBus[c], c);
+			brk2.params[CyberlinePtBreakout::TENSE_PARAM].setValue(0.8f);
+			// No neighbor at all
+			brk2.process(args);
+			CHECK(brk2.lights[CyberlinePtBreakout::BUSOK_LIGHT].getBrightness() < 0.5f,
+				"Breakout BUS OK dark with no expander neighbor");
+			CHECK(brk2.outputs[CyberlinePtBreakout::TONGUEX_OUTPUT].getVoltage() == 0.f
+				&& brk2.outputs[CyberlinePtBreakout::FRICLVL_OUTPUT].getVoltage() == 0.f
+				&& brk2.outputs[CyberlinePtBreakout::VEL_OUTPUT].getVoltage() == 0.f,
+				"Breakout gates bus-fed outputs with no neighbor (safe default)");
+			// Cyberline-mode neighbor (advertising ptMode=false)
+			CyberlineBroca neighbor2;
+			neighbor2.ptMode = false;
+			neighbor2.process(args);
+			brk2.leftExpander.module = &neighbor2;
+			brk2.process(args);
+			CHECK(brk2.lights[CyberlinePtBreakout::BUSOK_LIGHT].getBrightness() < 0.5f,
+				"Breakout BUS OK dim when the neighbor is in cyberline mode");
+			CHECK(brk2.outputs[CyberlinePtBreakout::TONGUEX_OUTPUT].getVoltage() == 0.f,
+				"Breakout still gated when the neighbor advertises cyberline mode");
+			// Neighbor flips to PT mode -> breakout follows automatically
+			neighbor2.ptMode = true;
+			neighbor2.process(args);
+			brk2.process(args);
+			CHECK(brk2.lights[CyberlinePtBreakout::BUSOK_LIGHT].getBrightness() > 0.5f,
+				"Breakout BUS OK lights once the neighbor flips to PT mode (auto-follow)");
+			CHECK(std::fabs(brk2.outputs[CyberlinePtBreakout::TONGUEX_OUTPUT].getVoltage() - 5.f) < 0.01f,
+				"Breakout fans out once the neighbor advertises PT mode");
+			// Neighbor removed (module moved away) -> mute again
+			brk2.leftExpander.module = NULL;
+			brk2.process(args);
+			CHECK(brk2.outputs[CyberlinePtBreakout::TONGUEX_OUTPUT].getVoltage() == 0.f,
+				"Breakout mutes when the neighbor module goes away");
+		}
+		// VOCT pass-through works without any bus/expander (pitch is not bus-fed)
+		{
+			CyberlinePtBreakout brk3;
+			brk3.inputs[CyberlinePtBreakout::VOCT_INPUT].channels = 1;
+			brk3.inputs[CyberlinePtBreakout::VOCT_INPUT].setVoltage(2.f, 0);
+			brk3.params[CyberlinePtBreakout::SRC_PARAM].setValue(1.f);
+			brk3.process(args);
+			CHECK(std::fabs(brk3.outputs[CyberlinePtBreakout::VOCT_OUTPUT].getVoltage() - 2.f) < 0.01f,
+				"Breakout VOCT pass-through works without a bus (pitch is not bus-fed)");
+		}
 
 		// Law pitch: FOLD 17 mm -> 178 Hz -> log2(178/261.6) = -0.555 V
 		brk.params[CyberlinePtBreakout::FOLD_PARAM].setValue(17.f);

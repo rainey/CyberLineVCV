@@ -51,8 +51,16 @@ struct CyberlinePtBreakout : rack::engine::Module {
 		NUM_OUTPUTS
 	};
 	enum LightIds {
+		BUSOK_LIGHT,    // green: cyberline phoneme module adjacent LEFT (expander link) and advertising PT mode
 		NUM_LIGHTS
 	};
+
+	// Auto-detected bus mode from the left expander link. Three states:
+	// no neighbor / non-phoneme neighbor => muted (safe default);
+	// phoneme neighbor in cyberline mode => muted too (bus carries the
+	// wrong map); phoneme neighbor advertising PT mode => fan out.
+	bool expanderPtMode = false;
+	bool expanderLinked = false;
 
 	static constexpr int BUS_CH = 10;
 
@@ -64,7 +72,7 @@ struct CyberlinePtBreakout : rack::engine::Module {
 		configParam(TENSE_PARAM, 0.f, 1.f, 0.44f, "PT tenseness", "%", 0.f, 100.f);
 		configSwitch(SRC_PARAM, 0.f, 1.f, 0.f, "Pitch source",
 			{"LAW + V/OCT in", "V/OCT pass-through"});
-		configInput(BUS_INPUT, "TRACT POLY (Broca/BrocaSq, Pink Trombone mode)");
+		configInput(BUS_INPUT, "TRACT POLY from a Broca/BrocaSq placed directly LEFT (mode auto-follows the neighbor's Pink Trombone setting via the expander link)");
 		configInput(VOCT_INPUT, "V/Oct (1 V/oct relative to C4)");
 		configOutput(VOCT_OUTPUT, "VOct -> PT V/OCT (1 V/oct rel. C4)");
 		configOutput(TONGUEX_OUTPUT, "Tongue X -> PT TONGUE XI (attenver. 1.0)");
@@ -79,11 +87,31 @@ struct CyberlinePtBreakout : rack::engine::Module {
 	void process(const ProcessArgs& args) override {
 		bool measure = cpuMeter.frameStart();
 
+		// ---- Auto-detect the bus protocol via the left expander link ----
+		// The neighbor module (directly LEFT on the rack row) advertises its
+		// phoneme bus mode on its rightExpander message (magic-tagged).
+		// No neighbor, a foreign neighbor, or a cyberline-mode neighbor all
+		// read as busOk = false: outputs gate to 0 V instead of interpreting
+		// the wrong map as articulation data. BUS OK shows the state.
+		expanderLinked = false;
+		expanderPtMode = false;
+		if (leftExpander.module) {
+			// The magic proves the neighbor is a cyberline phoneme module
+			// (Broca or BrocaSq publish this exact layout; foreign modules
+			// have some other buffer or NULL there).
+			auto* msg = (CyberlinePhonemeExpanderMsg*) leftExpander.module->rightExpander.producerMessage;
+			if (msg && msg->magic == CYBERLINE_PHONEME_MAGIC) {
+				expanderLinked = true;
+				expanderPtMode = msg->ptMode;
+			}
+		}
+		bool busOk = expanderLinked && expanderPtMode
+			&& inputs[BUS_INPUT].isConnected();
+
 		// ---- Bus fan-out (PT-mode channel map) ----
 		float bus[BUS_CH];
 		for (int c = 0; c < BUS_CH; c++)
-			bus[c] = inputs[BUS_INPUT].isConnected()
-				? inputs[BUS_INPUT].getVoltage(c) : 0.f;
+			bus[c] = busOk ? inputs[BUS_INPUT].getVoltage(c) : 0.f;
 
 		// ---- Pitch: law source referenced to C4, or pass-through ----
 		// Suite law: log10(F0) = -1.43*log10(L_mm) + 4.01, with the sqrt-
@@ -123,6 +151,11 @@ struct CyberlinePtBreakout : rack::engine::Module {
 
 		// Velum monitor (no PT sink)
 		outputs[VEL_OUTPUT].setVoltage(bus[5]);
+
+		// BUS OK light: green when a phoneme neighbor is adjacent LEFT and
+		// advertising PT mode (linked but wrong mode = half-bright amber-ish
+		// signal via the same light at low brightness)
+		lights[BUSOK_LIGHT].setBrightness(busOk ? 1.f : (expanderLinked ? 0.15f : 0.f));
 
 		cpuMeter.frameEnd(measure, args.sampleRate);
 	}
