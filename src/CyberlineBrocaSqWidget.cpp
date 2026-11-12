@@ -14,44 +14,51 @@ namespace cyberline {
 // =====================================================================================
 // BROCA² LAYOUT — all widget positions live here. Edit these freely; the
 // constructor and drawPanel only reference these constants. Panel is 300 px
-// wide (20 HP) x 380 px tall (RACK_GRID_HEIGHT); y must leave room for the
-// three jack rows (in1 y=252, in2 y=294, out y=338) and screw margins.
+// wide (20 HP) x 380 px tall (RACK_GRID_HEIGHT); the bottom half is split into
+// left INPUTS and right OUTPUTS boxes sharing two jack rows (y=292, y=338),
+// freeing vertical space for the knob row (y=236) and upper-right editor.
 // =====================================================================================
 namespace Layout {
 	// 4x4 register grid HUD (left side)
-	constexpr float GRID_X = 22.f,  GRID_Y = 24.f,  GRID_S = 136.f;
+	constexpr float GRID_X = 16.f,  GRID_Y = 24.f,  GRID_S = 142.f;
 
-	// Register editor (right column)
-	constexpr float PREVIEW_X = 164.f, PREVIEW_Y = 28.f, PREVIEW_S = 28.f;
-	constexpr float ENC_V_X = 218.f,  ENC_V_Y = 44.f;    // V SEL (12 detents)
-	constexpr float ENC_C_X = 250.f,  ENC_C_Y = 44.f;    // C SEL (21 detents)
-	constexpr float MODE_X = 276.f,   MODE_Y = 44.f;
-	constexpr float BTN_LKV_X = 218.f, BTN_LKV_Y = 76.f; // lock vowel
-	constexpr float BTN_LKC_X = 250.f, BTN_LKC_Y = 76.f; // lock consonant
-	constexpr float BTN_EDIT_X = 178.f, BTN_EDIT_Y = 108.f;
-	constexpr float ENC_CELL_X = 218.f, ENC_CELL_Y = 108.f;
-	constexpr float BTN_COPYL_X = 178.f, BTN_COPYR_X = 258.f, BTN_FILL_X = 218.f;
-	constexpr float UTIL_Y = 148.f;                       // copy/fill row
-	constexpr float FAVOR_X = 206.f, FAVOR_Y = 166.f;
-	constexpr float ONSET_X = 252.f, ONSET_Y = 166.f;
+	// Register editor (upper-right quadrant, x: 164..288, y: 24..204)
+	constexpr float PREVIEW_X = 168.f, PREVIEW_Y = 28.f, PREVIEW_S = 28.f;
+	constexpr float ENC_V_X = 219.f,  ENC_V_Y = 44.f;    // V SEL (12 detents)
+	constexpr float ENC_C_X = 251.f,  ENC_C_Y = 44.f;    // C SEL (21 detents)
+	constexpr float MODE_X = 281.f,   MODE_Y = 44.f;
+	constexpr float BTN_EDIT_X = 182.f, BTN_EDIT_Y = 84.f;
+	constexpr float BTN_LKV_X = 219.f, BTN_LKV_Y = 84.f; // lock vowel
+	constexpr float BTN_LKC_X = 251.f, BTN_LKC_Y = 84.f; // lock consonant
+	constexpr float ENC_CELL_X = 182.f, ENC_CELL_Y = 128.f;
+	constexpr float BTN_COPYL_X = 219.f, BTN_FILL_X = 249.f, BTN_COPYR_X = 279.f;
+	constexpr float UTIL_Y = 128.f;                      // CELL + copy/fill row
+	constexpr float FAVOR_X = 204.f, FAVOR_Y = 178.f;
+	constexpr float ONSET_X = 256.f, ONSET_Y = 178.f;
 
-	// Bottom knob row (y = KNOB_Y, labels 18 px above)
-	constexpr float KNOB_Y = 200.f;
+	// Main knob row (y = KNOB_Y, labels 18 px above)
+	constexpr float KNOB_Y = 236.f;
 	constexpr float kX[7] = {30.f, 70.f, 110.f, 150.f, 190.f, 230.f, 270.f};
 
-	// Jack rows
-	constexpr float IN1_Y = 252.f, IN2_Y = 294.f, OUT_Y = 338.f;
-	constexpr float inX[4] = {30.f, 68.f, 106.f, 144.f};
-	constexpr float outX[7] = {26.f, 64.f, 102.f, 140.f, 178.f, 220.f, 262.f};
+	// Shared bottom jack rows: left box = INPUTS (4x2), right box = OUTPUTS (3+4)
+	constexpr float IN1_Y = 292.f, IN2_Y = 338.f;
+	constexpr float OUT1_Y = 292.f, OUT2_Y = 338.f;
+	constexpr float inX[4] = {25.f, 59.f, 93.f, 127.f};
+	constexpr float outX1[3] = {180.f, 224.f, 268.f};        // TRACT, LARYNX, GATE
+	constexpr float outX2[4] = {173.f, 207.f, 241.f, 275.f}; // ENV, BURST, VOW, CONS
+
+	// Outlined box bounds for INPUTS (left) and OUTPUTS (right)
+	constexpr float IN_BOX_X0 = 7.f,   IN_BOX_X1 = 145.f;
+	constexpr float OUT_BOX_X0 = 155.f, OUT_BOX_X1 = 293.f;
+	constexpr float JACK_BOX_Y0 = 264.f, JACK_BOX_Y1 = 356.f;
 
 	// Label anchors (text draws are at these exact coords, matching the
 	// widgets they name)
 	constexpr float EDITOR_LABEL_Y1 = 26.f;   // V SEL / C SEL / MODE
-	constexpr float EDITOR_LABEL_Y2 = 62.f;   // LK-V / LK-C
-	constexpr float EDITOR_LABEL_Y3 = 92.f;   // EDIT / CELL
-	constexpr float UTIL_LABEL_Y = 134.f;     // CPY arrows / FILL
-	constexpr float CHAR_LABEL_Y = 150.f;     // FAVOR / ONSET s
-	constexpr float KNOB_LABEL_Y = 182.f;
+	constexpr float EDITOR_LABEL_Y2 = 70.f;   // EDIT / LK-V / LK-C
+	constexpr float UTIL_LABEL_Y = 112.f;     // CELL / CPY arrows / FILL
+	constexpr float CHAR_LABEL_Y = 160.f;     // FAVOR / ONSET s
+	constexpr float KNOB_LABEL_Y = 218.f;
 }
 
 struct CyberlineBrocaSqWidget : rack::app::ModuleWidget {
@@ -391,13 +398,12 @@ struct CyberlineBrocaSqWidget : rack::app::ModuleWidget {
 		nvgStrokeColor(vg, nvgRGBA(0x9b, 0x6d, 0xff, 130));
 		nvgStroke(vg);
 
-		float rIn1 = Layout::IN1_Y, rIn2 = Layout::IN2_Y, rOut = Layout::OUT_Y;
+		float rIn1 = Layout::IN1_Y, rIn2 = Layout::IN2_Y;
+		float rOut1 = Layout::OUT1_Y, rOut2 = Layout::OUT2_Y;
 
-		// Chamfered wireframe brackets around both input rows
-		for (float rIn : {rIn1, rIn2}) {
-			float bx0 = 8.f, bx1 = panelW - 8.f;
-			float by0 = rIn - 18.f, by1 = rIn + 16.5f;
-			float bch = 4.5f;
+		// Chamfered wireframe boxes around INPUTS (left) and OUTPUTS (right)
+		auto drawJackBox = [&](float bx0, float bx1, float by0, float by1, NVGcolor strokeCol) {
+			float bch = 5.f;
 			nvgBeginPath(vg);
 			nvgMoveTo(vg, bx0 + bch, by0);
 			nvgLineTo(vg, bx1 - bch, by0);
@@ -408,12 +414,16 @@ struct CyberlineBrocaSqWidget : rack::app::ModuleWidget {
 			nvgLineTo(vg, bx0, by1 - bch);
 			nvgLineTo(vg, bx0, by0 + bch);
 			nvgClosePath(vg);
-			nvgFillColor(vg, nvgRGBA(0x0b, 0x0d, 0x13, 115));
+			nvgFillColor(vg, nvgRGBA(0x0b, 0x0d, 0x13, 125));
 			nvgFill(vg);
-			nvgStrokeWidth(vg, 0.9f);
-			nvgStrokeColor(vg, nvgRGBA(0x8e, 0x62, 0xf8, 95));
+			nvgStrokeWidth(vg, 0.95f);
+			nvgStrokeColor(vg, strokeCol);
 			nvgStroke(vg);
-		}
+		};
+		drawJackBox(Layout::IN_BOX_X0, Layout::IN_BOX_X1, Layout::JACK_BOX_Y0, Layout::JACK_BOX_Y1,
+			nvgRGBA(0x8e, 0x62, 0xf8, 105));
+		drawJackBox(Layout::OUT_BOX_X0, Layout::OUT_BOX_X1, Layout::JACK_BOX_Y0, Layout::JACK_BOX_Y1,
+			nvgRGBA(0x48, 0xd8, 0xf8, 105));
 
 		auto drawPortRing = [&](float x, float y, NVGcolor col, bool isOutput, bool isPoly) {
 			nvgBeginPath(vg);
@@ -437,25 +447,24 @@ struct CyberlineBrocaSqWidget : rack::app::ModuleWidget {
 		// Port rings (color-coded like Broca: cyan = vowel lane, amber =
 		// consonant lane, mint = clock/reset, violet = poly buses)
 		// Inputs row 1: CLOCK, RESET, V-PH, C-PH
-		drawPortRing(30.f,  rIn1, neonMint,  false, false);
-		drawPortRing(68.f,  rIn1, neonMint,  false, false);
-		drawPortRing(106.f, rIn1, neonCyan,  false, false);
-		drawPortRing(144.f, rIn1, neonAmber, false, false);
+		drawPortRing(Layout::inX[0], rIn1, neonMint,   false, false);
+		drawPortRing(Layout::inX[1], rIn1, neonMint,   false, false);
+		drawPortRing(Layout::inX[2], rIn1, neonCyan,   false, false);
+		drawPortRing(Layout::inX[3], rIn1, neonAmber,  false, false);
 		// Inputs row 2: P-V, P-C, MORPH, LEN
-		drawPortRing(30.f,  rIn2, neonCyan,  false, false);
-		drawPortRing(68.f,  rIn2, neonAmber, false, false);
-		drawPortRing(106.f, rIn2, neonViolet, false, false);
-		drawPortRing(144.f, rIn2, neonMint,  false, false);
-		// Outputs: TRACT POLY (violet, poly), LARYNX POLY (coral, poly),
-		// CVENV (cyan), BURST (amber), GATE (mint), VOW CV (cyan), CONS CV (amber)
-		float outX[7] = {Layout::outX[0], Layout::outX[1], Layout::outX[2], Layout::outX[3], Layout::outX[4], Layout::outX[5], Layout::outX[6]};
-		drawPortRing(outX[0], rOut, neonViolet, true, true);
-		drawPortRing(outX[1], rOut, neonCoral,  true, true);
-		drawPortRing(outX[2], rOut, neonCyan,   true, false);
-		drawPortRing(outX[3], rOut, neonAmber,  true, false);
-		drawPortRing(outX[4], rOut, neonMint,   true, false);
-		drawPortRing(outX[5], rOut, neonCyan,   true, false);
-		drawPortRing(outX[6], rOut, neonAmber,  true, false);
+		drawPortRing(Layout::inX[0], rIn2, neonCyan,   false, false);
+		drawPortRing(Layout::inX[1], rIn2, neonAmber,  false, false);
+		drawPortRing(Layout::inX[2], rIn2, neonViolet, false, false);
+		drawPortRing(Layout::inX[3], rIn2, neonMint,   false, false);
+		// Outputs row 1: TRACT POLY (violet, poly), LARYNX POLY (coral, poly), GATE (mint)
+		drawPortRing(Layout::outX1[0], rOut1, neonViolet, true, true);
+		drawPortRing(Layout::outX1[1], rOut1, neonCoral,  true, true);
+		drawPortRing(Layout::outX1[2], rOut1, neonMint,   true, false);
+		// Outputs row 2: CVENV (cyan), BURST (amber), VOW CV (cyan), CONS CV (amber)
+		drawPortRing(Layout::outX2[0], rOut2, neonCyan,   true, false);
+		drawPortRing(Layout::outX2[1], rOut2, neonAmber,  true, false);
+		drawPortRing(Layout::outX2[2], rOut2, neonCyan,   true, false);
+		drawPortRing(Layout::outX2[3], rOut2, neonAmber,  true, false);
 
 		auto font = getLabelFont();
 		if (font && font->handle >= 0)
@@ -467,22 +476,22 @@ struct CyberlineBrocaSqWidget : rack::app::ModuleWidget {
 			nvgText(vg, x, y, s, NULL);
 		};
 
-		// Grid HUD title; lane legend moved under the grid
+		// Grid HUD title; lane legend under the grid
+		float gridCenterX = Layout::GRID_X + Layout::GRID_S * 0.5f;
 		nvgFontSize(vg, 7.5f);
 		nvgFillColor(vg, nvgRGB(0x88, 0xe4, 0xfc));
-		text(90.f, 20.f, "REGISTER GRID");
+		text(gridCenterX, 20.f, "REGISTER GRID");
 
-		// Right column: register editor + character knobs + MODE.
-		// Columns x: 178 (preview/EDIT), 218 & 250 (encoders), 276 (MODE)
+		// Upper-right quadrant: register editor + character knobs + MODE
 		nvgFontSize(vg, 6.4f);
 		nvgFillColor(vg, label);
 		text(Layout::ENC_V_X, Layout::EDITOR_LABEL_Y1, "V SEL");
 		text(Layout::ENC_C_X, Layout::EDITOR_LABEL_Y1, "C SEL");
 		text(Layout::MODE_X, Layout::EDITOR_LABEL_Y1, "MODE");
+		text(Layout::BTN_EDIT_X, Layout::EDITOR_LABEL_Y2, "EDIT");
 		text(Layout::BTN_LKV_X, Layout::EDITOR_LABEL_Y2, "LK-V");
 		text(Layout::BTN_LKC_X, Layout::EDITOR_LABEL_Y2, "LK-C");
-		text(Layout::BTN_EDIT_X, Layout::EDITOR_LABEL_Y3, "EDIT");
-		text(Layout::ENC_CELL_X, Layout::EDITOR_LABEL_Y3, "CELL");
+		text(Layout::ENC_CELL_X, Layout::UTIL_LABEL_Y, "CELL");
 		text(Layout::BTN_COPYL_X, Layout::UTIL_LABEL_Y, "\xE2\x86\x90 CPY");
 		text(Layout::BTN_FILL_X, Layout::UTIL_LABEL_Y, "FILL");
 		text(Layout::BTN_COPYR_X, Layout::UTIL_LABEL_Y, "CPY \xE2\x86\x92");
@@ -490,13 +499,13 @@ struct CyberlineBrocaSqWidget : rack::app::ModuleWidget {
 		text(Layout::ONSET_X, Layout::CHAR_LABEL_Y, "ONSET s");
 
 		// Register edit preview: the pair currently under the editor,
-		// drawn like an enlarged grid cell at (178, 42) size 28
+		// drawn like an enlarged grid cell at (PREVIEW_X, PREVIEW_Y)
 		{
 			int ep = module ? module->editPos : 0;
 			bool ea = module && module->editActive;
 			uint8_t pv = module ? module->vowelReg[ep] : 0;
 			uint8_t pc = module ? module->consReg[ep] : 0;
-			float px = 164.f, py = 28.f, ps = 28.f;
+			float px = Layout::PREVIEW_X, py = Layout::PREVIEW_Y, ps = Layout::PREVIEW_S;
 			nvgBeginPath(vg);
 			nvgRoundedRect(vg, px, py, ps, ps, 3.f);
 			nvgFillColor(vg, nvgRGB(0x11, 0x14, 0x1c));
@@ -523,59 +532,67 @@ struct CyberlineBrocaSqWidget : rack::app::ModuleWidget {
 			}
 		}
 
-		// Knob row labels (knobs at KNOB_Y=200)
+		// Knob row labels
 		nvgFontSize(vg, 8.f);
 		nvgFillColor(vg, label);
-		text(kX[0], 182.f, "RATE");
+		text(kX[0], Layout::KNOB_LABEL_Y, "RATE");
 		nvgFillColor(vg, nvgRGB(0x88, 0xe4, 0xfc));
-		text(kX[1], 182.f, "MUT-V");
-		text(kX[2], 182.f, "V LEN");
+		text(kX[1], Layout::KNOB_LABEL_Y, "MUT-V");
+		text(kX[2], Layout::KNOB_LABEL_Y, "V LEN");
 		nvgFillColor(vg, nvgRGB(0xf8, 0xc0, 0x78));
-		text(kX[3], 182.f, "C LEN");
-		text(kX[5], 182.f, "MUT-C");
+		text(kX[3], Layout::KNOB_LABEL_Y, "C LEN");
+		text(kX[5], Layout::KNOB_LABEL_Y, "MUT-C");
 		nvgFillColor(vg, label);
-		text(kX[4], 182.f, "MORPH");
-		text(kX[6], 182.f, "STEP");
+		text(kX[4], Layout::KNOB_LABEL_Y, "MORPH");
+		text(kX[6], Layout::KNOB_LABEL_Y, "STEP");
 
-		// Lane legend (moved under the grid to free the editor area)
+		// Lane legend under the grid
 		nvgFontSize(vg, 6.2f);
 		nvgFillColor(vg, label);
-		text(90.f, 172.f, "TOP: VOWEL \xC2\xB7 BOTTOM: CONSONANT");
+		text(gridCenterX, Layout::GRID_Y + Layout::GRID_S + 13.f, "TOP: VOWEL \xC2\xB7 BOTTOM: CONSONANT");
+
+		// Input / Output box section headers
+		nvgFontSize(vg, 6.2f);
+		nvgFillColor(vg, nvgRGBA(0xb8, 0x9c, 0xff, 195));
+		text((Layout::IN_BOX_X0 + Layout::IN_BOX_X1) * 0.5f, Layout::JACK_BOX_Y0 - 2.5f, "INPUTS");
+		nvgFillColor(vg, nvgRGBA(0x78, 0xe0, 0xfc, 195));
+		text((Layout::OUT_BOX_X0 + Layout::OUT_BOX_X1) * 0.5f, Layout::JACK_BOX_Y0 - 2.5f, "OUTPUTS");
 
 		nvgFontSize(vg, 6.2f);
 		// Input row 1 labels
 		nvgFillColor(vg, nvgRGB(0x80, 0xe8, 0xb8));
-		text(30.f,  rIn1 - 17.f, "CLK");
-		text(68.f,  rIn1 - 17.f, "RST");
+		text(Layout::inX[0], rIn1 - 16.5f, "CLK");
+		text(Layout::inX[1], rIn1 - 16.5f, "RST");
 		nvgFillColor(vg, nvgRGB(0x88, 0xe4, 0xfc));
-		text(106.f, rIn1 - 17.f, "V-PH");
+		text(Layout::inX[2], rIn1 - 16.5f, "V-PH");
 		nvgFillColor(vg, nvgRGB(0xf8, 0xc0, 0x78));
-		text(144.f, rIn1 - 17.f, "C-PH");
+		text(Layout::inX[3], rIn1 - 16.5f, "C-PH");
 		// Input row 2 labels
 		nvgFillColor(vg, nvgRGB(0x88, 0xe4, 0xfc));
-		text(30.f,  rIn2 - 17.f, "P-V");
+		text(Layout::inX[0], rIn2 - 16.5f, "P-V");
 		nvgFillColor(vg, nvgRGB(0xf8, 0xc0, 0x78));
-		text(68.f,  rIn2 - 17.f, "P-C");
+		text(Layout::inX[1], rIn2 - 16.5f, "P-C");
 		nvgFillColor(vg, nvgRGB(0xd0, 0xb0, 0xff));
-		text(106.f, rIn2 - 17.f, "MORPH");
+		text(Layout::inX[2], rIn2 - 16.5f, "MORPH");
 		nvgFillColor(vg, nvgRGB(0x80, 0xe8, 0xb8));
-		text(144.f, rIn2 - 17.f, "LEN");
-		// Output labels
-		nvgFontSize(vg, 6.2f);
+		text(Layout::inX[3], rIn2 - 16.5f, "LEN");
+
+		// Output row 1 labels: TRACT, LARYNX, GATE
 		nvgFillColor(vg, nvgRGB(0xd0, 0xb0, 0xff));
-		text(outX[0], rOut - 17.f, "TRACT");
+		text(Layout::outX1[0], rOut1 - 17.5f, "TRACT");
 		nvgFillColor(vg, nvgRGB(0xf8, 0x90, 0x98));
-		text(outX[1], rOut - 17.f, "LARYNX");
-		nvgFillColor(vg, nvgRGB(0x88, 0xe4, 0xfc));
-		text(outX[2], rOut - 17.f, "ENV");
-		nvgFillColor(vg, nvgRGB(0xf8, 0xc0, 0x78));
-		text(outX[3], rOut - 17.f, "BURST");
+		text(Layout::outX1[1], rOut1 - 17.5f, "LARYNX");
 		nvgFillColor(vg, nvgRGB(0x80, 0xe8, 0xb8));
-		text(outX[4], rOut - 17.f, "GATE");
+		text(Layout::outX1[2], rOut1 - 16.5f, "GATE");
+		// Output row 2 labels: ENV, BURST, VOW, CONS
 		nvgFillColor(vg, nvgRGB(0x88, 0xe4, 0xfc));
-		text(outX[5], rOut - 17.f, "VOW");
+		text(Layout::outX2[0], rOut2 - 16.5f, "ENV");
 		nvgFillColor(vg, nvgRGB(0xf8, 0xc0, 0x78));
-		text(outX[6], rOut - 17.f, "CONS");
+		text(Layout::outX2[1], rOut2 - 16.5f, "BURST");
+		nvgFillColor(vg, nvgRGB(0x88, 0xe4, 0xfc));
+		text(Layout::outX2[2], rOut2 - 16.5f, "VOW");
+		nvgFillColor(vg, nvgRGB(0xf8, 0xc0, 0x78));
+		text(Layout::outX2[3], rOut2 - 16.5f, "CONS");
 
 		drawPanelTitle(args, panelW, "BROCA\xC2\xB2");
 	}
@@ -675,16 +692,16 @@ struct CyberlineBrocaSqWidget : rack::app::ModuleWidget {
 		addInput(rack::createInputCentered<PJ301MPort>(rack::Vec(Layout::inX[2], rIn2), module, CyberlineBrocaSq::MORPH_INPUT));
 		addInput(rack::createInputCentered<PJ301MPort>(rack::Vec(Layout::inX[3], rIn2), module, CyberlineBrocaSq::LEN_INPUT));
 
-		// Outputs
-		float outX[7] = {Layout::outX[0], Layout::outX[1], Layout::outX[2], Layout::outX[3], Layout::outX[4], Layout::outX[5], Layout::outX[6]};
-		float rOut = Layout::OUT_Y;
-		addOutput(rack::createOutputCentered<PJ301MPort>(rack::Vec(outX[0], rOut), module, CyberlineBrocaSq::TRACT_POLY_OUTPUT));
-		addOutput(rack::createOutputCentered<PJ301MPort>(rack::Vec(outX[1], rOut), module, CyberlineBrocaSq::LARYNX_POLY_OUTPUT));
-		addOutput(rack::createOutputCentered<PJ301MPort>(rack::Vec(outX[2], rOut), module, CyberlineBrocaSq::CVENV_OUTPUT));
-		addOutput(rack::createOutputCentered<PJ301MPort>(rack::Vec(outX[3], rOut), module, CyberlineBrocaSq::BURST_OUTPUT));
-		addOutput(rack::createOutputCentered<PJ301MPort>(rack::Vec(outX[4], rOut), module, CyberlineBrocaSq::GATE_OUTPUT));
-		addOutput(rack::createOutputCentered<PJ301MPort>(rack::Vec(outX[5], rOut), module, CyberlineBrocaSq::VOWCV_OUTPUT));
-		addOutput(rack::createOutputCentered<PJ301MPort>(rack::Vec(outX[6], rOut), module, CyberlineBrocaSq::CONSCV_OUTPUT));
+		// Outputs row 1: TRACT, LARYNX, GATE
+		float rOut1 = Layout::OUT1_Y, rOut2 = Layout::OUT2_Y;
+		addOutput(rack::createOutputCentered<PJ301MPort>(rack::Vec(Layout::outX1[0], rOut1), module, CyberlineBrocaSq::TRACT_POLY_OUTPUT));
+		addOutput(rack::createOutputCentered<PJ301MPort>(rack::Vec(Layout::outX1[1], rOut1), module, CyberlineBrocaSq::LARYNX_POLY_OUTPUT));
+		addOutput(rack::createOutputCentered<PJ301MPort>(rack::Vec(Layout::outX1[2], rOut1), module, CyberlineBrocaSq::GATE_OUTPUT));
+		// Outputs row 2: ENV, BURST, VOW, CONS
+		addOutput(rack::createOutputCentered<PJ301MPort>(rack::Vec(Layout::outX2[0], rOut2), module, CyberlineBrocaSq::CVENV_OUTPUT));
+		addOutput(rack::createOutputCentered<PJ301MPort>(rack::Vec(Layout::outX2[1], rOut2), module, CyberlineBrocaSq::BURST_OUTPUT));
+		addOutput(rack::createOutputCentered<PJ301MPort>(rack::Vec(Layout::outX2[2], rOut2), module, CyberlineBrocaSq::VOWCV_OUTPUT));
+		addOutput(rack::createOutputCentered<PJ301MPort>(rack::Vec(Layout::outX2[3], rOut2), module, CyberlineBrocaSq::CONSCV_OUTPUT));
 	}
 
 	void appendContextMenu(rack::ui::Menu* menu) override {
