@@ -52,6 +52,19 @@ static inline float broca_lerpf(float a, float b, float t) {
 
 void CyberlineBroca::process(const ProcessArgs& args) {
 	bool measure = cpuMeter.frameStart();
+	// Auto-mode: a PT Breakout adjacent RIGHT requests the PT map
+	// (sinkRequest on its expander message). When present it overrides the
+	// menu checkmark; when absent the module returns to cyberline mode.
+	// The manual menu item still works when no sink is attached.
+	bool sinkWants = false, sinkPresent = false;
+	if (rightExpander.module) {
+		bool pt = false, req = false;
+		if (readPhonemeMode(rightExpander.module, &pt, &req)) {
+			sinkPresent = true;
+			sinkWants = req;
+		}
+	}
+	ptMode = sinkPresent ? sinkWants : false;
 	publishPhonemeMode(this, ptMode);
 	float dt = args.sampleTime;
 

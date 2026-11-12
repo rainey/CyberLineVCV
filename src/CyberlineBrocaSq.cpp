@@ -19,6 +19,17 @@ static inline float sq_wrapPhase(float ph) {
 
 void CyberlineBrocaSq::process(const ProcessArgs& args) {
 	bool measure = cpuMeter.frameStart();
+	// Auto-mode: a PT Breakout adjacent RIGHT requests the PT map; absent
+	// sink => cyberline mode. Manual menu still works with no sink.
+	bool sinkWants = false, sinkPresent = false;
+	if (rightExpander.module) {
+		bool pt = false, req = false;
+		if (readPhonemeMode(rightExpander.module, &pt, &req)) {
+			sinkPresent = true;
+			sinkWants = req;
+		}
+	}
+	ptMode = sinkPresent ? sinkWants : false;
 	publishPhonemeMode(this, ptMode);
 	float dt = args.sampleTime;
 

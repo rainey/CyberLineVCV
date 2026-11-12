@@ -713,17 +713,20 @@ centered, attenuversions at 1.0.
   bus `FRIC` + bus `PRESS` boost — pressure shades fricative energy.
 - **Zero-config mode follow (expander link):** Rack cables are
   one-directional and carry no metadata, so the bus cannot negotiate on its
-  own — instead the suite uses Rack's **expander message channel**. A
-  Broca/BrocaSq placed **directly LEFT** of the breakout (module adjacency,
-  not the cable route) publishes a magic-tagged advertisement of its current
-  `ptMode` on `rightExpander`; the breakout follows it automatically. Flip
-  the sender's menu checkmark and the breakout follows; move the sender
-  module away (`leftExpander.module == NULL`) and the breakout **mutes**
-  (safe default — a cyberline-mode bus interpreted as PT data would look
-  plausible, not obviously wrong). The `BUS OK` light: bright green = PT
-  neighbor advertising PT mode; dim = neighbor present but in cyberline
-  mode; dark = no/foreign neighbor. `VOCT` pass-through works regardless
-  (pitch is not bus data).
+  own — instead the suite uses Rack's **expander message channel** in both
+  directions. A Broca/BrocaSq placed **directly LEFT** of the breakout
+  (module adjacency, not the cable route) publishes a magic-tagged
+  advertisement of its current `ptMode` on `rightExpander`; the breakout
+  follows it automatically. The breakout also publishes a **sink request**
+  back on *its* rightExpander (which the sender reads as its own
+  rightExpander neighbor): a sink adjacent RIGHT **auto-sets the sender's
+  PT mode**, and when the sink goes away the sender **reverts to cyberline
+  mode**. The context-menu checkmark remains as the manual control when no
+  sink is adjacent. Panels show a small **PT / CL badge** (top-left): amber
+  `PT` = bus re-encoded for Pink Trombone, dim `CL` = native cyberline map.
+  The breakout's `BUS OK` light: bright green = PT neighbor advertising PT
+  mode; dim = neighbor present but in cyberline mode; dark = no/foreign
+  neighbor. `VOCT` pass-through works regardless (pitch is not bus data).
 
 ## 5e. `cyberline-visual1` — Visual1 (audio→image visualizer)
 

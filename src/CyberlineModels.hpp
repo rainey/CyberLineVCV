@@ -471,6 +471,8 @@ static constexpr int BAND_FULL = 0, BAND_SMALL = 1, BAND_MEDIUM = 2,
 struct CyberlinePhonemeExpanderMsg {
 	uint32_t magic;     // CYBERLINE_PHONEME_MAGIC
 	bool ptMode;        // current Pink Trombone bus mode
+	bool sinkRequest;   // sink-side request: a PT Breakout sits RIGHT and
+	                    // wants the PT map (sender auto-sets its mode)
 };
 
 static constexpr uint32_t CYBERLINE_PHONEME_MAGIC = 0xC7B2A11Eu;
@@ -482,13 +484,26 @@ static constexpr uint32_t CYBERLINE_PHONEME_MAGIC = 0xC7B2A11Eu;
 inline void publishPhonemeMode(rack::engine::Module* m, bool ptMode) {
 	auto& ex = m->rightExpander;
 	if (!ex.producerMessage || !ex.consumerMessage) {
-		ex.producerMessage = new CyberlinePhonemeExpanderMsg{CYBERLINE_PHONEME_MAGIC, ptMode};
-		ex.consumerMessage = new CyberlinePhonemeExpanderMsg{CYBERLINE_PHONEME_MAGIC, ptMode};
+		ex.producerMessage = new CyberlinePhonemeExpanderMsg{CYBERLINE_PHONEME_MAGIC, ptMode, false};
+		ex.consumerMessage = new CyberlinePhonemeExpanderMsg{CYBERLINE_PHONEME_MAGIC, ptMode, false};
 	}
 	auto* msg = (CyberlinePhonemeExpanderMsg*) ex.producerMessage;
 	msg->magic = CYBERLINE_PHONEME_MAGIC;
 	msg->ptMode = ptMode;
 	ex.requestMessageFlip();
+}
+
+// Read a phoneme-mode advertisement from a neighbor's producer message.
+// Returns false when the neighbor is absent or foreign (magic mismatch).
+inline bool readPhonemeMode(rack::engine::Module* neighbor, bool* ptMode, bool* sinkRequest) {
+	if (!neighbor)
+		return false;
+	auto* msg = (CyberlinePhonemeExpanderMsg*) neighbor->rightExpander.producerMessage;
+	if (!msg || msg->magic != CYBERLINE_PHONEME_MAGIC)
+		return false;
+	if (ptMode) *ptMode = msg->ptMode;
+	if (sinkRequest) *sinkRequest = msg->sinkRequest;
+	return true;
 }
 
 struct PtBusEncode {

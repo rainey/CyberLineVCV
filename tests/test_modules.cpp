@@ -1201,19 +1201,25 @@ static void test_pt_mode_and_breakout() {
 		CyberlineBroca broca;
 		broca.outputs[CyberlineBroca::TRACT_POLY_OUTPUT].channels = 1;
 		broca.params[CyberlineBroca::VOWELA_PARAM].setValue(0.f);  // EE (front: tngX 8.4)
+		// Simulate a PT-mode sink adjacent RIGHT (a real patch would have
+		// the breakout there requesting the map; the manual menu checkmark
+		// only applies when NO sink is adjacent, so a bare ptMode=true
+		// would be auto-reverted by the zero-config rule)
+		CyberlinePtBreakout sink;
+		sink.process(args);   // publishes sinkRequest = true
+		broca.rightExpander.module = &sink;
+		// Zero-config: the sink request auto-sets PT mode from the first frame
 		for (int i = 0; i < (int) (0.1f * args.sampleRate); i++) broca.process(args);
-		CHECK(broca.outputs[CyberlineBroca::TRACT_POLY_OUTPUT].getChannels() == 9,
-			"Broca TRACT POLY at Full has 9 channels (cyberline mode)");
-
-		broca.ptMode = true;
-		for (int i = 0; i < 32; i++) broca.process(args);
 		CHECK(broca.outputs[CyberlineBroca::TRACT_POLY_OUTPUT].getChannels() == 10,
-			"Broca TRACT POLY in PT mode has 10 channels");
+			"Broca TRACT POLY auto-enters PT mode (10 channels) when a sink is adjacent RIGHT");
+
+		// The re-encode follows (same frame, no settle time needed)
 		float tngXPt = broca.outputs[CyberlineBroca::TRACT_POLY_OUTPUT].getVoltage(0);
 		// EE tngX = 8.4 -> cyberline +3.4 -> PT +6.8
 		CHECK(std::fabs(tngXPt - 6.8f) < 0.3f,
 			"Broca PT mode re-encodes TNGX to PT convention (EE -> +6.8 V)");
 
+		// Persistence: ptMode (auto-driven) round-trips through JSON
 		json_t* rootJ = broca.dataToJson();
 		std::string saved = json_dumps(rootJ, 0);
 		json_decref(rootJ);
@@ -1223,12 +1229,21 @@ static void test_pt_mode_and_breakout() {
 		broca2.dataFromJson(load);
 		json_decref(load);
 		CHECK(broca2.ptMode, "Broca PT mode persists via JSON");
+		// With no sink attached, the zero-config rule reverts to cyberline
+		broca2.rightExpander.module = NULL;
+		for (int i = 0; i < 4; i++) broca2.process(args);
+		CHECK(!broca2.ptMode,
+			"Broca reverts to cyberline mode when no PT sink is adjacent");
 	}
 
 	// ---- BrocaSq PT mode: persistence ----
 	{
 		CyberlineBrocaSq sq;
-		sq.ptMode = true;
+		// Simulate a PT sink adjacent RIGHT (auto-mode)
+		CyberlinePtBreakout sink;
+		sink.process(args);
+		sq.rightExpander.module = &sink;
+		sq.process(args);
 		json_t* rootJ = sq.dataToJson();
 		std::string saved = json_dumps(rootJ, 0);
 		json_decref(rootJ);
@@ -1243,15 +1258,22 @@ static void test_pt_mode_and_breakout() {
 	// ---- PT Breakout: fan-out, fusions, law pitch ----
 	{
 		CyberlinePtBreakout brk;
-		// Simulate the expander link: a Broca directly LEFT advertising PT mode
+		// Simulate the expander link: a Broca directly LEFT advertising PT
+		// mode. The sender needs its own requesting sink (zero-config rule:
+		// with no sink adjacent it would revert to cyberline mode), so link
+		// brk as the sender's right neighbor too.
 		CyberlineBroca neighbor;
-		neighbor.ptMode = true;
+		// The breakout publishes its sink request BEFORE the sender's first
+		// process (in a live patch the sender may run one frame in cyberline
+		// mode before the request arrives; the loop self-heals in ~2 frames)
+		brk.process(args);
 		brk.leftExpander.module = &neighbor;
+		neighbor.rightExpander.module = &brk;
 		brk.inputs[CyberlinePtBreakout::BUS_INPUT].channels = 10;
 		float bus[10] = {6.8f, -4.f, 2.f, 3.f, 7.f, 5.f, 0.f, 8.f, 10.f, 0.f};
 		for (int c = 0; c < 10; c++)
 			brk.inputs[CyberlinePtBreakout::BUS_INPUT].setVoltage(bus[c], c);
-		neighbor.process(args);   // publishes the advertisement
+		neighbor.process(args);   // reads brk's request -> auto PT mode
 		brk.params[CyberlinePtBreakout::TENSE_PARAM].setValue(0.8f);
 		brk.params[CyberlinePtBreakout::SRC_PARAM].setValue(1.f);  // pass-through first
 		brk.process(args);
@@ -1302,19 +1324,26 @@ static void test_pt_mode_and_breakout() {
 				"Breakout BUS OK dim when the neighbor is in cyberline mode");
 			CHECK(brk2.outputs[CyberlinePtBreakout::TONGUEX_OUTPUT].getVoltage() == 0.f,
 				"Breakout still gated when the neighbor advertises cyberline mode");
-			// Neighbor flips to PT mode -> breakout follows automatically
-			neighbor2.ptMode = true;
-			neighbor2.process(args);
-			brk2.process(args);
+
+			// ---- Zero-config loop: the breakout's sink request auto-sets
+			// the sender's mode; removing the sink reverts it ----
+			// Link both directions as Rack would (adjacent modules)
+			neighbor2.rightExpander.module = &brk2;
+			brk2.leftExpander.module = &neighbor2;
+			neighbor2.process(args);      // sender reads brk2's request -> ptMode = true
+			CHECK(neighbor2.ptMode,
+				"Sender auto-enters PT mode when a PT Breakout is adjacent RIGHT");
+			brk2.process(args);           // breakout reads the sender's advertisement
 			CHECK(brk2.lights[CyberlinePtBreakout::BUSOK_LIGHT].getBrightness() > 0.5f,
-				"Breakout BUS OK lights once the neighbor flips to PT mode (auto-follow)");
+				"Breakout BUS OK lights once the loop settles (auto PT mode)");
 			CHECK(std::fabs(brk2.outputs[CyberlinePtBreakout::TONGUEX_OUTPUT].getVoltage() - 5.f) < 0.01f,
-				"Breakout fans out once the neighbor advertises PT mode");
-			// Neighbor removed (module moved away) -> mute again
+				"Breakout fans out once the zero-config loop settles");
+			// Remove the breakout -> sender reverts to cyberline mode
+			neighbor2.rightExpander.module = NULL;
 			brk2.leftExpander.module = NULL;
-			brk2.process(args);
-			CHECK(brk2.outputs[CyberlinePtBreakout::TONGUEX_OUTPUT].getVoltage() == 0.f,
-				"Breakout mutes when the neighbor module goes away");
+			neighbor2.process(args);
+			CHECK(!neighbor2.ptMode,
+				"Sender reverts to cyberline mode when the sink goes away");
 		}
 		// VOCT pass-through works without any bus/expander (pitch is not bus-fed)
 		{

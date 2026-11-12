@@ -66,6 +66,11 @@ struct CyberlinePtBreakout : rack::engine::Module {
 
 	CyberlineCpuMeter cpuMeter;
 
+	~CyberlinePtBreakout() {
+		delete (CyberlinePhonemeExpanderMsg*) rightExpander.producerMessage;
+		delete (CyberlinePhonemeExpanderMsg*) rightExpander.consumerMessage;
+	}
+
 	CyberlinePtBreakout() {
 		config(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS);
 		configParam(FOLD_PARAM, 2.f, 45.f, 14.f, "Fold length (law pitch)", " mm");
@@ -87,23 +92,29 @@ struct CyberlinePtBreakout : rack::engine::Module {
 	void process(const ProcessArgs& args) override {
 		bool measure = cpuMeter.frameStart();
 
-		// ---- Auto-detect the bus protocol via the left expander link ----
-		// The neighbor module (directly LEFT on the rack row) advertises its
-		// phoneme bus mode on its rightExpander message (magic-tagged).
-		// No neighbor, a foreign neighbor, or a cyberline-mode neighbor all
-		// read as busOk = false: outputs gate to 0 V instead of interpreting
-		// the wrong map as articulation data. BUS OK shows the state.
+		// ---- Publish our sink request to the LEFT neighbor (the phoneme
+		// module reads its rightExpander = our message) and read its
+		// advertised mode back. The sender auto-sets its mode from the
+		// request; our fan-out follows the sender's advertised mode.
+		// No neighbor / foreign neighbor / cyberline-mode neighbor all read
+		// as busOk = false: outputs gate to 0 V. BUS OK shows the state.
+		{
+			auto& ex = rightExpander;
+			if (!ex.producerMessage || !ex.consumerMessage) {
+				ex.producerMessage = new CyberlinePhonemeExpanderMsg{CYBERLINE_PHONEME_MAGIC, false, true};
+				ex.consumerMessage = new CyberlinePhonemeExpanderMsg{CYBERLINE_PHONEME_MAGIC, false, true};
+			}
+			auto* msg = (CyberlinePhonemeExpanderMsg*) ex.producerMessage;
+			msg->magic = CYBERLINE_PHONEME_MAGIC;
+			msg->sinkRequest = true;
+			ex.requestMessageFlip();
+		}
 		expanderLinked = false;
 		expanderPtMode = false;
-		if (leftExpander.module) {
-			// The magic proves the neighbor is a cyberline phoneme module
-			// (Broca or BrocaSq publish this exact layout; foreign modules
-			// have some other buffer or NULL there).
-			auto* msg = (CyberlinePhonemeExpanderMsg*) leftExpander.module->rightExpander.producerMessage;
-			if (msg && msg->magic == CYBERLINE_PHONEME_MAGIC) {
-				expanderLinked = true;
-				expanderPtMode = msg->ptMode;
-			}
+		bool pt = false, req = false;
+		if (readPhonemeMode(leftExpander.module, &pt, &req)) {
+			expanderLinked = true;
+			expanderPtMode = pt;
 		}
 		bool busOk = expanderLinked && expanderPtMode
 			&& inputs[BUS_INPUT].isConnected();

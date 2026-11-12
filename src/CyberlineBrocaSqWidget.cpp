@@ -777,6 +777,7 @@ struct CyberlineBrocaSqWidget : rack::app::ModuleWidget {
 				if (mod)
 					mod->ptMode = on;
 			}));
+		menu->addChild(rack::createMenuLabel("  (auto-set when a PT Breakout is adjacent RIGHT)"));
 		menu->addChild(rack::createMenuLabel("  re-encodes TRACT POLY ch1-5 for PT Breakout"));
 		menu->addChild(new rack::ui::MenuSeparator);
 		menu->addChild(rack::createMenuItem("Initialize registers", "", [=]() {
@@ -795,6 +796,29 @@ struct CyberlineBrocaSqWidget : rack::app::ModuleWidget {
 	void draw(const DrawArgs& args) override {
 		drawPanel(args, PANEL_W, static_cast<CyberlineBrocaSq*>(module));
 		ModuleWidget::draw(args);
+		// PT/CL bus-mode badge (top-left): amber "PT" when the bus is
+		// re-encoded for Pink Trombone, dim "CL" otherwise.
+		{
+			auto* mod = dynamic_cast<CyberlineBrocaSq*>(module);
+			NVGcontext* vg = args.vg;
+			auto font = getLabelFont();
+			if (font && font->handle >= 0) {
+				nvgFontFaceId(vg, font->handle);
+				nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_BOTTOM);
+				nvgFontSize(vg, 8.f);
+				nvgBeginPath(vg);
+				nvgRect(vg, 22.f, 2.f, 16.f, 11.f);
+				nvgFillColor(vg, nvgRGBA(0x0b, 0x0d, 0x12, 160));
+				nvgFill(vg);
+				if (mod && mod->ptMode) {
+					nvgFillColor(vg, nvgRGB(0xf4, 0xb0, 0x48));
+					nvgText(vg, 23.f, 12.f, "PT", NULL);
+				} else {
+					nvgFillColor(vg, nvgRGB(0x6a, 0x74, 0x80));
+					nvgText(vg, 23.f, 12.f, "CL", NULL);
+				}
+			}
+		}
 		drawCpuMeterText(args, static_cast<CyberlineBrocaSq*>(module));
 	}
 };
