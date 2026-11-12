@@ -43,6 +43,9 @@ struct CyberlineConsonantTarget {
 };
 
 struct CyberlineBroca : rack::engine::Module {
+	// Pink Trombone poly-bus mode: TRACT POLY re-encodes to the PT-oriented
+	// 10-channel map (see PtBusEncode). Persisted with the patch.
+	bool ptMode = false;
 	enum ParamIds {
 		VOWELA_PARAM,
 		VMORPH_PARAM,
@@ -180,7 +183,20 @@ struct CyberlineBroca : rack::engine::Module {
 
 	void process(const ProcessArgs& args) override;
 
+	json_t* dataToJson() override {
+		json_t* rootJ = json_object();
+		json_object_set_new(rootJ, "ptMode", json_boolean(ptMode));
+		return rootJ;
+	}
+
+	void dataFromJson(json_t* rootJ) override {
+		json_t* pJ = json_object_get(rootJ, "ptMode");
+		if (pJ)
+			ptMode = json_boolean_value(pJ) != 0;
+	}
+
 	void onReset() override {
+		ptMode = false;
 		trigWasHigh = false;
 		syncWasHigh = false;
 		onsetActive = false;

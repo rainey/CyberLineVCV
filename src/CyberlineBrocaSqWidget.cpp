@@ -771,6 +771,13 @@ struct CyberlineBrocaSqWidget : rack::app::ModuleWidget {
 	void appendContextMenu(rack::ui::Menu* menu) override {
 		ModuleWidget::appendContextMenu(menu);
 		auto* mod = dynamic_cast<CyberlineBrocaSq*>(module);
+		menu->addChild(rack::createBoolMenuItem("Pink Trombone poly mode", "",
+			[=]() { return mod ? mod->ptMode : false; },
+			[=](bool on) {
+				if (mod)
+					mod->ptMode = on;
+			}));
+		menu->addChild(rack::createMenuLabel("  re-encodes TRACT POLY ch1-5 for PT Breakout"));
 		menu->addChild(new rack::ui::MenuSeparator);
 		menu->addChild(rack::createMenuItem("Initialize registers", "", [=]() {
 			if (mod)

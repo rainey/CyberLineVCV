@@ -61,5 +61,5 @@ test-modules:
 	  -I../JayBird/src/Rack/include -I$$D/include \
 	  -o /tmp/test_modules tests/test_modules.cpp \
 	  src/CyberlineLungs.cpp src/CyberlineBroca.cpp src/CyberlineBrocaSq.cpp src/CyberlineOralChamber.cpp \
-	  src/CyberlineLarynx.cpp src/CyberlineVoice.cpp \
+	  src/CyberlineLarynx.cpp src/CyberlineVoice.cpp src/CyberlinePtBreakout.cpp \
 	  -L$$RACK -lRack -Wl,-rpath,$$RACK && /tmp/test_modules

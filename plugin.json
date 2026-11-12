@@ -88,6 +88,17 @@
         "Polyphonic",
         "Sequencer"
       ]
+    },
+    {
+      "slug": "cyberline-pt-breakout",
+      "name": "PT Breakout",
+      "description": "Pink Trombone adapter: splits Broca/BrocaSq's Pink-Trombone-mode poly bus into the individual mono CVs PinkTromboneVCV expects (VOct, tongue X/Y, throat X, fricative Fc/level, tenseness), with law-based pitch and voicing-gated tenseness",
+      "tags": [
+        "Physical modeling",
+        "Controller",
+        "Vocal",
+        "Utility"
+      ]
     }
   ]
 }

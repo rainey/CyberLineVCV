@@ -17,6 +17,7 @@
 #include "../src/CyberlineLungs.hpp"
 #include "../src/CyberlineBroca.hpp"
 #include "../src/CyberlineBrocaSq.hpp"
+#include "../src/CyberlinePtBreakout.hpp"
 #include "../src/CyberlineOralChamber.hpp"
 #include "../src/CyberlineLarynx.hpp"
 #include "../src/CyberlineVoice.hpp"
@@ -1150,6 +1151,147 @@ static void test_crispness_control() {
 		"Voice tract.turbulenceHp sums with V_CRISP_INPUT CV");
 }
 
+static void test_pt_mode_and_breakout() {
+	std::printf("--- Testing Pink Trombone mode & PT Breakout ---\n");
+	rack::random::init();
+	rack::engine::Module::ProcessArgs args;
+	args.sampleRate = 48000.f;
+	args.sampleTime = 1.f / 48000.f;
+
+	// ---- PtBusEncode: cyberline -> PT channel re-encoding ----
+	{
+		float in[9] = {
+			2.5f,   // TNGX +2.5 V (front-of-center offset)
+			-2.5f,  // TNGY
+			5.f,    // VEL mid
+			10.f,   // CPOS fully labial
+			5.f,    // CWID mid offset (narrow-ish: 5.0 = mid constriction)
+			10.f,   // FRIC max
+			0.f,    // TENS (0 V offset convention)
+			8.f,    // PRESS
+			0.f     // VOICING 0 = voiceless
+		};
+		float out[10];
+		PtBusEncode::encode(in, out);
+		CHECK(out[0] == 5.f && out[1] == -5.f,
+			"PT bus doubles tongue offsets to fill PT's ±10 V span");
+		// CPOS 10 (fully labial) -> +10 V (axis max); CPOS 0 -> -10 V
+		CHECK(out[2] > 9.9f, "PT throat X at labial CPOS 10 sits at the +10 V axis end");
+		float in2[9] = {0, 0, 5, 0, 5, 5, 0, 0, 0};
+		float out2[10];
+		PtBusEncode::encode(in2, out2);
+		CHECK(out2[2] < -9.9f, "PT throat X at glottal CPOS 0 sits at the -10 V axis end");
+		// FRIC FC: narrow constriction (cwid -5 = 0) -> bright (5 V), wide (cwid +5 = 10) -> dark (0 V)
+		float in3[9] = {0, 0, 5, 5, -5.f, 0, 0, 0, 0};
+		float out3[10];
+		PtBusEncode::encode(in3, out3);
+		CHECK(out3[3] > 4.9f, "PT FRIC FC = 5 V (10 kHz) for the narrowest constriction");
+		float in4[9] = {0, 0, 5, 5, 5.f, 0, 0, 0, 0};
+		float out4[10];
+		PtBusEncode::encode(in4, out4);
+		CHECK(out4[3] < 0.1f, "PT FRIC FC = 0 V for the widest constriction");
+		// FRIC LVL direct match, VEL/TENS/PRESS/VOIC pass through
+		CHECK(out[4] == 10.f && out[5] == 5.f && out[6] == 0.f && out[7] == 8.f && out[8] == 0.f,
+			"PT bus passes FRIC LVL, VEL, TENS, PRESS, VOICING unchanged");
+		CHECK(out[9] == 0.f, "PT bus ch10 is spare (0 V)");
+	}
+
+	// ---- Broca PT mode: bus re-encodes, 10 channels, persistence ----
+	{
+		CyberlineBroca broca;
+		broca.outputs[CyberlineBroca::TRACT_POLY_OUTPUT].channels = 1;
+		broca.params[CyberlineBroca::VOWELA_PARAM].setValue(0.f);  // EE (front: tngX 8.4)
+		for (int i = 0; i < (int) (0.1f * args.sampleRate); i++) broca.process(args);
+		CHECK(broca.outputs[CyberlineBroca::TRACT_POLY_OUTPUT].getChannels() == 9,
+			"Broca TRACT POLY at Full has 9 channels (cyberline mode)");
+
+		broca.ptMode = true;
+		for (int i = 0; i < 32; i++) broca.process(args);
+		CHECK(broca.outputs[CyberlineBroca::TRACT_POLY_OUTPUT].getChannels() == 10,
+			"Broca TRACT POLY in PT mode has 10 channels");
+		float tngXPt = broca.outputs[CyberlineBroca::TRACT_POLY_OUTPUT].getVoltage(0);
+		// EE tngX = 8.4 -> cyberline +3.4 -> PT +6.8
+		CHECK(std::fabs(tngXPt - 6.8f) < 0.3f,
+			"Broca PT mode re-encodes TNGX to PT convention (EE -> +6.8 V)");
+
+		json_t* rootJ = broca.dataToJson();
+		std::string saved = json_dumps(rootJ, 0);
+		json_decref(rootJ);
+		CyberlineBroca broca2;
+		json_error_t err;
+		json_t* load = json_loads(saved.c_str(), 0, &err);
+		broca2.dataFromJson(load);
+		json_decref(load);
+		CHECK(broca2.ptMode, "Broca PT mode persists via JSON");
+	}
+
+	// ---- BrocaSq PT mode: persistence ----
+	{
+		CyberlineBrocaSq sq;
+		sq.ptMode = true;
+		json_t* rootJ = sq.dataToJson();
+		std::string saved = json_dumps(rootJ, 0);
+		json_decref(rootJ);
+		CyberlineBrocaSq sq2;
+		json_error_t err;
+		json_t* load = json_loads(saved.c_str(), 0, &err);
+		sq2.dataFromJson(load);
+		json_decref(load);
+		CHECK(sq2.ptMode, "BrocaSq PT mode persists via JSON");
+	}
+
+	// ---- PT Breakout: fan-out, fusions, law pitch ----
+	{
+		CyberlinePtBreakout brk;
+		brk.inputs[CyberlinePtBreakout::BUS_INPUT].channels = 10;
+		float bus[10] = {6.8f, -4.f, 2.f, 3.f, 7.f, 5.f, 0.f, 8.f, 10.f, 0.f};
+		for (int c = 0; c < 10; c++)
+			brk.inputs[CyberlinePtBreakout::BUS_INPUT].setVoltage(bus[c], c);
+		brk.params[CyberlinePtBreakout::TENSE_PARAM].setValue(0.8f);
+		brk.params[CyberlinePtBreakout::SRC_PARAM].setValue(1.f);  // pass-through first
+		brk.process(args);
+		CHECK(std::fabs(brk.outputs[CyberlinePtBreakout::TONGUEX_OUTPUT].getVoltage() - 6.8f) < 0.01f,
+			"Breakout fans out PT bus ch1 to TONGUE X unchanged");
+		CHECK(std::fabs(brk.outputs[CyberlinePtBreakout::THROATX_OUTPUT].getVoltage() - 2.f) < 0.01f,
+			"Breakout fans out PT bus ch3 to THROAT X unchanged");
+		// TENSE fusion: knob 0.8 * voicing 1.0 (ch9 = 10 V) -> 8 V
+		CHECK(std::fabs(brk.outputs[CyberlinePtBreakout::TENSE_OUTPUT].getVoltage() - 8.f) < 0.01f,
+			"Breakout TENSE = knob x voicing (voiceless gates PT tenseness)");
+		// Voiceless: ch9 = 0 -> TENSE out 0
+		brk.inputs[CyberlinePtBreakout::BUS_INPUT].setVoltage(0.f, 8);
+		brk.process(args);
+		CHECK(brk.outputs[CyberlinePtBreakout::TENSE_OUTPUT].getVoltage() < 0.01f,
+			"Breakout TENSE collapses to 0 when the syllable is voiceless (breathy air)");
+		// FRIC LVL fusion: fric 0.7 + press 0.8*0.35 -> clamp 0.98
+		float fric = brk.outputs[CyberlinePtBreakout::FRICLVL_OUTPUT].getVoltage();
+		CHECK(fric > 9.f, "Breakout FRIC LVL = fricative + pressure boost");
+		// VEL monitor
+		CHECK(std::fabs(brk.outputs[CyberlinePtBreakout::VEL_OUTPUT].getVoltage() - 5.f) < 0.01f,
+			"Breakout VEL monitor passes ch6 (no PT sink)");
+
+		// Law pitch: FOLD 17 mm -> 178 Hz -> log2(178/261.6) = -0.555 V
+		brk.params[CyberlinePtBreakout::FOLD_PARAM].setValue(17.f);
+		brk.params[CyberlinePtBreakout::SRC_PARAM].setValue(0.f);  // LAW
+		brk.process(args);
+		float f0 = std::pow(10.f, 4.01f - 1.43f * std::log10(17.f));
+		float expectV = std::log2(f0 / 261.6255653f);
+		float voct = brk.outputs[CyberlinePtBreakout::VOCT_OUTPUT].getVoltage();
+		CHECK(std::fabs(voct - expectV) < 0.01f,
+			"Breakout LAW pitch matches the suite's allometric law referenced to C4");
+		// V/OCT input sums with LAW
+		brk.inputs[CyberlinePtBreakout::VOCT_INPUT].channels = 1;
+		brk.inputs[CyberlinePtBreakout::VOCT_INPUT].setVoltage(1.f, 0);
+		brk.process(args);
+		CHECK(std::fabs(brk.outputs[CyberlinePtBreakout::VOCT_OUTPUT].getVoltage() - (expectV + 1.f)) < 0.01f,
+			"Breakout sums the V/OCT input with the LAW pitch (+1 V = +1 octave)");
+		// Pass-through mode ignores LAW
+		brk.params[CyberlinePtBreakout::SRC_PARAM].setValue(1.f);
+		brk.process(args);
+		CHECK(std::fabs(brk.outputs[CyberlinePtBreakout::VOCT_OUTPUT].getVoltage() - 1.f) < 0.01f,
+			"Breakout VOCT pass-through ignores the LAW knob");
+	}
+}
+
 int main() {
 	std::printf("=========================================\n");
 	std::printf("Running Cyberline Module Integration Tests\n");
@@ -1168,6 +1310,7 @@ int main() {
 	test_brocasq_registers_clocking_and_mutation();
 	test_range_presets();
 	test_vtl_band_clamp();
+	test_pt_mode_and_breakout();
 	test_crispness_control();
 
 	std::printf("=========================================\n");

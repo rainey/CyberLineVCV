@@ -242,17 +242,21 @@ void CyberlineBroca::process(const ProcessArgs& args) {
 	float vVoic  = rack::math::clamp(curVoicing * 10.f, 0.f, 10.f);
 	float vPress = rack::math::clamp((curPressure / 0.8f) * 10.f, 0.f, 10.f);
 
-	// 9-channel TRACT POLY bus (drives Oral Chamber Ch 1-6, and Voice Ch 1-9)
-	outputs[TRACT_POLY_OUTPUT].setChannels(9);
-	outputs[TRACT_POLY_OUTPUT].setVoltage(vTngX,  0);
-	outputs[TRACT_POLY_OUTPUT].setVoltage(vTngY,  1);
-	outputs[TRACT_POLY_OUTPUT].setVoltage(vVel,   2);
-	outputs[TRACT_POLY_OUTPUT].setVoltage(vCpos,  3);
-	outputs[TRACT_POLY_OUTPUT].setVoltage(vCwid,  4);
-	outputs[TRACT_POLY_OUTPUT].setVoltage(vFric,  5);
-	outputs[TRACT_POLY_OUTPUT].setVoltage(vTens,  6);
-	outputs[TRACT_POLY_OUTPUT].setVoltage(vPress, 7);
-	outputs[TRACT_POLY_OUTPUT].setVoltage(vVoic,  8);
+	// 9-channel TRACT POLY bus (drives Oral Chamber Ch 1-6, and Voice Ch 1-9).
+	// In Pink Trombone mode the bus re-encodes to a 10-channel PT-oriented
+	// map (see PtBusEncode in CyberlineModels.hpp) for the PT Breakout.
+	float busIn[9] = {vTngX, vTngY, vVel, vCpos, vCwid, vFric, vTens, vPress, vVoic};
+	if (ptMode) {
+		float busOut[10];
+		PtBusEncode::encode(busIn, busOut);
+		outputs[TRACT_POLY_OUTPUT].setChannels(10);
+		for (int c = 0; c < 10; c++)
+			outputs[TRACT_POLY_OUTPUT].setVoltage(busOut[c], c);
+	} else {
+		outputs[TRACT_POLY_OUTPUT].setChannels(9);
+		for (int c = 0; c < 9; c++)
+			outputs[TRACT_POLY_OUTPUT].setVoltage(busIn[c], c);
+	}
 
 	// 3-channel LARYNX POLY bus (Ch 1: TENSION offset, Ch 2: PRESSURE envelope, Ch 3: VOICING)
 	outputs[LARYNX_POLY_OUTPUT].setChannels(3);

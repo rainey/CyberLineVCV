@@ -389,7 +389,31 @@ Sea lions produce loud, staccato, guttural barks ("honk-honk-honk" or "ark-ark-a
 
 ---
 
-## 6. Comprehensive Parameter Quick Reference
+## 6. A/B Against Pink Trombone
+
+Every recipe here can be auditioned through Neil Thapen's Pink Trombone
+(Vega Deftwing's **PinkTromboneVCV** port) with the same articulation CVs:
+
+1. On **Broca**/**BrocaSq**, enable the context-menu **"Pink Trombone poly
+   mode"** — the `TRACT POLY` bus re-encodes to PT's conventions (tongue
+   ±10 V offsets, throat-X axis, fricative cutoff/level; velum/pressure/
+   voicing ride along as monitor channels).
+2. Cable it into **PT Breakout** and patch its outputs to the matching PT
+   inputs (`TONGUE XI/YI`, `THROAT XI`, `FRICFCI`, `FRICL`, `TENSEI`,
+   `V/OCT`). On the PT side: tongue/throat knobs centered, attenuversions
+   at 1.0.
+3. Pitch: the breakout's `FOLD mm` knob (suite law) mirrors the Larynx
+   recipe's fold length so both engines sing the same F0; or flip `SRC` to
+   pass an external V/OCT through.
+4. What PT will *not* reproduce: velum (no CV — its NOSE knob is manual),
+   breath pressure (fold pressure is internal to its glottis model), and
+   the vocal-tract-length size classes (PT's tract is a fixed neon drawing,
+   so the size-band presets have no counterpart). The breakout folds
+   voicing into `TENSEI` (voiceless ⇒ breathy air) and pressure into the
+   fricative level, which are close-but-not-identical shadows of cyberline's
+   physical semantics.
+
+## 7. Comprehensive Parameter Quick Reference
 
 Pitch figures are approximate, computed from the Larynx pitch law (see the note at the top).
 

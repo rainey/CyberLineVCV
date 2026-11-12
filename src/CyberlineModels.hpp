@@ -433,12 +433,65 @@ static constexpr int NUM_SIZE_BANDS = (int) (sizeof(SIZE_BANDS) / sizeof(SIZE_BA
 static constexpr int BAND_FULL = 0, BAND_SMALL = 1, BAND_MEDIUM = 2,
 	BAND_LARGE = 3, BAND_XL = 4, BAND_HUMAN = 5;
 
+// ---- Pink Trombone poly-bus mode (shared by Broca & BrocaSq) ----
+// PT (Vega Deftwing's PinkTromboneVCV) accepts mono CVs with different
+// conventions than cyberline's internal buses. When ptMode is on, the
+// TRACT POLY output re-encodes in place to a 10-channel PT-oriented bus
+// (LARYNX POLY is mode-invariant and unchanged). The breakout module
+// (CyberlinePtBreakout) splits this bus into PT's individual CV inputs.
+//
+// Channel map (PT mode):
+//   ch0  TNGX      ±10 V  -> PT TONGUE XI  (attenuversion 1.0 => ±1 offset)
+//   ch1  TNGY      ±10 V  -> PT TONGUE YI
+//   ch2  THROAT X  ±10 V  -> PT THROAT XI  (constriction axis 0.06..1)
+//   ch3  FRIC FC   0-5 V  -> PT FRICFCI    (x2000 Hz/V => 0-10 kHz)
+//   ch4  FRIC LVL  0-10 V -> PT FRICL      (0-10 V = 0-1 fricative level)
+//   ch5  VEL       0-10 V -> monitor only  (PT has no velum CV)
+//   ch6  TENS      0 V    (offset convention: sink owns tension)
+//   ch7  PRESS     0-10 V -> monitor only  (PT has no pressure CV)
+//   ch8  VOICING   0-10 V -> monitor only  (breakout fuses into TENSE)
+//   ch9  spare     0 V
+// The same map with channels 0-4 re-encoded; TENS/PRESS/VOICING/VEL
+// channels carry identical values in both modes.
+struct PtBusEncode {
+	// Encode one frame's cyberline-channel values into PT mode channels.
+	// in:  [0]=tngX (±5), [1]=tngY (±5), [2]=vel (0-10), [3]=cpos (0-10),
+	//      [4]=cwid (±5), [5]=fric (0-10), [6..8] pass through.
+	// out: 10 channels per the map above.
+	static void encode(const float* in, float* out) {
+		// Tongue: cyberline ±5 V around 5.0 -> PT ±10 V around the knob
+		// (PT: value = knob + attenuversion * V/20, so ±10 V = ±1 on the
+		// 0..1 tongue axes; our ±5 offset = ±1 in our 0..10 space, doubled
+		// to fill PT's span with the same articulator excursion).
+		out[0] = in[0] * 2.f;
+		out[1] = in[1] * 2.f;
+		// Constriction position 0..10 (glottal->labial) -> PT throat X
+		// 0.06..1.0 mapped to ±10 V (PT adds V/20 to its 0.06..0.999 knob):
+		// axis position u/10 -> V = (u/10 * 2 - 1) * 10
+		float u = rack::math::clamp(in[3], 0.f, 10.f) / 10.f;
+		out[2] = (u * 2.f - 1.f) * 10.f;
+		// Constriction width ±5 V around 5.0 -> fricative filter cutoff
+		// 0-5 V (PT FRICFCI: 2000 Hz/V, so 5 V = 10 kHz ceiling)
+		float w = rack::math::clamp(in[4] + 5.f, 0.f, 10.f);   // 0..10 narrow->wide
+		out[3] = (1.f - w / 10.f) * 5.f;                       // narrow = bright
+		// Fricative level: direct match (PT FRICL is 0-10 V = 0-1)
+		out[4] = in[5];
+		// Velum, tension, pressure, voicing: pass through unchanged
+		out[5] = in[2];
+		out[6] = in[6];
+		out[7] = in[7];
+		out[8] = in[8];
+		out[9] = 0.f;
+	}
+};
+
 extern rack::plugin::Model* modelCyberlineLarynx;extern rack::plugin::Model* modelCyberlineLungs;
 extern rack::plugin::Model* modelCyberlineOralChamber;
 extern rack::plugin::Model* modelCyberlineVoice;
 extern rack::plugin::Model* modelCyberlineHeart;
 extern rack::plugin::Model* modelCyberlineBroca;
 extern rack::plugin::Model* modelCyberlineBrocaSq;
+extern rack::plugin::Model* modelCyberlinePtBreakout;
 extern rack::plugin::Model* modelCyberlineVisual1;
 extern rack::plugin::Model* modelCyberlineSagitta;
 

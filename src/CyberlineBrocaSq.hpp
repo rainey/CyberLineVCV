@@ -20,6 +20,9 @@
 namespace cyberline {
 
 struct CyberlineBrocaSq : rack::engine::Module {
+	// Pink Trombone poly-bus mode: TRACT POLY re-encodes to the PT-oriented
+	// 10-channel map (see PtBusEncode). Persisted with the patch.
+	bool ptMode = false;
 	enum ParamIds {
 		MODE_PARAM,     // clocking mode: FREE / CLOCK / PHASOR
 		RATE_PARAM,     // internal clock rate (steps/sec) in FREE mode
@@ -243,6 +246,7 @@ struct CyberlineBrocaSq : rack::engine::Module {
 	}
 
 	void onReset() override {
+		ptMode = false;
 		step = 0;
 		vPos = 0;
 		cPos = 0;
@@ -270,6 +274,7 @@ struct CyberlineBrocaSq : rack::engine::Module {
 	json_t* dataToJson() override {
 		json_t* rootJ = json_object();
 		json_object_set_new(rootJ, "mode", json_integer(mode));
+		json_object_set_new(rootJ, "ptMode", json_boolean(ptMode));
 		json_t* vJ = json_array();
 		json_t* cJ = json_array();
 		for (int i = 0; i < REG_LEN; i++) {
@@ -286,6 +291,8 @@ struct CyberlineBrocaSq : rack::engine::Module {
 	void dataFromJson(json_t* rootJ) override {
 		json_t* mJ = json_object_get(rootJ, "mode");
 		if (mJ) mode = (int) json_integer_value(mJ);
+		json_t* ptJ = json_object_get(rootJ, "ptMode");
+		if (ptJ) ptMode = json_boolean_value(ptJ) != 0;
 		json_t* vJ = json_object_get(rootJ, "vowelReg");
 		json_t* cJ = json_object_get(rootJ, "consReg");
 		for (int i = 0; i < REG_LEN; i++) {

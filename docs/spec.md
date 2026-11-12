@@ -49,6 +49,7 @@ fixed filter banks.
 | `cyberline-heart` | `CyberlineHeart` | Elastance cardiac pump: intrinsic clock, Wiggers envelopes, ECG/beats, phonocardiogram, mass allometry |
 | `cyberline-broca` | `CyberlineBroca` | "Broca" (Broca-Brika) articulatory cortex & phoneme generator: vowel A/B morphing, consonant onset/manner engine, and polyphonic Tract/Larynx buses |
 | `cyberline-broca-sq` | `CyberlineBrocaSq` | "Broca²" dual phoneme Turing machine: two rotating vowel/consonant registers with independent lengths & mutation probability, free/clock/dual-phasor clocking, Broca-compatible poly buses |
+| `cyberline-pt-breakout` | `CyberlinePtBreakout` | "PT Breakout" Pink Trombone adapter: splits Broca/BrocaSq's PT-mode poly bus into PinkTromboneVCV's mono CVs (VOct, tongue/throat/fricative/tense) with law-based pitch and voicing-gated tenseness |
 | `cyberline-visual1` | `CyberlineVisual1` | Audio→image visualizer: FFT band envelopes drive 8×8 DCT coefficients of a rendered image; perturb mode loads an image and lets the spectrum deform it (unregistered — see §5e) |
 | `cyberline-sagitta` | `CyberlineSagitta` | Vocal-system fluoroscopy: sagittal anatomy of the lungs→larynx→tract pipeline driven by the CV buses and a live waveguide replica (§5f) |
 
@@ -674,6 +675,42 @@ erode into new material. Independent lengths (1–16, `V LEN` / `C LEN` + shared
 - **MORPH:** articulator slew between consecutive phonemes — 0 % = Broca's crisp defaults (~4.5 ms stops / ~14 ms vowels), 100 % = heavy blend (half-formed speech).
 - **Display:** 4×4 register grid; each cell shows the slot's vowel code (top, cyan lane) and consonant code (bottom, amber lane, dim dash = NONE). Cyan/amber head markers move together in FREE/CLOCK and independently in PHASOR. Slots past a register's length dim that lane; slots past both are near-dark (unplayed). **Left-click a cell to move the editor selection there** (equivalent to turning the CELL encoder — it does not arm the editor; the EDIT button or dragging the V/C encoders still does that; while armed, the clicked cell's phonemes load onto the V/C encoders). Hovering highlights the target cell.
 - **I/O:** `TRACT POLY` (9-ch) and `LARYNX POLY` (3-ch) use *identical channel maps to Broca* — a drop-in swap in the Larynx/OralChamber/Voice chain. Plus `CV.ENV`, `BURST`, `GATE` (syllable gesture; fires on every step including rests), `VOW` / `CONS` index CVs (0–10 V over each table).
+
+### Pink Trombone poly mode (Broca & BrocaSq) + PT Breakout
+
+For A/B testing against Vega Deftwing's **PinkTromboneVCV** (available via
+the VCV Library; registered in the JayBird/Cardinal build as a submodule),
+both Broca and BrocaSq carry a context-menu **"Pink Trombone poly mode"**
+checkmark (persisted with the patch; Reset turns it off).
+
+- **What changes:** the `TRACT POLY` output re-encodes in place from the
+  9-channel cyberline map to a **10-channel PT-oriented map** (see
+  `PtBusEncode` in `CyberlineModels.hpp`): ch1–2 tongue X/Y become ±10 V
+  offsets onto PT's 0..1 tongue axes; ch3 becomes the throat-X axis encoding
+  (±10 V over PT's 0.06..1 constriction axis); ch4 re-purposes constriction
+  width as the fricative-filter cutoff (0–5 V at PT's 2 kHz/V ⇒ narrow
+  constriction = bright); ch5 is FRIC LVL (direct 0–10 V = 0–1 match);
+  ch6–8 carry VEL/PRESS/VOICING as monitor-only channels PT cannot sink;
+  LARYNX POLY is unchanged (mode-invariant).
+- **Caveat:** in PT mode the cable is *not* valid for OralChamber/Voice —
+  flip the checkmark back before returning to the cyberline chain.
+
+**PT Breakout** (`cyberline-pt-breakout`, 14 HP) splits the PT-mode bus into
+Pink Trombone's individual mono CV inputs, each labeled with its destination:
+`VOCT` (1 V/oct rel. C4), `TNG X/Y` → `TONGUE XI/YI`, `THROT X` →
+`THROAT XI`, `FR FC` → `FRICFCI`, `FR LVL` → `FRICL`, `TENSE` → `TENSEI`,
+and a `VEL` monitor (no PT sink). Setup on the PT side: tongue/throat knobs
+centered, attenuversions at 1.0.
+
+- **Pitch:** `SRC` switch — **LAW + V/OCT in** (default): a `FOLD mm` knob
+  (suite's allometric law, tension-0.6 reference) produces the 1 V/oct
+  output, so A/B testing keeps the same F0 as a cyberline Larynx at the same
+  fold length; the `V/OCT` input sums in. **V/OCT pass-through**: pitch is
+  entirely external.
+- **Creative fusions** of the channels PT cannot sink: `TENSE` out =
+  the breakout's own `TENSE` knob × the bus `VOICING` channel — voiceless
+  consonants collapse PT's fold tension into breathy air; `FR LVL` =
+  bus `FRIC` + bus `PRESS` boost — pressure shades fricative energy.
 
 ## 5e. `cyberline-visual1` — Visual1 (audio→image visualizer)
 
