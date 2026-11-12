@@ -1,6 +1,8 @@
-// CyberlinePtBreakoutWidget — programmatic 14 HP hollow neon vector panel
+// CyberlinePtBreakoutWidget — programmatic 10 HP hollow neon vector panel
 // for "PT BREAKOUT" (Pink Trombone adapter). House styling: flat dark plate,
-// violet neon top bar, jack boxes, neon port rings, PT-destination labels.
+// coral neon top bar, jack boxes, neon port rings, PT-destination labels.
+// Compact layout: control row (FOLD/TENSE/SRC), input row, and a 3x3
+// output grid with destination hints.
 
 #include "CyberlinePtBreakout.hpp"
 #include "CyberlineModels.hpp"
@@ -9,7 +11,7 @@
 namespace cyberline {
 
 struct CyberlinePtBreakoutWidget : rack::app::ModuleWidget {
-	static constexpr float PANEL_W = 14 * 15.f; // 210 px (14 HP)
+	static constexpr float PANEL_W = 10 * 15.f; // 150 px (10 HP)
 
 	static void strokeNeon(NVGcontext* vg, NVGcolor col, float coreW = 1.2f, float glowW = 3.4f, int glowAlpha = 50) {
 		nvgStrokeWidth(vg, glowW);
@@ -51,12 +53,15 @@ struct CyberlinePtBreakoutWidget : rack::app::ModuleWidget {
 		nvgStrokeColor(vg, nvgRGBA(0xf0, 0x5c, 0x64, 130));
 		nvgStroke(vg);
 
-		float rIn = 92.f, rOut1 = 158.f, rOut2 = 216.f, rOut3 = 274.f;
-		float outX[3] = {42.f, 105.f, 168.f};
+		// Layout: knobs row y=32; inputs y=86; outputs 3x3 grid at y=150/208/266
+		float rIn = 86.f;
+		float rOut[3] = {150.f, 208.f, 266.f};
+		float inX[2] = {45.f, 105.f};
+		float outX[3] = {28.f, 75.f, 122.f};
 
 		// Jack boxes
 		auto drawJackBox = [&](float by0, float by1, NVGcolor strokeCol) {
-			float bx0 = 8.f, bx1 = panelW - 8.f;
+			float bx0 = 6.f, bx1 = panelW - 6.f;
 			float bch = 4.5f;
 			nvgBeginPath(vg);
 			nvgMoveTo(vg, bx0 + bch, by0);
@@ -75,29 +80,29 @@ struct CyberlinePtBreakoutWidget : rack::app::ModuleWidget {
 			nvgStroke(vg);
 		};
 		drawJackBox(rIn - 18.f, rIn + 16.5f, nvgRGBA(0x8e, 0x62, 0xf8, 95));
-		drawJackBox(rOut1 - 18.f, rOut3 + 16.5f, nvgRGBA(0x8e, 0x62, 0xf8, 95));
+		drawJackBox(rOut[0] - 18.f, rOut[2] + 16.5f, nvgRGBA(0x8e, 0x62, 0xf8, 95));
 
-		auto drawPortRing = [&](float x, float y, NVGcolor col, bool isOutput) {
+		auto drawPortRing = [&](float x, float y, NVGcolor col) {
 			nvgBeginPath(vg);
-			nvgCircle(vg, x, y, isOutput ? 13.8f : 12.8f);
+			nvgCircle(vg, x, y, 13.2f);
 			strokeNeon(vg, col, 1.0f, 2.6f, 38);
 		};
 
 		// Inputs: BUS (violet), V/OCT (mint)
-		drawPortRing(60.f, rIn, neonViolet, false);
-		drawPortRing(150.f, rIn, neonMint, false);
+		drawPortRing(inX[0], rIn, neonViolet);
+		drawPortRing(inX[1], rIn, neonMint);
 
 		// Outputs row 1: VOCT (mint), TNG X (cyan), TNG Y (cyan)
-		drawPortRing(outX[0], rOut1, neonMint, true);
-		drawPortRing(outX[1], rOut1, neonCyan, true);
-		drawPortRing(outX[2], rOut1, neonCyan, true);
+		drawPortRing(outX[0], rOut[0], neonMint);
+		drawPortRing(outX[1], rOut[0], neonCyan);
+		drawPortRing(outX[2], rOut[0], neonCyan);
 		// Row 2: THROAT X (amber), FRIC FC (amber), FRIC LVL (amber)
-		drawPortRing(outX[0], rOut2, neonAmber, true);
-		drawPortRing(outX[1], rOut2, neonAmber, true);
-		drawPortRing(outX[2], rOut2, neonAmber, true);
+		drawPortRing(outX[0], rOut[1], neonAmber);
+		drawPortRing(outX[1], rOut[1], neonAmber);
+		drawPortRing(outX[2], rOut[1], neonAmber);
 		// Row 3: TENSE (coral), VEL (dim monitor)
-		drawPortRing(outX[1], rOut3, neonCoral, true);
-		drawPortRing(outX[2], rOut3, nvgRGB(0x6a, 0x74, 0x80), true);
+		drawPortRing(outX[1], rOut[2], neonCoral);
+		drawPortRing(outX[2], rOut[2], nvgRGB(0x6a, 0x74, 0x80));
 
 		auto font = getLabelFont();
 		if (font && font->handle >= 0)
@@ -108,56 +113,58 @@ struct CyberlinePtBreakoutWidget : rack::app::ModuleWidget {
 			nvgText(vg, x, y, s, NULL);
 		};
 
-		// Knobs: FOLD mm + TENSE + SRC switch (top row)
-		nvgFontSize(vg, 8.f);
-		nvgFillColor(vg, label);
-		text(40.f, 48.f, "FOLD mm");
-		text(105.f, 48.f, "TENSE");
-		nvgFontSize(vg, 6.2f);
-		text(170.f, 26.f, "SRC");
-		text(170.f, 36.f, "LAW");
-		text(170.f, 66.f, "VOCT");
+		// Usage note (tucked left of the SRC switch, above inputs)
+		nvgFontSize(vg, 5.2f);
+		nvgFillColor(vg, nvgRGB(0x6a, 0x74, 0x80));
+		text(45.f, 22.f, "Broca/BrocaSq menu: PT poly");
+		text(45.f, 28.f, "mode ON. PT knobs centered,");
 
-		// Input labels
+		// Knob row labels: FOLD mm, TENSE, SRC switch labels
+		nvgFontSize(vg, 7.5f);
+		nvgFillColor(vg, label);
+		text(28.f, 54.f, "FOLD mm");
+		text(75.f, 54.f, "TENSE");
+		nvgFontSize(vg, 6.f);
+		text(122.f, 44.f, "SRC");
+		text(122.f, 54.f, "LAW");
+		text(122.f, 78.f, "PSTH");
+
+		// Input labels (above jacks, inside the box) — clear of the note
 		nvgFontSize(vg, 6.2f);
 		nvgFillColor(vg, nvgRGB(0xd0, 0xb0, 0xff));
-		text(60.f, rIn - 15.f, "PT BUS");
+		text(inX[0], rIn - 16.f, "PT BUS");
 		nvgFillColor(vg, nvgRGB(0x80, 0xe8, 0xb8));
-		text(150.f, rIn - 15.f, "V/OCT");
+		text(inX[1], rIn - 16.f, "V/OCT");
 
-		// Output labels (with PT destination hint below)
-		nvgFontSize(vg, 7.5f);
+		// Output labels (above each jack)
+		nvgFontSize(vg, 6.8f);
 		nvgFillColor(vg, nvgRGB(0x80, 0xe8, 0xb8));
-		text(outX[0], rOut1 - 15.f, "VOCT");
+		text(outX[0], rOut[0] - 15.f, "VOCT");
 		nvgFillColor(vg, nvgRGB(0x88, 0xe4, 0xfc));
-		text(outX[1], rOut1 - 15.f, "TNG X");
-		text(outX[2], rOut1 - 15.f, "TNG Y");
+		text(outX[1], rOut[0] - 15.f, "TNG X");
+		text(outX[2], rOut[0] - 15.f, "TNG Y");
 		nvgFillColor(vg, nvgRGB(0xf8, 0xc0, 0x78));
-		text(outX[0], rOut2 - 15.f, "THROT X");
-		text(outX[1], rOut2 - 15.f, "FR FC");
-		text(outX[2], rOut2 - 15.f, "FR LVL");
+		text(outX[0], rOut[1] - 15.f, "THRT X");
+		text(outX[1], rOut[1] - 15.f, "FR FC");
+		text(outX[2], rOut[1] - 15.f, "FR LVL");
 		nvgFillColor(vg, nvgRGB(0xf8, 0x90, 0x98));
-		text(outX[1], rOut3 - 15.f, "TENSE");
+		text(outX[1], rOut[2] - 15.f, "TENSE");
 		nvgFillColor(vg, nvgRGB(0x9a, 0xa4, 0xae));
-		text(outX[2], rOut3 - 15.f, "VEL");
+		text(outX[2], rOut[2] - 15.f, "VEL");
 
 		// Destination hints (tiny, under each row)
-		nvgFontSize(vg, 5.6f);
+		nvgFontSize(vg, 5.2f);
 		nvgFillColor(vg, nvgRGB(0x6a, 0x74, 0x80));
-		text(outX[0], rOut1 + 20.f, "VOCT");
-		text(outX[1], rOut1 + 20.f, "TONGUE XI");
-		text(outX[2], rOut1 + 20.f, "TONGUE YI");
-		text(outX[0], rOut2 + 20.f, "THROAT XI");
-		text(outX[1], rOut2 + 20.f, "FRICFCI");
-		text(outX[2], rOut2 + 20.f, "FRICL");
-		text(outX[1], rOut3 + 20.f, "TENSEI");
-		text(outX[2], rOut3 + 20.f, "(no sink)");
+		text(outX[0], rOut[0] + 20.f, "VOCT");
+		text(outX[1], rOut[0] + 20.f, "TNG XI");
+		text(outX[2], rOut[0] + 20.f, "TNG YI");
+		text(outX[0], rOut[1] + 20.f, "THR XI");
+		text(outX[1], rOut[1] + 20.f, "FRFCI");
+		text(outX[2], rOut[1] + 20.f, "FRICL");
+		text(outX[1], rOut[2] + 20.f, "TENSEI");
+		text(outX[2], rOut[2] + 20.f, "(no sink)");
 
-		// Usage note (between TENSE knob and input row)
-		nvgFontSize(vg, 5.6f);
-		nvgFillColor(vg, nvgRGB(0x6a, 0x74, 0x80));
-		text(78.f, 64.f, "Broca/BrocaSq menu: Pink Trombone poly mode ON.");
-		text(78.f, 70.f, "Set PT tongue/throat knobs centered, attenver. 1.0.");
+		// (usage note now sits left of the SRC switch above)
 
 		drawPanelTitle(args, panelW, "PT BREAKOUT");
 	}
@@ -175,8 +182,8 @@ struct CyberlinePtBreakoutWidget : rack::app::ModuleWidget {
 		using rack::componentlibrary::PJ301MPort;
 
 		// Top row: FOLD knob, TENSE knob, SRC switch
-		addParam(rack::createParamCentered<RoundSmallBlackKnob>(rack::Vec(40.f, 30.f), module, CyberlinePtBreakout::FOLD_PARAM));
-		addParam(rack::createParamCentered<RoundSmallBlackKnob>(rack::Vec(105.f, 30.f), module, CyberlinePtBreakout::TENSE_PARAM));
+		addParam(rack::createParamCentered<RoundSmallBlackKnob>(rack::Vec(28.f, 32.f), module, CyberlinePtBreakout::FOLD_PARAM));
+		addParam(rack::createParamCentered<RoundSmallBlackKnob>(rack::Vec(75.f, 32.f), module, CyberlinePtBreakout::TENSE_PARAM));
 		{
 			// Tiny 2-position vertical snap switch for SRC
 			struct SrcSwitch : rack::app::ParamWidget {
@@ -210,27 +217,28 @@ struct CyberlinePtBreakoutWidget : rack::app::ModuleWidget {
 					nvgFill(args.vg);
 				}
 			};
-			auto* sw = rack::createParamCentered<SrcSwitch>(rack::Vec(170.f, 44.f), module, CyberlinePtBreakout::SRC_PARAM);
-			sw->box.size = rack::Vec(14.f, 30.f);
+			auto* sw = rack::createParamCentered<SrcSwitch>(rack::Vec(122.f, 52.f), module, CyberlinePtBreakout::SRC_PARAM);
+			sw->box.size = rack::Vec(14.f, 22.f);
 			addParam(sw);
 		}
 
 		// Inputs
-		float rIn = 92.f;
-		addInput(rack::createInputCentered<PJ301MPort>(rack::Vec(60.f, rIn), module, CyberlinePtBreakout::BUS_INPUT));
-		addInput(rack::createInputCentered<PJ301MPort>(rack::Vec(150.f, rIn), module, CyberlinePtBreakout::VOCT_INPUT));
+		float rIn = 86.f;
+		float inX[2] = {45.f, 105.f};
+		addInput(rack::createInputCentered<PJ301MPort>(rack::Vec(inX[0], rIn), module, CyberlinePtBreakout::BUS_INPUT));
+		addInput(rack::createInputCentered<PJ301MPort>(rack::Vec(inX[1], rIn), module, CyberlinePtBreakout::VOCT_INPUT));
 
-		// Outputs
-		float outX[3] = {42.f, 105.f, 168.f};
-		float rOut1 = 158.f, rOut2 = 216.f, rOut3 = 274.f;
-		addOutput(rack::createOutputCentered<PJ301MPort>(rack::Vec(outX[0], rOut1), module, CyberlinePtBreakout::VOCT_OUTPUT));
-		addOutput(rack::createOutputCentered<PJ301MPort>(rack::Vec(outX[1], rOut1), module, CyberlinePtBreakout::TONGUEX_OUTPUT));
-		addOutput(rack::createOutputCentered<PJ301MPort>(rack::Vec(outX[2], rOut1), module, CyberlinePtBreakout::TONGUEY_OUTPUT));
-		addOutput(rack::createOutputCentered<PJ301MPort>(rack::Vec(outX[0], rOut2), module, CyberlinePtBreakout::THROATX_OUTPUT));
-		addOutput(rack::createOutputCentered<PJ301MPort>(rack::Vec(outX[1], rOut2), module, CyberlinePtBreakout::FRICFC_OUTPUT));
-		addOutput(rack::createOutputCentered<PJ301MPort>(rack::Vec(outX[2], rOut2), module, CyberlinePtBreakout::FRICLVL_OUTPUT));
-		addOutput(rack::createOutputCentered<PJ301MPort>(rack::Vec(outX[1], rOut3), module, CyberlinePtBreakout::TENSE_OUTPUT));
-		addOutput(rack::createOutputCentered<PJ301MPort>(rack::Vec(outX[2], rOut3), module, CyberlinePtBreakout::VEL_OUTPUT));
+		// Outputs (3x3 grid; row 3 has 2)
+		float outX[3] = {28.f, 75.f, 122.f};
+		float rOut[3] = {150.f, 208.f, 266.f};
+		addOutput(rack::createOutputCentered<PJ301MPort>(rack::Vec(outX[0], rOut[0]), module, CyberlinePtBreakout::VOCT_OUTPUT));
+		addOutput(rack::createOutputCentered<PJ301MPort>(rack::Vec(outX[1], rOut[0]), module, CyberlinePtBreakout::TONGUEX_OUTPUT));
+		addOutput(rack::createOutputCentered<PJ301MPort>(rack::Vec(outX[2], rOut[0]), module, CyberlinePtBreakout::TONGUEY_OUTPUT));
+		addOutput(rack::createOutputCentered<PJ301MPort>(rack::Vec(outX[0], rOut[1]), module, CyberlinePtBreakout::THROATX_OUTPUT));
+		addOutput(rack::createOutputCentered<PJ301MPort>(rack::Vec(outX[1], rOut[1]), module, CyberlinePtBreakout::FRICFC_OUTPUT));
+		addOutput(rack::createOutputCentered<PJ301MPort>(rack::Vec(outX[2], rOut[1]), module, CyberlinePtBreakout::FRICLVL_OUTPUT));
+		addOutput(rack::createOutputCentered<PJ301MPort>(rack::Vec(outX[1], rOut[2]), module, CyberlinePtBreakout::TENSE_OUTPUT));
+		addOutput(rack::createOutputCentered<PJ301MPort>(rack::Vec(outX[2], rOut[2]), module, CyberlinePtBreakout::VEL_OUTPUT));
 	}
 
 	void appendContextMenu(rack::ui::Menu* menu) override {
