@@ -856,6 +856,36 @@ static void test_brocasq_registers_clocking_and_mutation() {
 	CHECK(sq.cPos == sq.vPos,
 		"Unpatched consonant phasor follows the vowel phasor (fallback rule)");
 
+	// ---- External modes never free-run (strictly external clocking) ----
+	{
+		CyberlineBrocaSq sq2;
+		sq2.outputs[CyberlineBrocaSq::TRACT_POLY_OUTPUT].channels = 1;
+		sq2.params[CyberlineBrocaSq::MODE_PARAM].setValue(1.f);  // CLOCK
+		sq2.params[CyberlineBrocaSq::RATE_PARAM].setValue(1.f);  // internal clock at max
+		rack::engine::Module::ProcessArgs args2;
+		args2.sampleRate = 48000.f;
+		args2.sampleTime = 1.f / 48000.f;
+		int step0 = sq2.step;
+		for (int i = 0; i < (int) (0.5f * args2.sampleRate); i++) sq2.process(args2);
+		CHECK(sq2.step == step0,
+			"CLOCK mode with no clock patched does not free-run (0 steps in 0.5 s)");
+
+		sq2.params[CyberlineBrocaSq::MODE_PARAM].setValue(2.f);  // PHASOR
+		int vPos0 = sq2.vPos, cPos0 = sq2.cPos;
+		for (int i = 0; i < (int) (0.5f * args2.sampleRate); i++) sq2.process(args2);
+		CHECK(sq2.vPos == vPos0 && sq2.cPos == cPos0,
+			"PHASOR mode with both phasors unpatched holds still (no internal phasor)");
+
+		// One register patched, the other holds/follows per its rule
+		sq2.inputs[CyberlineBrocaSq::VPH_INPUT].channels = 1;
+		sq2.inputs[CyberlineBrocaSq::VPH_INPUT].setVoltage(0.f, 0);
+		for (int i = 0; i < (int) (0.05f * args2.sampleRate); i++) sq2.process(args2);
+		sq2.inputs[CyberlineBrocaSq::VPH_INPUT].setVoltage(9.f, 0);
+		for (int i = 0; i < 64; i++) sq2.process(args2);
+		CHECK(sq2.vPos == 7 && sq2.cPos == 7,
+			"PHASOR with only V-PH patched scans V and C follows it (C-PH unpatched)");
+	}
+
 	// ---- Mutation: at 0% probability registers never change ----
 	sq.params[CyberlineBrocaSq::MODE_PARAM].setValue(1.f); // CLOCK
 	sq.params[CyberlineBrocaSq::MUTV_PARAM].setValue(0.f);

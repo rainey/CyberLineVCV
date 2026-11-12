@@ -176,21 +176,14 @@ void CyberlineBrocaSq::process(const ProcessArgs& args) {
 				stepEvent = true;
 			}
 		} else {
-			// CLOCK mode: external trigger advances the shared step; with no
-			// clock patched, fall back to the internal RATE clock.
+			// CLOCK mode is strictly external: no clock patched = no steps
+			// (no silent fallback to the internal RATE clock — switch to
+			// FREE mode for that). The manual STEP button still works.
 			bool clockHigh = inputs[CLOCK_INPUT].getVoltage() >= 1.f;
 			bool clockRising = (clockHigh && !clockWasHigh);
 			clockWasHigh = clockHigh;
 			if (clockRising)
 				stepEvent = true;
-			else if (!inputs[CLOCK_INPUT].isConnected()) {
-				float rate = rack::math::clamp(params[RATE_PARAM].getValue() * 19.5f + 0.5f, 0.5f, 20.f);
-				freePhase += dt * rate;
-				if (freePhase >= 1.f) {
-					freePhase -= std::floor(freePhase);
-					stepEvent = true;
-				}
-			}
 		}
 		if (stepRising)
 			stepEvent = true;
@@ -208,9 +201,11 @@ void CyberlineBrocaSq::process(const ProcessArgs& args) {
 		}
 	} else {
 		// PHASOR mode: each register's position is a pure function of its own
-		// phase (stateless). Unpatched phasor follows the other's; both
-		// unpatched -> internal RATE phasor. Fast jumps snap: only the final
-		// position change fires (the normal old->new morph handles it).
+		// phase (stateless). Strictly external: an unpatched register phasor
+		// holds that register still (no internal fallback — switch to FREE
+		// for that); an unpatched C-PH follows the V-PH phase. Fast jumps
+		// snap: only the final position change fires (the normal old->new
+		// morph handles it).
 		float vPhase, cPhase;
 		bool vPatched = inputs[VPH_INPUT].isConnected();
 		bool cPatched = inputs[CPH_INPUT].isConnected();
@@ -218,11 +213,8 @@ void CyberlineBrocaSq::process(const ProcessArgs& args) {
 			vPhase = sq_wrapPhase(inputs[VPH_INPUT].getVoltage() * 0.1f);
 		else if (cPatched)
 			vPhase = sq_wrapPhase(inputs[CPH_INPUT].getVoltage() * 0.1f);
-		else {
-			float rate = rack::math::clamp(params[RATE_PARAM].getValue() * 19.5f + 0.5f, 0.5f, 20.f);
-			freePhase += dt * rate;
-			vPhase = sq_wrapPhase(freePhase);
-		}
+		else
+			vPhase = sq_wrapPhase((float) vPos / (float) vLen);  // both unpatched: hold
 		if (cPatched)
 			cPhase = sq_wrapPhase(inputs[CPH_INPUT].getVoltage() * 0.1f);
 		else

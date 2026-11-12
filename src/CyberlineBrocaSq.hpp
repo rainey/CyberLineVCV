@@ -174,9 +174,9 @@ struct CyberlineBrocaSq : rack::engine::Module {
 		configParam(ONSET_PARAM, 0.02f, 0.35f, 0.11f, "Consonant onset / glide time", " s");
 		configButton(STEP_PARAM, "Manual step");
 
-		configInput(CLOCK_INPUT, "Clock / step trigger (CLOCK mode)");
+		configInput(CLOCK_INPUT, "Clock / step trigger (CLOCK mode; unpatched = no steps)");
 		configInput(RESET_INPUT, "Reset (trigger: step counter & heads to 0; registers untouched)");
-		configInput(VPH_INPUT, "Vowel register phase CV (0-10 V ramp, PHASOR mode)");
+		configInput(VPH_INPUT, "Vowel register phase CV (0-10 V ramp, PHASOR mode; unpatched = hold)");
 		configInput(CPH_INPUT, "Consonant register phase CV (0-10 V ramp, PHASOR mode)");
 		configInput(PV_INPUT, "Vowel mutation probability CV (0-10 V)");
 		configInput(PC_INPUT, "Consonant mutation probability CV (0-10 V)");
