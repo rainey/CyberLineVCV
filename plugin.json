@@ -25,6 +25,17 @@
       ]
     },
     {
+      "slug": "cyberline-cantor",
+      "name": "Cantor",
+      "description": "Musical singer LF-glottis voice source with accurate 1V/oct tracking via dynamic fold length, timbre-only tension, vocal mass control, and external oscillator carrier blend/sync",
+      "tags": [
+        "Physical modeling",
+        "Oscillator",
+        "Synth voice",
+        "Polyphonic"
+      ]
+    },
+    {
       "slug": "cyberline-lungs",
       "name": "Breath",
       "description": "Respiratory pressure reservoir and physically-shaped envelope generator with energy-limited sustain and whale-style air retention mode",

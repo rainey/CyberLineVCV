@@ -20,6 +20,7 @@
 #include "../src/CyberlinePtBreakout.hpp"
 #include "../src/CyberlineOralChamber.hpp"
 #include "../src/CyberlineLarynx.hpp"
+#include "../src/CyberlineCantor.hpp"
 #include "../src/CyberlineVoice.hpp"
 #include "../src/CyberlineQuality.hpp"
 
@@ -1379,6 +1380,161 @@ static void test_pt_mode_and_breakout() {
 	}
 }
 
+static void test_cantor_musical_pitch_and_carrier() {
+	std::printf("--- Testing CyberlineCantor: musical pitch tracking, mass & carrier blend ---\n");
+	CyberlineCantor cantor;
+	rack::engine::Module::ProcessArgs args;
+	args.sampleRate = 48000.f;
+	args.sampleTime = 1.f / 48000.f;
+
+	auto stepBlock = [&]() {
+		for (int i = 0; i < 32; i++) {
+			cantor.process(args);
+		}
+	};
+
+	// 1. Verify changing TENSION_PARAM (0.2f vs 0.9f) and MASS_PARAM (-1.f vs +1.f)
+	// does NOT change glottis.targetF0 (which stays at 261.6256f Hz at 0V),
+	// while MASS_PARAM DOES scale glottis.targetFoldLen (effFoldMm).
+	// Zero PCOUPLE_PARAM and TUNE_PARAM so breath pitch bend doesn't offset base F0.
+	cantor.params[CyberlineCantor::PCOUPLE_PARAM].setValue(0.f);
+	cantor.params[CyberlineCantor::TUNE_PARAM].setValue(0.f);
+	cantor.params[CyberlineCantor::OCT_PARAM].setValue(0.f);
+
+	cantor.params[CyberlineCantor::TENSION_PARAM].setValue(0.2f);
+	cantor.params[CyberlineCantor::MASS_PARAM].setValue(-1.f);
+	stepBlock();
+	CHECK(std::fabs(cantor.glottis.targetF0 - 261.6256f) < 0.05f, "Cantor targetF0 stays at 261.63 Hz with low tension and light mass");
+	float foldLight = cantor.glottis.targetFoldLen;
+	CHECK(cantor.telemetryEffFoldMm == foldLight, "telemetryEffFoldMm matches glottis targetFoldLen");
+
+	cantor.params[CyberlineCantor::TENSION_PARAM].setValue(0.9f);
+	cantor.params[CyberlineCantor::MASS_PARAM].setValue(1.f);
+	stepBlock();
+	CHECK(std::fabs(cantor.glottis.targetF0 - 261.6256f) < 0.05f, "Cantor targetF0 stays at 261.63 Hz with high tension and heavy mass");
+	float foldHeavy = cantor.glottis.targetFoldLen;
+	CHECK(foldHeavy > foldLight * 3.f, "MASS_PARAM scales glottis.targetFoldLen (light vs heavy fold length)");
+
+	// 2. Verify 1V/Oct input (0V -> +1V -> -1V) tracks exact octaves (261.63 Hz -> 523.25 Hz -> 130.81 Hz)
+	// and updates telemetryEffFoldMm inversely with pitch (Leff shrinks as pitch rises).
+	cantor.params[CyberlineCantor::TENSION_PARAM].setValue(0.6f);
+	cantor.params[CyberlineCantor::MASS_PARAM].setValue(0.f);
+	cantor.params[CyberlineCantor::TUNE_PARAM].setValue(0.f);
+	cantor.params[CyberlineCantor::OCT_PARAM].setValue(0.f);
+	cantor.params[CyberlineCantor::PCOUPLE_PARAM].setValue(0.f);
+	cantor.inputs[CyberlineCantor::PITCH_INPUT].channels = 1;
+
+	cantor.inputs[CyberlineCantor::PITCH_INPUT].setVoltage(0.f);
+	stepBlock();
+	float f0_0V = cantor.glottis.targetF0;
+	float len0 = cantor.telemetryEffFoldMm;
+	CHECK(std::fabs(f0_0V - 261.6256f) < 0.05f, "1V/oct: 0V yields 261.63 Hz");
+
+	cantor.inputs[CyberlineCantor::PITCH_INPUT].setVoltage(1.f);
+	stepBlock();
+	float f0_plus1V = cantor.glottis.targetF0;
+	float lenPlus1 = cantor.telemetryEffFoldMm;
+	CHECK(std::fabs(f0_plus1V - 523.2511f) < 0.1f, "1V/oct: +1V yields 523.25 Hz");
+
+	cantor.inputs[CyberlineCantor::PITCH_INPUT].setVoltage(-1.f);
+	stepBlock();
+	float f0_minus1V = cantor.glottis.targetF0;
+	float lenMinus1 = cantor.telemetryEffFoldMm;
+	CHECK(std::fabs(f0_minus1V - 130.8128f) < 0.05f, "1V/oct: -1V yields 130.81 Hz");
+
+	CHECK(lenPlus1 < len0 && len0 < lenMinus1, "Effective fold length shrinks inversely as pitch rises");
+
+	// 3. Verify TENSION_INPUT 3-ch Larynx Poly Bus from Broca gates glottis.targetVoicing on voiceless consonants (/S/)
+	// without detuning glottis.targetF0.
+	CyberlineBroca broca;
+	broca.outputs[CyberlineBroca::LARYNX_POLY_OUTPUT].channels = 3;
+
+	// Reset Cantor pitch to 0V
+	cantor.inputs[CyberlineCantor::PITCH_INPUT].setVoltage(0.f);
+
+	// Find consonant /S/
+	int sIndex = -1;
+	for (int c = 0; c < CyberlineBroca::NUM_CONSONANTS; c++) {
+		if (std::string(CyberlineBroca::CONSONANTS[c].code) == "S") {
+			sIndex = c;
+			break;
+		}
+	}
+	CHECK(sIndex >= 0, "Found consonant /S/ in Broca consonant table");
+	broca.params[CyberlineBroca::CONSONANT_PARAM].setValue((float)sIndex);
+	broca.inputs[CyberlineBroca::TRIG_INPUT].setVoltage(10.f);
+	broca.process(args);
+	broca.inputs[CyberlineBroca::TRIG_INPUT].setVoltage(0.f);
+
+	float minTargetVoicing = 10.f;
+	for (int i = 0; i < (int)(0.08f * args.sampleRate); i++) {
+		broca.process(args);
+		int n = broca.outputs[CyberlineBroca::LARYNX_POLY_OUTPUT].getChannels();
+		cantor.inputs[CyberlineCantor::TENSION_INPUT].channels = n;
+		for (int c = 0; c < n; c++) {
+			cantor.inputs[CyberlineCantor::TENSION_INPUT].setVoltage(
+				broca.outputs[CyberlineBroca::LARYNX_POLY_OUTPUT].getVoltage(c), c);
+		}
+		cantor.process(args);
+		if (cantor.glottis.targetVoicing < minTargetVoicing)
+			minTargetVoicing = cantor.glottis.targetVoicing;
+	}
+	CHECK(minTargetVoicing < 0.05f, "Broca /S/ voiceless consonant gates Cantor glottis.targetVoicing to ~0");
+	CHECK(std::fabs(cantor.glottis.targetF0 - 261.6256f) < 0.05f, "Voiceless consonant does not detune glottis.targetF0");
+
+	// 4. Verify CARRIER_INPUT with CARRMIX_PARAM = 1.0f outputs the carrier shaped by breath pressure
+	// and muted when voicing = 0.
+	cantor.onReset();
+	cantor.inputs[CyberlineCantor::TENSION_INPUT].channels = 0; // unpatch Broca bus
+	cantor.params[CyberlineCantor::CARRMIX_PARAM].setValue(1.0f);
+	cantor.params[CyberlineCantor::PRESSURE_PARAM].setValue(1.0f);
+	cantor.params[CyberlineCantor::TENSION_PARAM].setValue(1.0f); // 1.0 tension -> 0 aspiration noise
+	cantor.inputs[CyberlineCantor::CARRIER_INPUT].channels = 1;
+	cantor.inputs[CyberlineCantor::CARRIER_INPUT].setVoltage(5.0f); // +5V carrier test signal
+
+	// Run enough samples for glottis intensity to settle (~5ms alpha)
+	for (int i = 0; i < 2000; i++) {
+		cantor.process(args);
+	}
+	float voicedCarrierOut = cantor.outputs[CyberlineCantor::VOICED_OUTPUT].getVoltage();
+	CHECK(voicedCarrierOut > 2.0f, "CARRIER_INPUT shaped by full breath pressure produces strong output");
+
+	// Now mute voicing via 3-ch bus (Ch 0: tension, Ch 1: pressure, Ch 2: voicing = 0V)
+	cantor.inputs[CyberlineCantor::TENSION_INPUT].channels = 3;
+	cantor.inputs[CyberlineCantor::TENSION_INPUT].setVoltage(10.0f, 0); // 1.0 tension -> 0 aspiration
+	cantor.inputs[CyberlineCantor::TENSION_INPUT].setVoltage(8.0f, 1);  // 0.8 pressure
+	cantor.inputs[CyberlineCantor::TENSION_INPUT].setVoltage(0.0f, 2);  // 0 voicing
+
+	for (int i = 0; i < 2000; i++) {
+		cantor.process(args);
+	}
+	float mutedCarrierOut = cantor.outputs[CyberlineCantor::VOICED_OUTPUT].getVoltage();
+	CHECK(std::fabs(mutedCarrierOut) < 0.05f, "Carrier output is muted when voicing = 0");
+
+	// When breath pressure is 0, carrier is also silent
+	cantor.inputs[CyberlineCantor::TENSION_INPUT].channels = 0; // unpatch
+	cantor.params[CyberlineCantor::PRESSURE_PARAM].setValue(0.f);
+	for (int i = 0; i < 2000; i++) {
+		cantor.process(args);
+	}
+	float zeroPressureOut = cantor.outputs[CyberlineCantor::VOICED_OUTPUT].getVoltage();
+	CHECK(std::fabs(zeroPressureOut) < 0.01f, "Carrier output is silent when breath pressure = 0");
+
+	// 5. Hard-sync glottis to external carrier rising edge
+	cantor.onReset();
+	cantor.carrierHardSync = true;
+	cantor.inputs[CyberlineCantor::CARRIER_INPUT].channels = 1;
+	cantor.inputs[CyberlineCantor::CARRIER_INPUT].setVoltage(-1.0f);
+	for (int i = 0; i < 100; i++) cantor.process(args);
+	// Set timeInWaveform to somewhere mid-period
+	cantor.glottis.timeInWaveform = cantor.glottis.waveformLength * 0.5f;
+	// Rising edge on carrier input
+	cantor.inputs[CyberlineCantor::CARRIER_INPUT].setVoltage(1.0f);
+	cantor.process(args);
+	// After rising edge, glottis immediately restarts a new period (timeInWaveform wraps to ~1 sample)
+	CHECK(cantor.glottis.timeInWaveform < 2.f * args.sampleTime, "Carrier rising edge hard-syncs glottal period");
+}
+
 int main() {
 	std::printf("=========================================\n");
 	std::printf("Running Cyberline Module Integration Tests\n");
@@ -1394,6 +1550,7 @@ int main() {
 	test_quality_global_and_override();
 	test_tract_settled_early_out_bitexact();
 	test_poly_normalling_larynx_and_voice();
+	test_cantor_musical_pitch_and_carrier();
 	test_brocasq_registers_clocking_and_mutation();
 	test_range_presets();
 	test_vtl_band_clamp();

@@ -15,6 +15,7 @@ void init(rack::Plugin* p) {
 	cyberline::CyberlineQuality::init(p);   // load the global DSP quality (default LOW)
 
 	p->addModel(cyberline::modelCyberlineLarynx);
+	p->addModel(cyberline::modelCyberlineCantor);
 	p->addModel(cyberline::modelCyberlineLungs);
 	p->addModel(cyberline::modelCyberlineOralChamber);
 	p->addModel(cyberline::modelCyberlineVoice);

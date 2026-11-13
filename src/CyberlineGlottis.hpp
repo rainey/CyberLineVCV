@@ -184,6 +184,11 @@ struct CyberlineGlottis {
 		setupWaveform(110.f, 0.6f);
 	}
 
+	// Perceived vocal loudness factor (tenseness^0.25, Neil Thapen / Pink Trombone)
+	float loudness() const {
+		return std::pow(std::fmax(curTenseness, 0.01f), 0.25f);
+	}
+
 	// One sample. noise: white noise in [-1, 1]. fbDrive: pre-scaled feedback
 	// sample (module multiplies input by feedback gain). driftAmt: 0..1.
 	// vibRate: Hz. Returns normalized voiced sample (roughly ±1).
