@@ -11,7 +11,9 @@
 #include "CyberlineMidiMap.hpp"
 #include "CyberlineModels.hpp"
 #include <rack.hpp>
+#ifndef USING_CARDINAL_NOT_RACK
 #include <osdialog.h>
+#endif
 #include <cinttypes>
 #include <fstream>
 #include <map>
@@ -22,6 +24,68 @@ namespace cyberline {
 static std::string truncateCellLabel(const std::string& name) {
 	return name.size() > 30 ? name.substr(0, 29) + "\xE2\x80\xA6" : name; // ellipsis
 }
+
+#ifdef USING_CARDINAL_NOT_RACK
+// Cardinal-only channel strip: the host is the MIDI device, so the only
+// addressable state is the channel. In-house plate styling matching the
+// SPEC strip; click opens a 1..16 channel menu.
+struct ChannelStrip : rack::widget::Widget {
+	CyberlineMidiMap* module = NULL;
+
+	void onButton(const rack::event::Button& e) override {
+		Widget::onButton(e);
+		if (e.button != GLFW_MOUSE_BUTTON_LEFT)
+			return;
+		if (e.action == GLFW_PRESS && module) {
+			auto* menu = rack::createMenu();
+			menu->addChild(rack::createMenuLabel("MIDI channel"));
+			menu->addChild(new rack::ui::MenuSeparator);
+			int current = module->midiOutput.channel < 0 ? 0 : module->midiOutput.channel;
+			for (int ch = 0; ch < 16; ch++) {
+				char buf[24];
+				std::snprintf(buf, sizeof(buf), "Channel %d", ch + 1);
+				int cc = ch;
+				menu->addChild(rack::createCheckMenuItem(buf, "",
+					[=]() { return cc == current; },
+					[=]() {
+						module->midiOutput.channel = cc;
+						// Channel change moves every conflict key.
+						module->midiOutput.resetValues();
+					}));
+			}
+			e.consume(this);
+		}
+	}
+
+	void draw(const DrawArgs& args) override {
+		NVGcontext* vg = args.vg;
+		auto font = getLabelFont();
+		if (font && font->handle >= 0)
+			nvgFontFaceId(vg, font->handle);
+		nvgBeginPath(vg);
+		nvgRoundedRect(vg, 0, 0, box.size.x, box.size.y, 3.f);
+		nvgFillColor(vg, nvgRGBA(0x0b, 0x0d, 0x13, 150));
+		nvgFill(vg);
+		nvgStrokeWidth(vg, 0.9f);
+		nvgStrokeColor(vg, nvgRGBA(0x2e, 0x34, 0x40, 200));
+		nvgStroke(vg);
+		int channel = module ? module->midiOutput.channel : -1;
+		char buf[24];
+		std::snprintf(buf, sizeof(buf), "MIDI CH %d", (channel < 0 ? 0 : channel) + 1);
+		nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_BOTTOM);
+		nvgFontSize(vg, 5.8f);
+		nvgFillColor(vg, nvgRGB(0x6a, 0x74, 0x80));
+		nvgText(vg, 8.f, 11.f, "MIDI", NULL);
+		nvgFontSize(vg, 8.5f);
+		nvgFillColor(vg, nvgRGB(0xd8, 0xde, 0xe4));
+		nvgText(vg, 8.f, 20.f, buf, NULL);
+		nvgTextAlign(vg, NVG_ALIGN_RIGHT | NVG_ALIGN_BOTTOM);
+		nvgFontSize(vg, 7.f);
+		nvgFillColor(vg, nvgRGB(0x9b, 0x6d, 0xff));
+		nvgText(vg, box.size.x - 8.f, 20.f, "\xE2\x96\xBE", NULL);
+	}
+};
+#endif
 
 struct CyberlineMidiMapWidget : rack::app::ModuleWidget {
 	static constexpr float PANEL_W = 26 * 15.f; // 390 px (26 HP)
@@ -42,11 +106,20 @@ struct CyberlineMidiMapWidget : rack::app::ModuleWidget {
 		using rack::componentlibrary::PJ301MPort;
 
 		// MIDI display (driver/device/channel), top-left. Standard Rack
+#ifndef USING_CARDINAL_NOT_RACK
 		// MidiDisplay: click rows to pick driver/device/channel.
 		auto* midiDisplay = rack::createWidget<rack::app::MidiDisplay>(rack::Vec(GRID_X, 10.f));
 		midiDisplay->box.size = rack::Vec(160.f, 24.f);
 		midiDisplay->setMidiPort(module ? &module->midiOutput : NULL);
 		addChild(midiDisplay);
+#else
+		// Cardinal: no driver/device stack (the host is the device) — an
+		// in-house channel strip replaces the MidiDisplay.
+		auto* channelStrip = rack::createWidget<ChannelStrip>(rack::Vec(GRID_X, 10.f));
+		channelStrip->box.size = rack::Vec(160.f, 24.f);
+		channelStrip->module = module;
+		addChild(channelStrip);
+#endif
 
 		// SPEC strip, top-right; clicking opens the spec chooser.
 		auto* strip = rack::createWidget<SpecStrip>(rack::Vec(PANEL_W - 190.f, 10.f));
@@ -442,6 +515,24 @@ struct CyberlineMidiMapWidget : rack::app::ModuleWidget {
 			// parseMidiMapSpecJson for the schema).
 			menu->addChild(rack::createMenuItem("Load spec JSON\xE2\x80\xA6", "",
 				[=]() {
+#ifdef USING_CARDINAL_NOT_RACK
+					// Cardinal: no blocking osdialog; the choice comes back
+					// asynchronously (no format filters in the async API).
+					async_dialog_filebrowser(false, nullptr, nullptr,
+						"Load MIDI Map spec", [m](char* pathC) {
+							if (!pathC)
+								return;
+							DEFER({ std::free(pathC); });
+							std::ifstream f(pathC, std::ios::binary);
+							if (!f.good())
+								return;
+							std::string text((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
+							std::string err;
+							if (!m->loadSpecJson(text.c_str(), pathC, &err))
+								async_dialog_message(
+									std::string("Spec load failed:\n" + err).c_str());
+						});
+#else
 					osdialog_filters* filters = osdialog_filters_parse("JSON:json");
 					DEFER({ osdialog_filters_free(filters); });
 					char* path = osdialog_file(OSDIALOG_OPEN, NULL, NULL, filters);
@@ -458,6 +549,7 @@ struct CyberlineMidiMapWidget : rack::app::ModuleWidget {
 						// simply stays closed on failure.
 						WARN("MIDI Map spec load failed (%s): %s", path, err.c_str());
 					}
+#endif
 				}));
 			menu->addChild(rack::createMenuLabel("  spec JSON: {synth, params:["));
 			menu->addChild(rack::createMenuLabel("  {cc | nrpn:\"m:l\", name,"));
@@ -502,9 +594,28 @@ struct CyberlineMidiMapWidget : rack::app::ModuleWidget {
 		auto* m = dynamic_cast<CyberlineMidiMap*>(module);
 		if (!m)
 			return;
-		// Full MIDI driver/device/channel config, also available here.
+		// MIDI routing: full driver/device/channel config under Rack; the
+		// channel selector only under Cardinal (no driver stack there).
 		menu->addChild(new rack::ui::MenuSeparator);
+#ifndef USING_CARDINAL_NOT_RACK
 		rack::app::appendMidiMenu(menu, &m->midiOutput);
+#else
+		menu->addChild(rack::createMenuLabel("MIDI out: Cardinal host"));
+		{
+			int current = m->midiOutput.channel < 0 ? 0 : m->midiOutput.channel;
+			for (int ch = 0; ch < 16; ch++) {
+				char buf[24];
+				std::snprintf(buf, sizeof(buf), "Channel %d", ch + 1);
+				int cc = ch;
+				menu->addChild(rack::createCheckMenuItem(buf, "",
+					[=]() { return cc == current; },
+					[=]() {
+						m->midiOutput.channel = cc;
+						m->midiOutput.resetValues();
+					}));
+			}
+		}
+#endif
 		menu->addChild(new rack::ui::MenuSeparator);
 		menu->addChild(rack::createMenuItem("Resend all cell values", "",
 			[=]() { m->resendAll(); }));

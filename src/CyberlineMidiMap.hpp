@@ -33,6 +33,11 @@
 #include "CyberlineQuality.hpp"
 #include "CyberlineModels.hpp"
 #include <rack.hpp>
+#ifdef USING_CARDINAL_NOT_RACK
+// CardinalPluginContext::writeMidiMessage (the host MIDI-out path) — the
+// same include halfagiraf's Entwine uses for its CardinalMidiOut adapter.
+#include <plugincontext.hpp>
+#endif
 #include <cmath>
 #include <cstdio>
 #include <cstring>
@@ -622,11 +627,29 @@ struct CellParamQuantity : rack::engine::ParamQuantity {
 	std::string getDisplayValueString() override;
 };
 
-// Change-gated MIDI CC / NRPN sender (mirrors Core CV-CC's CCMidiOutput,
-// extended with NRPN sequences). The port's selected channel is applied
-// automatically by midi::Output::sendMessage when it is >= 0; with the
-// channel unset (-1) the byte's low nibble (0) is transmitted = MIDI ch 1.
-struct MidiMapOutput : rack::midi::Output {
+// Change-gated MIDI CC / NRPN sender with two compile-time backends:
+//
+// - Rack: subclasses rack::midi::Output (driver/device/channel picked on
+//   the panel like Core's MIDI modules). sendMessage applies the port's
+//   selected channel automatically when it is >= 0; with the channel
+//   unset (-1) the message's own low nibble (0) is transmitted = MIDI ch 1.
+// - Cardinal (USING_CARDINAL_NOT_RACK): the MIDI driver stack is removed
+//   there (include/midi.hpp keeps only Message), so this is a standalone
+//   struct forwarding to the host via
+//   CardinalPluginContext::writeMidiMessage — the host IS the device, and
+//   the channel is the only selector (0-based, -1 = ch 1, matching the
+//   Rack port semantics our conflict keys use). Frame is block-relative
+//   (host expects the offset within the current process block), computed
+//   by CyberlineMidiMap::process from Engine::getBlockFrame.
+//   Precedent: CardinalMidiOut in halfagiraf's osdialog-midi patch, and
+//   core HostMIDI's midiOutput.
+struct MidiMapOutput
+#ifdef USING_CARDINAL_NOT_RACK
+    /* standalone (Cardinal) */
+#else
+    : rack::midi::Output
+#endif
+{
 	int64_t frame = -1;
 	std::map<int, uint8_t> lastValues; // keyed by MidiMapParam::key()
 
@@ -634,6 +657,39 @@ struct MidiMapOutput : rack::midi::Output {
 		lastValues.clear();
 	}
 
+#ifdef USING_CARDINAL_NOT_RACK
+	// Channel: 0-based, -1 = unset (transmits as ch 1). The channel menu
+	// under Cardinal stores 0..15 here.
+	int channel = -1;
+
+	void sendController(int cc, uint8_t value) {
+		rack::midi::Message m;
+		m.setStatus(0xb);
+		m.setNote(cc);
+		m.setValue(value);
+		m.setFrame(frame);
+		auto* pc = static_cast<CardinalPluginContext*>(APP);
+		if (pc)
+			pc->writeMidiMessage(m, channel < 0 ? 0 : (uint8_t) channel);
+	}
+
+	void reset() {
+		resetValues();
+	}
+
+	json_t* toJson() const {
+		json_t* rootJ = json_object();
+		json_object_set_new(rootJ, "channel", json_integer(channel));
+		return rootJ;
+	}
+
+	void fromJson(json_t* rootJ) {
+		json_t* j = json_object_get(rootJ, "channel");
+		if (j)
+			channel = rack::math::clamp((int) json_integer_value(j), 0, 15);
+		resetValues();
+	}
+#else
 	void sendController(int cc, uint8_t value) {
 		rack::midi::Message m;
 		m.setStatus(0xb);
@@ -642,6 +698,7 @@ struct MidiMapOutput : rack::midi::Output {
 		m.setFrame(frame);
 		sendMessage(m);
 	}
+#endif
 
 	// Transmit `value` for one parameter (CC or NRPN), gated on change.
 	void sendParam(const MidiMapParam& p, uint8_t value) {
@@ -887,6 +944,19 @@ struct CyberlineMidiMap : rack::engine::Module {
 		}
 
 		midiOutput.frame = args.frame;
+#ifdef USING_CARDINAL_NOT_RACK
+		// Cardinal: the host expects block-relative event frames; compute
+		// the offset from the current process block (CardinalCommon's own
+		// InputQueue does the same with engine->getBlockFrame()).
+		{
+			auto* pc = static_cast<CardinalPluginContext*>(APP);
+			if (pc && pc->engine) {
+				int64_t blockStart = pc->engine->getBlockFrame();
+				midiOutput.frame = args.frame > blockStart ? args.frame - blockStart : 0;
+			} else
+				midiOutput.frame = 0;
+		}
+#endif
 		const MidiMapSpec* s = spec();
 		for (int c = 0; c < NUM_CELLS; c++) {
 			const MidiMapParam* p = s->paramAt((int) std::lround(params[CELL0_PARAM + c].getValue()));
