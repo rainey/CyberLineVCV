@@ -164,6 +164,9 @@ struct CyberlineMidiMapWidget : rack::app::ModuleWidget {
 			return;
 		const MidiMapSpec* s = m->spec();
 		menu->addChild(rack::createMenuLabel(rack::string::uppercase(s->synth)));
+		if (m->cellDisabled[cell])
+			menu->addChild(rack::createMenuLabel("  cell disabled (all targets in use)"));
+		menu->addChild(rack::createMenuLabel("  picking re-claims the target"));
 		menu->addChild(new rack::ui::MenuSeparator);
 
 		// Used targets across all instances + this module's other cells.
@@ -280,6 +283,9 @@ struct CyberlineMidiMapWidget : rack::app::ModuleWidget {
 		auto* m = dynamic_cast<CyberlineMidiMap*>(module);
 		if (!m)
 			return;
+		// A manual pick re-enables a cell disabled by default assignment
+		// (the user chooses to take over that target).
+		m->cellDisabled[cell] = false;
 		float oldV = m->params[CyberlineMidiMap::CELL0_PARAM + cell].getValue();
 		if (oldV == (float) index)
 			return;
@@ -370,6 +376,27 @@ struct CyberlineMidiMapWidget : rack::app::ModuleWidget {
 				if (!p)
 					continue;
 
+				bool disabled = module && module->cellDisabled[cell];
+				if (disabled) {
+					// Cell disabled by default assignment (every target on
+					// this channel is held elsewhere): dim + explicit tag.
+					nvgBeginPath(vg);
+					nvgRoundedRect(vg, x0, y0, cw - 3.f, CELL_H, 3.f);
+					nvgFillColor(vg, nvgRGBA(0x0b, 0x0d, 0x13, 190));
+					nvgFill(vg);
+					nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_TOP);
+					nvgFontSize(vg, 7.2f);
+					nvgFillColor(vg, nvgRGB(0x4a, 0x52, 0x5c));
+					nvgText(vg, x0 + 6.f, y0 + 5.f, "DISABLED", NULL);
+					nvgFontSize(vg, 5.8f);
+					nvgFillColor(vg, nvgRGB(0x3a, 0x40, 0x4a));
+					nvgText(vg, x0 + 6.f, y0 + 15.f, "all targets in use", NULL);
+					nvgFontSize(vg, 5.4f);
+					nvgFillColor(vg, nvgRGB(0x4a, 0x52, 0x5c));
+					nvgText(vg, x0 + 6.f, y0 + 25.f, "click to assign", NULL);
+					continue;
+				}
+
 				// Param label (up to two lines, wrapped on spaces)
 				nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_TOP);
 				nvgFontSize(vg, 7.2f);
@@ -406,14 +433,12 @@ struct CyberlineMidiMapWidget : rack::app::ModuleWidget {
 				nvgFillColor(vg, nvgRGB(0x8a, 0x94, 0xa0));
 				nvgText(vg, x0 + 24.f - 15.5f, y0 + CELL_H - 26.f, "IN", NULL);
 
-				// Activity bar (right edge): last transmitted 7-bit value
-				float v = 0.f;
-				if (module) {
-					int k = p->key();
-					auto it = module->midiOutput.lastValues.find(k);
-					if (it != module->midiOutput.lastValues.end())
-						v = it->second / 127.f;
-				}
+				// Activity bar (right edge): last processed 7-bit value,
+				// read from the per-cell atomic (UI thread never touches
+				// the audio thread's change-gate map).
+				float v = module
+					? module->telValue[cell].load(std::memory_order_relaxed) / 127.f
+					: 0.f;
 				float barH = (CELL_H - 14.f) * v;
 				nvgBeginPath(vg);
 				nvgRect(vg, x0 + cw - 9.f, y0 + CELL_H - 7.f - barH, 2.5f, barH);

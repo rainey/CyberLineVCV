@@ -1835,6 +1835,79 @@ static void test_midi_map() {
 				if (u2.key == u1.key)
 					clash = true;
 		CHECK(!clash, "second instance's defaults avoid the first instance's targets");
+		// Regression: the first instance's defaults are ALL taken, so every
+		// cell of the second falls back — the picks must still be distinct
+		// within the second module (earlier code let them all converge on
+		// the same first-free parameter and fight each other).
+		bool selfClash = false;
+		for (size_t x = 0; x < uses2.size(); x++)
+			for (size_t y = x + 1; y < uses2.size(); y++)
+				if (uses2[x].key == uses2[y].key)
+					selfClash = true;
+		CHECK(!selfClash, "fallback picks are distinct within one module (regression)");
+	}
+
+	// ---- Disabled cells: every target taken -> cell transmits nothing ----
+	{
+		// Two-parameter spec; another module (same channel) holds both.
+		const char* specText =
+			"{\"synth\":\"Tiny\",\"params\":["
+			"{\"cc\":74,\"name\":\"Cutoff\"},{\"cc\":71,\"name\":\"Reso\"}]}";
+		CyberlineMidiMap m;
+		std::string err;
+		CHECK(m.loadSpecJson(specText, "tiny.json", &err), "2-param spec loads");
+		// Other instance holds both targets
+		std::vector<MidiMapTargetUse> uses;
+		MidiMapTargetUse u1, u2;
+		u1.key.nrpn = false; u1.key.addr = 74; u1.key.channel = 0;
+		u1.moduleId = 7; u1.cell = 0;
+		u2.key.nrpn = false; u2.key.addr = 71; u2.key.channel = 0;
+		u2.moduleId = 7; u2.cell = 1;
+		uses.push_back(u1);
+		uses.push_back(u2);
+		m.applySpecDefaults(uses);
+		bool allDisabled = true;
+		for (int c = 0; c < CyberlineMidiMap::NUM_CELLS; c++)
+			if (!m.cellDisabled[c])
+				allDisabled = false;
+		CHECK(allDisabled, "cells disabled when every target on the channel is taken");
+		// Disabled cells transmit nothing
+		for (int i = 0; i < 4800; i++)
+			m.process(args);
+		CHECK(m.midiOutput.lastValues.empty(),
+			"disabled cells transmit nothing over MIDI");
+		// Manual pick re-enables (cells 3 and 4 taken over by the user)
+		m.params[CyberlineMidiMap::CELL0_PARAM + 3].setValue(1.f);
+		m.cellDisabled[3] = false;
+		m.params[CyberlineMidiMap::CELL0_PARAM + 4].setValue(0.f);
+		m.cellDisabled[4] = false;
+		m.inputs[CyberlineMidiMap::CELL0_INPUT + 3].channels = 1;
+		m.inputs[CyberlineMidiMap::CELL0_INPUT + 3].setVoltage(10.f);
+		for (int i = 0; i < 4800; i++)
+			m.process(args);
+		// cell 3 (patched to +10 V) sends CC71 max; cell 4 (re-enabled,
+		// unpatched) sends its neutral for CC74
+		CHECK(m.midiOutput.lastValues.size() == 2
+				&& m.midiOutput.lastValues[71] == 127
+				&& m.midiOutput.lastValues[74] == 64,
+			"re-enabled cells transmit again (patched CV + neutral rest)");
+		// Disabled state persists through save/load
+		m.cellDisabled[5] = true;
+		json_t* rootJ = m.dataToJson();
+		std::string saved = json_dumps(rootJ, 0);
+		json_decref(rootJ);
+		CyberlineMidiMap m2b;
+		json_error_t jerr;
+		json_t* load = json_loads(saved.c_str(), 0, &jerr);
+		m2b.dataFromJson(load);
+		json_decref(load);
+		CHECK(m2b.cellDisabled[5] && !m2b.cellDisabled[4],
+			"disabled state persists through patch JSON");
+		// Disabled cells are excluded from conflict scans
+		std::vector<MidiMapTargetUse> scan;
+		collectSelfUses(&m2b, 9, &scan);
+		CHECK(scan.size() == 2,
+			"conflict scan skips disabled cells (2 enabled of 16)");
 	}
 
 	// ---- Spec defaults persist through save/load (params not reset to 0) ----

@@ -41,6 +41,8 @@
 #include <cmath>
 #include <cstdio>
 #include <cstring>
+#include <algorithm>
+#include <atomic>
 #include <map>
 #include <string>
 #include <vector>
@@ -751,6 +753,16 @@ struct CyberlineMidiMap : rack::engine::Module {
 	bool syncWasHigh = false;         // SYNC trigger edge detect
 	CyberlineCpuMeter cpuMeter;   // plugin-side CPU % ring (see CyberlineModels.hpp)
 
+	// Cells disabled by default assignment: every target on this channel
+	// is already held (by another instance or a sibling cell), so the cell
+	// transmits nothing. A manual pick from the assign menu re-enables.
+	// Persisted in the patch JSON.
+	bool cellDisabled[NUM_CELLS] = {};
+	// Per-cell last processed value (atomic: written by the audio thread
+	// in process(), read by the UI thread in MidiMapGrid::draw for the
+	// activity bars — replaces reading the change-gate map cross-thread).
+	std::atomic<uint8_t> telValue[NUM_CELLS];
+
 	CyberlineMidiMap() {
 		config(NUM_PARAMS, NUM_INPUTS_WITH_SYNC, 0, 0);
 		for (int c = 0; c < NUM_CELLS; c++)
@@ -758,6 +770,8 @@ struct CyberlineMidiMap : rack::engine::Module {
 		configInput(CELL0_INPUT, "Cell 1 CV");
 		configInput(SYNC_INPUT, "Sync (resend all values on trigger)");
 		setSpec(SPEC_BLOFELD);
+		for (int c = 0; c < NUM_CELLS; c++)
+			telValue[c].store(0, std::memory_order_relaxed);
 	}
 
 	const MidiMapSpec* spec() const {
@@ -833,43 +847,76 @@ struct CyberlineMidiMap : rack::engine::Module {
 	}
 
 	// Assign the spec's default parameter set to the cells, avoiding
-	// targets already in `uses`. Pure (testable headless); the live
-	// wrapper scans the engine. Cell c prefers the spec's c-th default;
-	// when absent or taken, the first unused parameter; when every
-	// parameter is in use, the spread fallback (cell c -> param c).
+	// targets already in `uses` (other instances) AND targets picked by
+	// earlier cells of this loop (recorded into a local copy — without
+	// that, every fallback cell would converge on the same first-free
+	// parameter and fight each other). Pure (testable headless); the live
+	// wrapper scans the engine.
+	//
+	// Pick order: cell c prefers the spec's c-th default; when absent or
+	// taken, the first parameter in ascending target order (CC 0 up, then
+	// NRPNs by address) that no one holds. When every target on this
+	// channel is taken, the cell is DISABLED (transmits nothing) instead
+	// of colliding — the assign menu can still pick a target, which
+	// re-enables it (user trades places with whoever holds that target).
 	void applySpecDefaults(const std::vector<MidiMapTargetUse>& uses) {
 		const MidiMapSpec* s = spec();
 		int n = (int) s->params.size();
 		int channel = effectiveChannel();
-		auto used = [&](int idx) {
-			const MidiMapParam& p = s->params[idx];
+		auto keyOf = [&](int idx) {
 			MidiMapTargetKey key;
+			const MidiMapParam& p = s->params[idx];
 			key.nrpn = p.isNrpn();
 			key.addr = p.isNrpn() ? p.nrpnMsb * 128 + p.nrpnLsb : p.cc;
 			key.channel = channel;
-			for (auto& u : uses)
-				if (u.key == key)
+			return key;
+		};
+		std::vector<MidiMapTargetUse> taken = uses;
+		auto isTaken = [&](int idx) {
+			MidiMapTargetKey k = keyOf(idx);
+			for (auto& u : taken)
+				if (u.key == k)
 					return true;
 			return false;
 		};
+		// Params in ascending target order (CC 0.. first, then NRPNs).
+		std::vector<int> order(n);
+		for (int i = 0; i < n; i++)
+			order[i] = i;
+		std::sort(order.begin(), order.end(),
+			[&](int a, int b) { return keyOf(a) < keyOf(b); });
+
 		for (int c = 0; c < NUM_CELLS; c++) {
+			cellDisabled[c] = false;
 			int pick = -1;
 			if (c < (int) s->defaults.size()) {
 				int cand = s->defaults[c];
-				if (cand >= 0 && cand < n && !used(cand))
+				if (cand >= 0 && cand < n && !isTaken(cand))
 					pick = cand;
 			}
 			if (pick < 0) {
-				for (int i = 0; i < n; i++) {
-					if (!used(i)) {
+				for (int oi = 0; oi < n; oi++) {
+					int i = order[oi];
+					if (!isTaken(i)) {
 						pick = i;
 						break;
 					}
 				}
 			}
-			if (pick < 0)
-				pick = std::min(c, n - 1);
+			if (pick < 0) {
+				// Every target on this channel is held: disable the cell.
+				cellDisabled[c] = true;
+				params[CELL0_PARAM + c].setValue(0.f);
+				continue;
+			}
 			params[CELL0_PARAM + c].setValue((float) pick);
+			// Record this pick so later cells don't claim the same target.
+			MidiMapTargetUse u;
+			u.key = keyOf(pick);
+			u.moduleId = this->id;
+			u.cell = c;
+			u.synth = s->synth;
+			taken.push_back(u);
 		}
 	}
 
@@ -959,6 +1006,11 @@ struct CyberlineMidiMap : rack::engine::Module {
 #endif
 		const MidiMapSpec* s = spec();
 		for (int c = 0; c < NUM_CELLS; c++) {
+			if (cellDisabled[c]) {
+				// Disabled cell transmits nothing; bar shows empty.
+				telValue[c].store(0, std::memory_order_relaxed);
+				continue;
+			}
 			const MidiMapParam* p = s->paramAt((int) std::lround(params[CELL0_PARAM + c].getValue()));
 			if (!p)
 				continue;
@@ -967,6 +1019,9 @@ struct CyberlineMidiMap : rack::engine::Module {
 				? voltsToValue(*p, in.getVoltage())
 				: neutralValue(*p);
 			midiOutput.sendParam(*p, value);
+			// Atomic cell meter for the UI thread (also covers the
+			// change-gated case: value equals what was last sent).
+			telValue[c].store(value, std::memory_order_relaxed);
 		}
 		cpuMeter.frameEnd(measure, args.sampleRate);
 	}
@@ -996,6 +1051,10 @@ struct CyberlineMidiMap : rack::engine::Module {
 		if (specIndex == SPEC_LOADED)
 			json_object_set_new(rootJ, "loadedPath", json_string(loadedPath.c_str()));
 		json_object_set_new(rootJ, "midi", midiOutput.toJson());
+		json_t* disJ = json_array();
+		for (int c = 0; c < NUM_CELLS; c++)
+			json_array_append_new(disJ, json_boolean(cellDisabled[c]));
+		json_object_set_new(rootJ, "cellDisabled", disJ);
 		return rootJ;
 	}
 
@@ -1017,6 +1076,16 @@ struct CyberlineMidiMap : rack::engine::Module {
 			specIndex = SPEC_BLOFELD;
 		}
 		setSpec(specIndex, false);
+		j = json_object_get(rootJ, "cellDisabled");
+		if (j && json_is_array(j)) {
+			size_t di;
+			json_t* dv;
+			json_array_foreach(j, di, dv) {
+				if (di >= NUM_CELLS)
+					break;
+				cellDisabled[di] = json_is_true(dv);
+			}
+		}
 		j = json_object_get(rootJ, "midi");
 		if (j)
 			midiOutput.fromJson(j);
@@ -1044,6 +1113,8 @@ inline void collectSelfUses(CyberlineMidiMap* m, int64_t moduleId,
 	const MidiMapSpec* s = m->spec();
 	int channel = m->effectiveChannel();
 	for (int c = 0; c < CyberlineMidiMap::NUM_CELLS; c++) {
+		if (m->cellDisabled[c])
+			continue; // disabled cells hold no target
 		const MidiMapParam* p = s->paramAt(
 			(int) std::lround(m->params[CyberlineMidiMap::CELL0_PARAM + c].getValue()));
 		if (!p)
