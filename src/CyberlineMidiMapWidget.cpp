@@ -454,7 +454,8 @@ struct CyberlineMidiMapWidget : rack::app::ModuleWidget {
 				}));
 			menu->addChild(rack::createMenuLabel("  spec JSON: {synth, params:["));
 			menu->addChild(rack::createMenuLabel("  {cc | nrpn:\"m:l\", name,"));
-			menu->addChild(rack::createMenuLabel("  min, max, centered, group}]}"));
+			menu->addChild(rack::createMenuLabel("  min, max, centered, group}],"));
+			menu->addChild(rack::createMenuLabel("  defaults:[\"name\"|idx,...]}"));
 		}
 
 		void draw(const DrawArgs& args) override {

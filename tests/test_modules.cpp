@@ -1773,6 +1773,84 @@ static void test_midi_map() {
 		m3.midiOutput.channel = 5;
 		CHECK(m3.effectiveChannel() == 5, "set port channel passes through");
 	}
+
+	// ---- Default cell assignment (spec defaults + conflict avoidance) ----
+	{
+		// Fresh module: spec defaults applied, not all on one param
+		CyberlineMidiMap m;
+		const MidiMapSpec* s = m.spec();
+		std::vector<MidiMapTargetUse> uses;
+		collectSelfUses(&m, 1, &uses);
+		CHECK(uses.size() == CyberlineMidiMap::NUM_CELLS, "fresh module: 16 cells assigned");
+		bool distinct = true;
+		for (size_t a = 0; a < uses.size(); a++)
+			for (size_t b = a + 1; b < uses.size(); b++)
+				if (uses[a].key == uses[b].key)
+					distinct = false;
+		CHECK(distinct, "fresh module: spec defaults are distinct per cell");
+		int idx4 = (int) std::lround(m.params[CyberlineMidiMap::CELL0_PARAM + 4].getValue());
+		CHECK(s->paramAt(idx4) && s->paramAt(idx4)->name == "Filter 1 cutoff",
+			"Blofeld default cell 5 = Filter 1 cutoff");
+
+		// Second module with the same spec avoids the first's targets
+		std::vector<MidiMapTargetUse> uses2; // simulate engine scan result
+		CyberlineMidiMap m2;
+		m2.applySpecDefaults(uses);
+		collectSelfUses(&m2, 2, &uses2);
+		bool clash = false;
+		for (auto& u2 : uses2)
+			for (auto& u1 : uses)
+				if (u2.key == u1.key)
+					clash = true;
+		CHECK(!clash, "second instance's defaults avoid the first instance's targets");
+	}
+
+	// ---- Spec defaults persist through save/load (params not reset to 0) ----
+	{
+		CyberlineMidiMap m;
+		// Move cell 3 onto "OSC 1 level"
+		int osc1 = -1;
+		for (int i = 0; i < (int) m.spec()->params.size(); i++)
+			if (m.spec()->params[i].name == "OSC 1 level")
+				osc1 = i;
+		m.params[CyberlineMidiMap::CELL0_PARAM + 3].setValue((float) osc1);
+		// Simulate Rack's restore order: params restored, then dataFromJson
+		json_t* rootJ = m.dataToJson();
+		std::string saved = json_dumps(rootJ, 0);
+		json_decref(rootJ);
+		CyberlineMidiMap m2;
+		for (int c = 0; c < CyberlineMidiMap::NUM_CELLS; c++)
+			m2.params[CyberlineMidiMap::CELL0_PARAM + c].setValue(
+				m.params[CyberlineMidiMap::CELL0_PARAM + c].getValue());
+		json_error_t jerr;
+		json_t* load = json_loads(saved.c_str(), 0, &jerr);
+		m2.dataFromJson(load);
+		json_decref(load);
+		int kept = (int) std::lround(m2.params[CyberlineMidiMap::CELL0_PARAM + 3].getValue());
+		CHECK(kept == osc1, "patch load keeps assigned cell targets (not all Mod wheel)");
+	}
+
+	// ---- JSON spec with defaults ----
+	{
+		const char* specText =
+			"{\"synth\":\"Dflt Synth\",\"params\":["
+			"{\"cc\":74,\"name\":\"Cutoff\"},"
+			"{\"cc\":71,\"name\":\"Reso\"},"
+			"{\"cc\":1,\"name\":\"Wheel\"}"
+			"],\"defaults\":[\"Cutoff\",\"Wheel\",99,0]}";
+		MidiMapSpec s;
+		std::string err;
+		CHECK(parseMidiMapSpecJson(specText, &s, &err), "spec with defaults parses");
+		CHECK(s.defaults.size() == 3, "out-of-range index default dropped");
+		CHECK(s.defaults[0] == 0 && s.defaults[1] == 2,
+			"defaults resolve by name (Cutoff=0, Wheel=2)");
+
+		CyberlineMidiMap m;
+		CHECK(m.loadSpecJson(specText, "dflt.json", &err), "module accepts spec with defaults");
+		int c0 = (int) std::lround(m.params[CyberlineMidiMap::CELL0_PARAM + 0].getValue());
+		CHECK(m.spec()->paramAt(c0) && m.spec()->paramAt(c0)->name == "Cutoff",
+			"loaded spec's defaults applied to cells");
+	}
 }
 
 int main() {

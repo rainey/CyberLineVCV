@@ -73,6 +73,10 @@ struct MidiMapParam {
 struct MidiMapSpec {
 	std::string synth;   // display name, e.g. "Waldorf Blofeld"
 	std::vector<MidiMapParam> params;
+	// Default cell assignment: defaults[c] = param index for cell c
+	// (shorter lists leave the remaining cells to first-unused/spread
+	// fallback). Empty = spread over the table order.
+	std::vector<int> defaults;
 
 	const MidiMapParam* paramAt(int index) const {
 		if (index < 0 || index >= (int) params.size())
@@ -82,6 +86,19 @@ struct MidiMapSpec {
 };
 
 // Built-in spec tables (compiled in; JSON import builds the same struct).
+
+// Fill s.defaults by parameter NAME (first match wins; unmatched names
+// are skipped, leaving those cells to the fallback).
+inline void specDefaultsByName(MidiMapSpec& s, std::initializer_list<const char*> names) {
+	for (const char* nm : names) {
+		for (int i = 0; i < (int) s.params.size(); i++) {
+			if (s.params[i].name == nm) {
+				s.defaults.push_back(i);
+				break;
+			}
+		}
+	}
+}
 
 inline MidiMapSpec makeBlofeldSpec() {
 	MidiMapSpec s;
@@ -209,6 +226,13 @@ inline MidiMapSpec makeBlofeldSpec() {
 	add(116, "Envelope 4 decay 2", 0, 127, false, "Env 4");
 	add(117, "Envelope 4 sustain 2", 0, 127, false, "Env 4");
 	add(118, "Envelope 4 release", 0, 127, false, "Env 4");
+	specDefaultsByName(s, {
+		"Mod wheel", "Breath control", "Channel volume", "Pan",
+		"Filter 1 cutoff", "Filter 1 resonance",
+		"OSC 1 level", "OSC 2 level", "OSC 3 level", "Noise level",
+		"Amp env attack", "Amp env decay", "Amp env sustain", "Amp env release",
+		"Filter env attack", "Filter env release",
+	});
 	return s;
 }
 
@@ -418,6 +442,13 @@ inline MidiMapSpec makeUltraNovaSpec() {
 	addnrpn(1, 65, "Arp mode", false, "Arp (NRPN)");
 	addnrpn(1, 66, "Arp pattern", false, "Arp (NRPN)");
 	addnrpn(1, 67, "Arp velocity", false, "Arp (NRPN)");
+	specDefaultsByName(s, {
+		"Modwheel", "Breath", "Channel volume", "Pan position",
+		"Filter1 frequency", "Filter1 resonance",
+		"Osc1 mix level", "Osc2 mix level", "Osc3 mix level", "Noise mix level",
+		"AmpEnv attack", "AmpEnv decay", "AmpEnv sustain level", "AmpEnv release",
+		"FiltEnv attack", "FiltEnv release",
+	});
 	return s;
 }
 
@@ -432,6 +463,7 @@ inline MidiMapSpec makeGenericSpec() {
 		p.name = buf;
 		p.group = (cc < 32) ? "CC 0-31" : (cc < 96) ? "CC 32-95" : "CC 96-127";
 		s.params.push_back(p);
+		s.defaults.push_back(cc); // sequential default: CC 0..15 on cells 1..16
 	}
 	return s;
 }
@@ -514,6 +546,28 @@ inline bool parseMidiMapSpecJson(const char* text, MidiMapSpec* out, std::string
 			*error = "no valid params rows";
 		json_decref(root);
 		return false;
+	}
+	// Optional default cell assignment: array of parameter names or
+	// indices. e.g. "defaults": ["Filter 1 cutoff", "Mod wheel", 7]
+	json_t* defJ = json_object_get(root, "defaults");
+	if (json_is_array(defJ)) {
+		size_t di;
+		json_t* dv;
+		json_array_foreach(defJ, di, dv) {
+			if (json_is_string(dv)) {
+				std::string nm = json_string_value(dv);
+				for (int i = 0; i < (int) s.params.size(); i++) {
+					if (s.params[i].name == nm) {
+						s.defaults.push_back(i);
+						break;
+					}
+				}
+			} else if (json_is_integer(dv)) {
+				int idx = (int) json_integer_value(dv);
+				if (idx >= 0 && idx < (int) s.params.size())
+					s.defaults.push_back(idx);
+			}
+		}
 	}
 	*out = s;
 	json_decref(root);
@@ -642,18 +696,7 @@ struct CyberlineMidiMap : rack::engine::Module {
 		for (int c = 0; c < NUM_CELLS; c++)
 			configParam<CellParamQuantity>(CELL0_PARAM + c, 0.f, 1.f, 0.f, "Cell target");
 		configInput(CELL0_INPUT, "Cell 1 CV");
-		setSpec(SPEC_BLOFELD, false);
-		defaultTargets();
-	}
-
-	// Spread the cell targets over the spec's parameter list (cell c ->
-	// param index c, clamped) so the factory state doesn't put all 16
-	// cells on one parameter fighting over it. Core's CV-CC does the same
-	// (cell id = CC id).
-	void defaultTargets() {
-		const MidiMapSpec* s = spec();
-		for (int c = 0; c < NUM_CELLS; c++)
-			params[CELL0_PARAM + c].setValue((float) std::min(c, (int) s->params.size() - 1));
+		setSpec(SPEC_BLOFELD);
 	}
 
 	const MidiMapSpec* spec() const {
@@ -693,39 +736,97 @@ struct CyberlineMidiMap : rack::engine::Module {
 	// Select a spec. Re-targets every cell by parameter NAME where possible
 	// (a cell assigned "Filter 1 cutoff" finds the same name in the new
 	// spec; unmatched cells keep their index clamped into the new list).
-	void setSpec(int index, bool keepCellTargets = true) {
-		const MidiMapSpec* old = spec();
-		std::string oldNames[NUM_CELLS];
-		if (keepCellTargets && old) {
-			for (int c = 0; c < NUM_CELLS; c++) {
-				const MidiMapParam* p = old->paramAt((int) std::lround(params[CELL0_PARAM + c].getValue()));
-				if (p)
-					oldNames[c] = p->name;
-			}
-		}
+	// Select a spec. With applyDefaults (user picked a spec, fresh module,
+	// loaded a JSON spec), cells are assigned the spec's default parameter
+	// set — skipping targets already held by any other MIDI Map instance
+	// or cell on the same effective channel. With applyDefaults=false
+	// (patch load), the engine-restored cell targets are kept as-is and
+	// only clamped into the new spec's range.
+	void setSpec(int index, bool applyDefaults = true) {
 		specIndex = rack::math::clamp(index, 0, SPEC_LOADED);
 		if (specIndex == SPEC_LOADED && loadedSpec.params.empty())
 			specIndex = SPEC_BLOFELD; // nothing loaded yet
 		const MidiMapSpec* s = spec();
 		float maxIdx = (float) (s->params.size() - 1);
 		for (int c = 0; c < NUM_CELLS; c++) {
-			int target = 0;
-			if (keepCellTargets && !oldNames[c].empty()) {
-				for (int i = 0; i < (int) s->params.size(); i++) {
-					if (s->params[i].name == oldNames[c]) {
-						target = i;
+			// Set the quantity range directly (NOT applyParamRange, which
+			// never widens past the configured 0..1 config range — that
+			// clamped every target into 0/1 and collapsed all cells onto
+			// the first spec entries). Cell targets legitimately span the
+			// whole spec, and the spec width changes on every switch.
+			auto* pq = paramQuantities[CELL0_PARAM + c];
+			if (pq) {
+				pq->minValue = 0.f;
+				pq->maxValue = maxIdx;
+			}
+			// Keep the raw value inside the range (patch-load preserve
+			// path; the defaults path overwrites below anyway).
+			float v = params[CELL0_PARAM + c].getValue();
+			if (v > maxIdx)
+				params[CELL0_PARAM + c].setValue(maxIdx);
+		}
+		if (applyDefaults)
+			applySpecDefaultsLive();
+		// Targets (re)assigned: force a re-send of everything.
+		midiOutput.resetValues();
+	}
+
+	// Assign the spec's default parameter set to the cells, avoiding
+	// targets already in `uses`. Pure (testable headless); the live
+	// wrapper scans the engine. Cell c prefers the spec's c-th default;
+	// when absent or taken, the first unused parameter; when every
+	// parameter is in use, the spread fallback (cell c -> param c).
+	void applySpecDefaults(const std::vector<MidiMapTargetUse>& uses) {
+		const MidiMapSpec* s = spec();
+		int n = (int) s->params.size();
+		int channel = effectiveChannel();
+		auto used = [&](int idx) {
+			const MidiMapParam& p = s->params[idx];
+			MidiMapTargetKey key;
+			key.nrpn = p.isNrpn();
+			key.addr = p.isNrpn() ? p.nrpnMsb * 128 + p.nrpnLsb : p.cc;
+			key.channel = channel;
+			for (auto& u : uses)
+				if (u.key == key)
+					return true;
+			return false;
+		};
+		for (int c = 0; c < NUM_CELLS; c++) {
+			int pick = -1;
+			if (c < (int) s->defaults.size()) {
+				int cand = s->defaults[c];
+				if (cand >= 0 && cand < n && !used(cand))
+					pick = cand;
+			}
+			if (pick < 0) {
+				for (int i = 0; i < n; i++) {
+					if (!used(i)) {
+						pick = i;
 						break;
 					}
 				}
-				if (target == 0)
-					target = rack::math::clamp(
-						(int) std::lround(params[CELL0_PARAM + c].getValue()), 0, (int) s->params.size() - 1);
 			}
-			applyParamRange(paramQuantities[CELL0_PARAM + c], 0.f, maxIdx);
-			params[CELL0_PARAM + c].setValue((float) target);
+			if (pick < 0)
+				pick = std::min(c, n - 1);
+			params[CELL0_PARAM + c].setValue((float) pick);
 		}
-		// Targets changed: force a re-send of everything.
-		midiOutput.resetValues();
+	}
+
+	// Live wrapper: scan the engine for OTHER instances' uses (self is
+	// excluded — a fresh module re-claiming its own defaults is fine).
+	void applySpecDefaultsLive() {
+		std::vector<MidiMapTargetUse> uses;
+		if (rack::contextGet() && rack::contextGet()->engine) {
+			for (int64_t id : rack::contextGet()->engine->getModuleIds()) {
+				if (id == this->id)
+					continue;
+				auto* mod = rack::contextGet()->engine->getModule(id);
+				auto* mm = dynamic_cast<CyberlineMidiMap*>(mod);
+				if (mm)
+					collectSelfUses(mm, id, &uses);
+			}
+		}
+		applySpecDefaults(uses);
 	}
 
 	bool loadSpecJson(const char* text, const std::string& pathLabel, std::string* error) {
