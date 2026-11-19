@@ -73,10 +73,10 @@ struct CyberlineMidiMapWidget : rack::app::ModuleWidget {
 			}
 		}
 
-		// SYNC jack (mint ring, drawn by the grid's bottom-right plate):
-		// trigger clears the change-gate so every cell retransmits.
+		// SYNC jack (mint): sits below the SPEC strip, outside the grid.
+		// Trigger clears the change-gate so every cell retransmits.
 		addInput(rack::createInputCentered<PJ301MPort>(
-			rack::Vec(PANEL_W - GRID_X - 24.f, GRID_Y + 3 * ROW_H + CELL_H - 18.f),
+			rack::Vec(PANEL_W - GRID_X - 24.f, 52.f),
 			module, CyberlineMidiMap::SYNC_INPUT));
 	}
 
@@ -334,17 +334,7 @@ struct CyberlineMidiMapWidget : rack::app::ModuleWidget {
 				nvgFillColor(vg, nvgRGB(0x8a, 0x94, 0xa0));
 				nvgText(vg, x0 + 24.f - 15.5f, y0 + CELL_H - 26.f, "IN", NULL);
 
-				// Activity bar (right edge): last transmitted 7-bit value.
-				// Bottom-right cell: the SYNC jack lives there instead —
-				// draw its mint label and skip the bar for that cell.
-				if (cell == 15) {
-					nvgFontSize(vg, 6.2f);
-					nvgTextAlign(vg, NVG_ALIGN_RIGHT | NVG_ALIGN_BOTTOM);
-					nvgFillColor(vg, nvgRGB(0x58, 0xe0, 0xa8));
-					nvgText(vg, x0 + cw - 6.f, y0 + CELL_H - 34.f, "SYNC", NULL);
-					nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_TOP);
-					continue;
-				}
+				// Activity bar (right edge): last transmitted 7-bit value
 				float v = 0.f;
 				if (module) {
 					int k = p->key();
@@ -559,7 +549,8 @@ struct CyberlineMidiMapWidget : rack::app::ModuleWidget {
 		nvgStrokeWidth(vg, 0.7f);
 		nvgStrokeColor(vg, nvgRGBA(0x8e, 0x62, 0xf8, 70));
 		nvgStroke(vg);
-		// Convention hint (under the midi/spec strip)
+		// Convention hint (under the midi/spec strip) + SYNC label next to
+		// the SYNC jack (right side, below the SPEC strip).
 		auto font = getLabelFont();
 		if (font && font->handle >= 0) {
 			nvgFontFaceId(vg, font->handle);
@@ -567,6 +558,14 @@ struct CyberlineMidiMapWidget : rack::app::ModuleWidget {
 			nvgFontSize(vg, 5.6f);
 			nvgFillColor(vg, nvgRGB(0x6a, 0x74, 0x80));
 			nvgText(vg, GRID_X, 40.f, "click cell to assign \xC2\xB7 cyan \xC2\xB1 = -5..+5 V in \xC2\xB7 bar = sent value", NULL);
+			nvgTextAlign(vg, NVG_ALIGN_RIGHT | NVG_ALIGN_TOP);
+			nvgFontSize(vg, 6.2f);
+			nvgFillColor(vg, nvgRGB(0x58, 0xe0, 0xa8));
+			nvgText(vg, PANEL_W - GRID_X - 38.f, 44.f, "SYNC", NULL);
+			nvgTextAlign(vg, NVG_ALIGN_RIGHT | NVG_ALIGN_TOP);
+			nvgFontSize(vg, 5.2f);
+			nvgFillColor(vg, nvgRGB(0x6a, 0x74, 0x80));
+			nvgText(vg, PANEL_W - GRID_X - 38.f, 53.f, "resend all", NULL);
 		}
 		drawPanelTitle(args, panelW, "MIDI MAP");
 	}
