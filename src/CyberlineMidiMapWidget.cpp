@@ -114,7 +114,12 @@ struct CyberlineMidiMapWidget : rack::app::ModuleWidget {
 					const MidiMapSpec* spec;
 					int current;
 					rack::ui::Menu* createChildMenu() override {
-						auto* sub = rack::createMenu();
+						// NOTE: new ui::Menu, NOT rack::createMenu() — the
+						// latter creates its own MenuOverlay and adds the
+						// menu to the scene, but Menu::setChildMenu re-parents
+						// the submenu into the overlay (assert !child->parent).
+						// Rack's own Audio/MidiDisplay items do the same.
+						auto* sub = new rack::ui::Menu;
 						for (int i : idxs) {
 							const MidiMapParam* p = &spec->params[i];
 							sub->addChild(rack::createCheckMenuItem(p->name,
