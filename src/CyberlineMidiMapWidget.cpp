@@ -189,7 +189,6 @@ struct CyberlineMidiMapWidget : rack::app::ModuleWidget {
 			}
 			return "";
 		};
-		auto targetTaken = [&](int i) -> bool { return !ownerHint(i).empty(); };
 
 		// Group in stable order of first appearance
 		std::vector<std::string> groupOrder;
@@ -394,7 +393,7 @@ struct CyberlineMidiMapWidget : rack::app::ModuleWidget {
 				// Range hint (documented value span)
 				nvgFontSize(vg, 5.4f);
 				nvgFillColor(vg, nvgRGB(0x6a, 0x74, 0x80));
-				char rangeBuf[24];
+				char rangeBuf[32];
 				if (p->min == 0.f && p->max == 127.f)
 					std::snprintf(rangeBuf, sizeof(rangeBuf), "0-127");
 				else

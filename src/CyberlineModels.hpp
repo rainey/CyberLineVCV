@@ -654,6 +654,7 @@ extern rack::plugin::Model* modelCyberlineHeart;
 extern rack::plugin::Model* modelCyberlineBroca;
 extern rack::plugin::Model* modelCyberlineBrocaSq;
 extern rack::plugin::Model* modelCyberlinePtBreakout;
+extern rack::plugin::Model* modelCyberlineMidiMap;
 extern rack::plugin::Model* modelCyberlineVisual1;
 extern rack::plugin::Model* modelCyberlineSagitta;
 
