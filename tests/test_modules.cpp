@@ -1728,6 +1728,51 @@ static void test_midi_map() {
 		CHECK(g.params.size() == 128 && g.params[0].cc == 0 && g.params[127].cc == 127,
 			"generic spec covers CC 0-127");
 	}
+
+	// ---- Target-conflict keys (grey-out logic core) ----
+	{
+		// Same module, two cells on the same param -> conflicting keys.
+		CyberlineMidiMap m;
+		std::vector<MidiMapTargetUse> uses;
+		collectSelfUses(&m, 42, &uses);
+		CHECK(uses.size() == CyberlineMidiMap::NUM_CELLS,
+			"collectSelfUses reports all 16 cells");
+		// Default spread targets: cell c -> param index c -> distinct keys
+		bool distinct = true;
+		for (size_t a = 0; a < uses.size(); a++)
+			for (size_t b = a + 1; b < uses.size(); b++)
+				if (uses[a].key == uses[b].key)
+					distinct = false;
+		CHECK(distinct, "default spread targets give distinct conflict keys");
+		// Force two cells onto one param -> keys collide
+		m.params[CyberlineMidiMap::CELL0_PARAM + 1].setValue(
+			m.params[CyberlineMidiMap::CELL0_PARAM + 0].getValue());
+		uses.clear();
+		collectSelfUses(&m, 42, &uses);
+		CHECK(uses[0].key == uses[1].key,
+			"two cells on the same param produce a conflicting key pair");
+
+		// CC vs NRPN at the same number never conflict (transports differ)
+		MidiMapParam ccParam, nrpnParam;
+		ccParam.cc = 69;
+		nrpnParam.nrpnMsb = 0;
+		nrpnParam.nrpnLsb = 69;
+		MidiMapTargetKey kcc, knrpn;
+		kcc.nrpn = false; kcc.addr = ccParam.cc; kcc.channel = 0;
+		knrpn.nrpn = true; knrpn.addr = nrpnParam.nrpnMsb * 128 + nrpnParam.nrpnLsb; knrpn.channel = 0;
+		CHECK(!(kcc == knrpn), "CC 69 and NRPN 0:69 are distinct targets");
+
+		// Same target on a different channel does not conflict
+		MidiMapTargetKey k2 = kcc;
+		k2.channel = 3;
+		CHECK(!(kcc == k2), "same CC on a different channel is a distinct target");
+
+		// Effective channel: port channel -1 (= unset) transmits on ch 1
+		CyberlineMidiMap m3;
+		CHECK(m3.effectiveChannel() == 0, "unset port channel maps to effective ch 1");
+		m3.midiOutput.channel = 5;
+		CHECK(m3.effectiveChannel() == 5, "set port channel passes through");
+	}
 }
 
 int main() {

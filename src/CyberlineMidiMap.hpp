@@ -524,6 +524,42 @@ inline bool parseMidiMapSpecJson(const char* text, MidiMapSpec* out, std::string
 
 struct CyberlineMidiMap;
 
+// Conflict-detection key for a cell target: transport + address +
+// effective MIDI channel. Two cells conflict when they hold the same key
+// (they would write the same parameter on the same channel and fight —
+// last writer wins at 200 Hz). The same CC on a different channel is a
+// different target (multi-timbral setups are legitimate), and CC vs NRPN
+// never conflict even at the same number (different transports).
+struct MidiMapTargetKey {
+	bool nrpn;
+	int addr;     // CC number, or nrpnMsb*128+nrpnLsb
+	int channel;  // effective channel: port channel < 0 means 0 (ch 1)
+
+	bool operator<(const MidiMapTargetKey& o) const {
+		if (nrpn != o.nrpn)
+			return nrpn < o.nrpn;
+		if (addr != o.addr)
+			return addr < o.addr;
+		return channel < o.channel;
+	}
+	bool operator==(const MidiMapTargetKey& o) const {
+		return nrpn == o.nrpn && addr == o.addr && channel == o.channel;
+	}
+};
+
+// Who holds a target (for the "(cell n)" grey-out hints in the menu).
+struct MidiMapTargetUse {
+	MidiMapTargetKey key;
+	int64_t moduleId = -1;
+	int cell = -1;
+	std::string synth; // owning module's spec name (hint text)
+};
+
+// One module's own uses (pure, testable headless). Defined after
+// CyberlineMidiMap (needs the complete type).
+inline void collectSelfUses(CyberlineMidiMap* m, int64_t moduleId,
+		std::vector<MidiMapTargetUse>* out);
+
 // ParamQuantity for a cell-target param: displays the assigned parameter
 // name + CC/NRPN tag instead of a bare list index (context menu, tooltip,
 // Ctrl-click entry all use the same string). Defined after CyberlineMidiMap
@@ -763,6 +799,12 @@ struct CyberlineMidiMap : rack::engine::Module {
 		resendAll();
 	}
 
+	// Effective MIDI channel the port transmits on (port channel < 0 means
+	// the message's own nibble, which sendController leaves at 0 = ch 1).
+	int effectiveChannel() const {
+		return midiOutput.channel < 0 ? 0 : midiOutput.channel;
+	}
+
 	json_t* dataToJson() override {
 		json_t* rootJ = json_object();
 		json_object_set_new(rootJ, "specIndex", json_integer(specIndex));
@@ -806,6 +848,48 @@ inline std::string CellParamQuantity::getDisplayValueString() {
 	if (!p)
 		return "?";
 	return p->name + " (" + p->tag() + ")";
+}
+
+// One module's own uses (pure, testable headless). Non-const module: Rack's
+// Param::getValue is not const-qualified.
+inline void collectSelfUses(CyberlineMidiMap* m, int64_t moduleId,
+		std::vector<MidiMapTargetUse>* out) {
+	if (!m)
+		return;
+	const MidiMapSpec* s = m->spec();
+	int channel = m->effectiveChannel();
+	for (int c = 0; c < CyberlineMidiMap::NUM_CELLS; c++) {
+		const MidiMapParam* p = s->paramAt(
+			(int) std::lround(m->params[CyberlineMidiMap::CELL0_PARAM + c].getValue()));
+		if (!p)
+			continue;
+		MidiMapTargetUse u;
+		u.key.nrpn = p->isNrpn();
+		u.key.addr = p->isNrpn() ? p->nrpnMsb * 128 + p->nrpnLsb : p->cc;
+		u.key.channel = channel;
+		u.moduleId = moduleId;
+		u.cell = c;
+		u.synth = s->synth;
+		out->push_back(u);
+	}
+}
+
+// All CyberlineMidiMap instances in the engine (live app only; headless
+// contexts without an engine get an empty scan). Used by the assign menu
+// to grey out targets already held by any cell of any instance.
+inline std::vector<MidiMapTargetUse> collectMidiMapUses(const CyberlineMidiMap* self) {
+	std::vector<MidiMapTargetUse> uses;
+	if (!rack::contextGet() || !rack::contextGet()->engine)
+		return uses;
+	auto ids = rack::contextGet()->engine->getModuleIds();
+	for (int64_t id : ids) {
+		auto* mod = rack::contextGet()->engine->getModule(id);
+		auto* mm = dynamic_cast<CyberlineMidiMap*>(mod);
+		if (!mm)
+			continue;
+		collectSelfUses(mm, id, &uses);
+	}
+	return uses;
 }
 
 extern rack::plugin::Model* modelCyberlineMidiMap;

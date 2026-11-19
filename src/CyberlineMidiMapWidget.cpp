@@ -12,6 +12,7 @@
 #include "CyberlineModels.hpp"
 #include <rack.hpp>
 #include <osdialog.h>
+#include <cinttypes>
 #include <fstream>
 #include <map>
 
@@ -75,6 +76,9 @@ struct CyberlineMidiMapWidget : rack::app::ModuleWidget {
 
 	// Build the parameter-assign menu for one cell: one submenu per group
 	// (in spec order), entries "name" with rightText "CC n"/"NRPN m:l".
+	// Targets already held by another cell (this module or any other MIDI
+	// Map instance on the same effective MIDI channel) are greyed out
+	// with an owner hint — two writers on one parameter would fight.
 	void buildCellMenu(rack::ui::Menu* menu, int cell) {
 		auto* m = dynamic_cast<CyberlineMidiMap*>(module);
 		if (!m)
@@ -82,6 +86,31 @@ struct CyberlineMidiMapWidget : rack::app::ModuleWidget {
 		const MidiMapSpec* s = m->spec();
 		menu->addChild(rack::createMenuLabel(rack::string::uppercase(s->synth)));
 		menu->addChild(new rack::ui::MenuSeparator);
+
+		// Used targets across all instances + this module's other cells.
+		// Engine scan runs once per menu open (not per frame) — cheap.
+		auto uses = collectMidiMapUses(m);
+		int channel = m->effectiveChannel();
+		int64_t selfId = module->id;
+		auto ownerHint = [&](int i) -> std::string {
+			const MidiMapParam* p = &s->params[i];
+			MidiMapTargetKey key;
+			key.nrpn = p->isNrpn();
+			key.addr = p->isNrpn() ? p->nrpnMsb * 128 + p->nrpnLsb : p->cc;
+			key.channel = channel;
+			for (auto& u : uses) {
+				if (u.key == key && !(u.moduleId == selfId && u.cell == cell)) {
+					char buf[64];
+					if (u.moduleId == selfId)
+						std::snprintf(buf, sizeof(buf), "  (cell %d)", u.cell + 1);
+					else
+						std::snprintf(buf, sizeof(buf), "  (MIDI Map %" PRId64 " cell %d)", u.moduleId, u.cell + 1);
+					return buf;
+				}
+			}
+			return "";
+		};
+		auto targetTaken = [&](int i) -> bool { return !ownerHint(i).empty(); };
 
 		// Group in stable order of first appearance
 		std::vector<std::string> groupOrder;
@@ -100,10 +129,12 @@ struct CyberlineMidiMapWidget : rack::app::ModuleWidget {
 			if (idxs.size() <= 4) {
 				for (int i : idxs) {
 					const MidiMapParam* p = &s->params[i];
+					std::string hint = ownerHint(i);
 					menu->addChild(rack::createCheckMenuItem(p->name,
-						p->tag(),
+						p->tag() + hint,
 						[=]() { return i == current; },
-						[=]() { setCellTarget(cell, i); }));
+						[=]() { setCellTarget(cell, i); },
+						i != current && !hint.empty()));
 				}
 				menu->addChild(new rack::ui::MenuSeparator);
 			} else {
@@ -113,6 +144,27 @@ struct CyberlineMidiMapWidget : rack::app::ModuleWidget {
 					std::vector<int> idxs;
 					const MidiMapSpec* spec;
 					int current;
+					int channel;
+					int64_t selfId;
+					std::vector<MidiMapTargetUse> uses;
+					std::string ownerHint(int i) {
+						const MidiMapParam* p = &spec->params[i];
+						MidiMapTargetKey key;
+						key.nrpn = p->isNrpn();
+						key.addr = p->isNrpn() ? p->nrpnMsb * 128 + p->nrpnLsb : p->cc;
+						key.channel = channel;
+						for (auto& u : uses) {
+							if (u.key == key && !(u.moduleId == selfId && u.cell == cell)) {
+								char buf[64];
+								if (u.moduleId == selfId)
+									std::snprintf(buf, sizeof(buf), "  (cell %d)", u.cell + 1);
+								else
+									std::snprintf(buf, sizeof(buf), "  (MIDI Map %" PRId64 " cell %d)", u.moduleId, u.cell + 1);
+								return buf;
+							}
+						}
+						return "";
+					}
 					rack::ui::Menu* createChildMenu() override {
 						// NOTE: new ui::Menu, NOT rack::createMenu() — the
 						// latter creates its own MenuOverlay and adds the
@@ -122,10 +174,12 @@ struct CyberlineMidiMapWidget : rack::app::ModuleWidget {
 						auto* sub = new rack::ui::Menu;
 						for (int i : idxs) {
 							const MidiMapParam* p = &spec->params[i];
+							std::string hint = ownerHint(i);
 							sub->addChild(rack::createCheckMenuItem(p->name,
-								p->tag(),
+								p->tag() + hint,
 								[=]() { return i == current; },
-								[=]() { w->setCellTarget(cell, i); }));
+								[=]() { w->setCellTarget(cell, i); },
+								i != current && !hint.empty()));
 						}
 						return sub;
 					}
@@ -136,6 +190,9 @@ struct CyberlineMidiMapWidget : rack::app::ModuleWidget {
 				item->idxs = idxs;
 				item->spec = s;
 				item->current = current;
+				item->channel = channel;
+				item->selfId = selfId;
+				item->uses = uses;
 				menu->addChild(item);
 			}
 		}
