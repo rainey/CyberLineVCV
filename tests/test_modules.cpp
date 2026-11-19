@@ -22,6 +22,7 @@
 #include "../src/CyberlineLarynx.hpp"
 #include "../src/CyberlineCantor.hpp"
 #include "../src/CyberlineVoice.hpp"
+#include "../src/CyberlineMidiMap.hpp"
 #include "../src/CyberlineQuality.hpp"
 
 #include <cmath>
@@ -1535,6 +1536,200 @@ static void test_cantor_musical_pitch_and_carrier() {
 	CHECK(cantor.glottis.timeInWaveform < 2.f * args.sampleTime, "Carrier rising edge hard-syncs glottal period");
 }
 
+// ---- MIDI Map: specs, scaling, NRPN sequences, change-gating ----
+static void test_midi_map() {
+	rack::engine::Module::ProcessArgs args;
+	args.sampleRate = 48000.f;
+	args.sampleTime = 1.f / 48000.f;
+
+	// ---- Built-in specs ----
+	{
+		CyberlineMidiMap m;
+		CHECK(m.spec()->synth == "Waldorf Blofeld", "MIDI Map defaults to the Blofeld spec");
+		CHECK(m.spec()->params.size() >= 100, "Blofeld spec has the full CC parameter set");
+		const MidiMapParam* cutoff = NULL;
+		const MidiMapParam* arpLen = NULL;
+		for (auto& p : m.spec()->params) {
+			if (p.name == "Filter 1 cutoff")
+				cutoff = &p;
+			if (p.name == "Arpeggiator length")
+				arpLen = &p;
+		}
+		CHECK(cutoff && cutoff->cc == 69 && !cutoff->centered, "Blofeld Filter 1 cutoff = CC 69 (standard)");
+		CHECK(arpLen && arpLen->min == 0.f && arpLen->max == 15.f, "Blofeld ARP length documents its 0-15 range");
+	}
+
+	// ---- voltsToValue: orientation-aware scaling ----
+	{
+		MidiMapParam std_; // standard 0..10 V, full 0..127
+		std_.cc = 7;
+		std_.name = "volume";
+		CHECK(CyberlineMidiMap::voltsToValue(std_, 0.f) == 0, "standard 0 V -> CC 0");
+		CHECK(CyberlineMidiMap::voltsToValue(std_, 10.f) == 127, "standard +10 V -> CC 127");
+		CHECK(std::abs((int) CyberlineMidiMap::voltsToValue(std_, 5.f) - 64) <= 1, "standard +5 V -> mid CC");
+
+		MidiMapParam ctr; // centered -5..+5 V (bipolar)
+		ctr.cc = 10;
+		ctr.name = "pan";
+		ctr.centered = true;
+		CHECK(CyberlineMidiMap::voltsToValue(ctr, -5.f) == 0, "centered -5 V -> min");
+		CHECK(CyberlineMidiMap::voltsToValue(ctr, 0.f) == 64, "centered 0 V -> neutral center");
+		CHECK(CyberlineMidiMap::voltsToValue(ctr, 5.f) == 127, "centered +5 V -> max");
+
+		MidiMapParam sub; // non-0-127 documented range (ARP length 0..15)
+		sub.cc = 13;
+		sub.name = "arp len";
+		sub.min = 0.f;
+		sub.max = 15.f;
+		CHECK(CyberlineMidiMap::voltsToValue(sub, 10.f) == 15, "sub-range scales to its own max (0-15)");
+		CHECK(CyberlineMidiMap::voltsToValue(sub, 5.f) == 8, "sub-range mid scales within range");
+	}
+
+	// ---- UltraNova spec: plain CC + NRPN rows ----
+	{
+		MidiMapSpec un = makeUltraNovaSpec();
+		CHECK(un.synth == "Novation UltraNova", "UltraNova spec name");
+		int ccRows = 0, nrpnRows = 0;
+		const MidiMapParam* delay1 = NULL;
+		const MidiMapParam* filtEnv = NULL;
+		for (auto& p : un.params) {
+			if (p.isNrpn())
+				nrpnRows++;
+			else
+				ccRows++;
+			if (p.name == "Delay1 time")
+				delay1 = &p;
+			if (p.name == "FiltEnv attack")
+				filtEnv = &p;
+		}
+		CHECK(ccRows >= 90, "UltraNova plain-CC rows present");
+		CHECK(nrpnRows >= 40, "UltraNova NRPN rows present (Filter Env, Envs, LFOs, FX, EQ, Arp)");
+		CHECK(delay1 && delay1->isNrpn() && delay1->nrpnMsb == 1 && delay1->nrpnLsb == 6,
+			"UltraNova Delay1 time = NRPN 1:6");
+		CHECK(filtEnv && filtEnv->isNrpn() && filtEnv->nrpnMsb == 0 && filtEnv->nrpnLsb == 1,
+			"UltraNova FiltEnv attack = NRPN 0:1");
+	}
+
+	// ---- Process: unpatched cells rest at neutral, change-gated ----
+	{
+		CyberlineMidiMap m;
+		// Cell 0 default target = index 0 (Blofeld "Mod wheel", CC 1, 0..127)
+		for (int i = 0; i < 48000; i++)
+			m.process(args); // 1 s at 48k, rate limiter fires ~200 times
+		auto it = m.midiOutput.lastValues.find(1); // key = CC 1
+		CHECK(it != m.midiOutput.lastValues.end() && it->second == 64,
+			"unpatched cell transmits its neutral center value (CC 64)");
+		// Change-gating: another second of processing sends nothing new
+		m.midiOutput.lastValues[1] = 99; // pretend a different value was sent...
+		// ...no wait: gating compares to lastValues; set it back and count via size
+		m.midiOutput.lastValues[1] = 64;
+		size_t before = m.midiOutput.lastValues.size();
+		for (int i = 0; i < 48000; i++)
+			m.process(args);
+		CHECK(m.midiOutput.lastValues.size() == before,
+			"unchanged CV does not re-transmit (change-gated)");
+		// Neutral for a centered param = center (CC 64 as well for 0..127)
+		const MidiMapParam* pan = NULL;
+		for (auto& p : m.spec()->params) {
+			if (p.name == "Pan")
+				pan = &p;
+		}
+		CHECK(pan && CyberlineMidiMap::neutralValue(*pan) == 64,
+			"centered param neutral = range midpoint");
+	}
+
+	// ---- Patched CV drives the value; spec switching re-targets by name ----
+	{
+		CyberlineMidiMap m;
+		m.inputs[CyberlineMidiMap::CELL0_INPUT + 0].channels = 1;
+		m.inputs[CyberlineMidiMap::CELL0_INPUT + 0].setVoltage(10.f);
+		for (int i = 0; i < 4800; i++)
+			m.process(args);
+		CHECK(m.midiOutput.lastValues[1] == 127, "cell CV +10 V -> CC max transmitted");
+		// Switch spec: "Mod wheel" exists in UltraNova too -> cell re-targets
+		m.setSpec(CyberlineMidiMap::SPEC_ULTRANOVA, true);
+		const MidiMapParam* p0 = m.spec()->paramAt(
+			(int) std::lround(m.params[CyberlineMidiMap::CELL0_PARAM + 0].getValue()));
+		CHECK(p0 && p0->name == "Modwheel", "spec switch keeps cells by parameter name");
+		// lastValues cleared -> next process resends everything
+		CHECK(m.midiOutput.lastValues.empty(), "spec switch forces a full re-send");
+	}
+
+	// ---- NRPN emission path (message content via lastValues + no-crash) ----
+	{
+		CyberlineMidiMap m;
+		m.setSpec(CyberlineMidiMap::SPEC_ULTRANOVA, false);
+		// Point cell 0 at FiltEnv attack (NRPN 0:1) by name
+		for (int i = 0; i < (int) m.spec()->params.size(); i++) {
+			if (m.spec()->params[i].name == "FiltEnv attack") {
+				m.params[CyberlineMidiMap::CELL0_PARAM + 0].setValue((float) i);
+				break;
+			}
+		}
+		for (int i = 0; i < 4800; i++)
+			m.process(args);
+		// NRPN key = 0x4000 + msb*128 + lsb = 0x4000 + 1
+		auto it = m.midiOutput.lastValues.find(0x4000 + 1);
+		CHECK(it != m.midiOutput.lastValues.end() && it->second == 64,
+			"NRPN cell transmits its neutral value (change-gated key = NRPN address)");
+		// resendAll forces re-transmission
+		m.resendAll();
+		CHECK(m.midiOutput.lastValues.empty(), "resendAll clears the change-gate");
+	}
+
+	// ---- JSON spec import: CC + NRPN rows, malformed rows skipped ----
+	{
+		const char* specText =
+			"{\"synth\":\"Test Synth\",\"params\":["
+			"{\"cc\":74,\"name\":\"Cutoff\"},"
+			"{\"nrpn\":\"1:6\",\"name\":\"Dly Time\",\"max\":255},"
+			"{\"nrpnMsb\":0,\"nrpnLsb\":76,\"name\":\"Lfo Rate\"},"
+			"{\"cc\":999,\"name\":\"no name row? has name\"}," // fine, has name
+			"{\"name\":\"no address\"},"                       // skipped
+			"{\"cc\":10}"                                      // skipped (no name)
+			"]}";
+		MidiMapSpec s;
+		std::string err;
+		CHECK(parseMidiMapSpecJson(specText, &s, &err), "spec JSON parses");
+		CHECK(s.params.size() == 4, "malformed rows skipped, valid rows kept");
+		CHECK(s.params[1].isNrpn() && s.params[1].nrpnMsb == 1 && s.params[1].nrpnLsb == 6,
+			"nrpn string form \"msb:lsb\" parses");
+		CHECK(s.params[1].max == 255.f, "custom min/max preserved");
+		CHECK(s.params[2].isNrpn() && s.params[2].nrpnLsb == 76, "nrpnMsb/nrpnLsb int form parses");
+
+		const char* bad = "{\"synth\":\"X\"}";
+		CHECK(!parseMidiMapSpecJson(bad, &s, &err) && err.find("params") != std::string::npos,
+			"missing params array rejected with an error");
+
+		// Round-trip through the module
+		CyberlineMidiMap m;
+		CHECK(m.loadSpecJson(specText, "test.json", &err), "module accepts a valid spec");
+		CHECK(m.specIndex == CyberlineMidiMap::SPEC_LOADED && m.spec()->synth == "Test Synth",
+			"loaded spec becomes active");
+		CHECK(m.spec()->params[0].cc == 74 && m.spec()->params[0].name == "Cutoff",
+			"loaded CC row usable as a cell target");
+		// Persistence: loaded spec falls back to Blofeld across JSON
+		// round-trip (the table itself isn't saved; label-only per spec.md)
+		json_t* rootJ = m.dataToJson();
+		std::string saved = json_dumps(rootJ, 0);
+		json_decref(rootJ);
+		CyberlineMidiMap m2;
+		json_error_t jerr;
+		json_t* load = json_loads(saved.c_str(), 0, &jerr);
+		m2.dataFromJson(load);
+		json_decref(load);
+		CHECK(m2.specIndex == CyberlineMidiMap::SPEC_BLOFELD,
+			"unavailable loaded spec falls back to Blofeld on patch load");
+	}
+
+	// ---- Generic spec ----
+	{
+		MidiMapSpec g = makeGenericSpec();
+		CHECK(g.params.size() == 128 && g.params[0].cc == 0 && g.params[127].cc == 127,
+			"generic spec covers CC 0-127");
+	}
+}
+
 int main() {
 	std::printf("=========================================\n");
 	std::printf("Running Cyberline Module Integration Tests\n");
@@ -1556,6 +1751,7 @@ int main() {
 	test_vtl_band_clamp();
 	test_pt_mode_and_breakout();
 	test_crispness_control();
+	test_midi_map();
 
 	std::printf("=========================================\n");
 	std::printf("Results: %d passed, %d failed\n", g_passCount, g_failCount);

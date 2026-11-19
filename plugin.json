@@ -110,6 +110,16 @@
         "Vocal",
         "Utility"
       ]
+    },
+    {
+      "slug": "cyberline-midimap",
+      "name": "MIDI Map",
+      "description": "Synth CC/NRPN grid: 16 labeled CV inputs that transmit directly over MIDI to external synthesizers, with built-in Waldorf Blofeld and Novation UltraNova parameter specs (CC and NRPN), JSON spec import, and orientation-aware bipolar input scaling",
+      "tags": [
+        "MIDI",
+        "Controller",
+        "External"
+      ]
     }
   ]
 }

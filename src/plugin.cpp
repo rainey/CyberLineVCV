@@ -6,6 +6,7 @@
 #include <rack.hpp>
 #include "CyberlineModels.hpp"
 #include "CyberlineLarynx.hpp"
+#include "CyberlineMidiMap.hpp"
 
 rack::Plugin* pluginInstance;
 
@@ -23,6 +24,7 @@ void init(rack::Plugin* p) {
 	p->addModel(cyberline::modelCyberlineBroca);
 	p->addModel(cyberline::modelCyberlineBrocaSq);
 	p->addModel(cyberline::modelCyberlinePtBreakout);
+	p->addModel(cyberline::modelCyberlineMidiMap);
 	// Sagitta (vocal-system fluoroscopy) is implemented but unregistered
 	// from the main build for now. Revisit later. To re-enable: uncomment
 	// cyberline::modelCyberlineSagitta here and re-add to plugin.json.
