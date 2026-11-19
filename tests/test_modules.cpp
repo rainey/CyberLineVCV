@@ -1729,6 +1729,38 @@ static void test_midi_map() {
 			"generic spec covers CC 0-127");
 	}
 
+	// ---- SYNC trigger: resend-all on rising edge ----
+	{
+		CyberlineMidiMap m;
+		// Settle: everything transmits once (neutral values)
+		for (int i = 0; i < 4800; i++)
+			m.process(args);
+		size_t before = m.midiOutput.lastValues.size();
+		CHECK(before == CyberlineMidiMap::NUM_CELLS, "all cells transmitted once at settle");
+		// No CV change -> nothing new sent for a second
+		for (int i = 0; i < 48000; i++)
+			m.process(args);
+		CHECK(m.midiOutput.lastValues.size() == before, "change-gate holds without CV change");
+		// Trigger SYNC (>= 1 V rising edge) -> gate cleared -> next tick resends
+		m.inputs[CyberlineMidiMap::SYNC_INPUT].setVoltage(5.f);
+		for (int i = 0; i < 4800; i++)
+			m.process(args);
+		CHECK(m.midiOutput.lastValues.size() == before,
+			"SYNC edge forces every cell to retransmit");
+		// Holding SYNC high does not spam (edge-detected)
+		for (int i = 0; i < 48000; i++)
+			m.process(args);
+		CHECK(m.midiOutput.lastValues.size() == before, "held SYNC does not re-trigger");
+		// Falling edge then re-trigger works again
+		m.inputs[CyberlineMidiMap::SYNC_INPUT].setVoltage(0.f);
+		for (int i = 0; i < 4800; i++)
+			m.process(args);
+		m.inputs[CyberlineMidiMap::SYNC_INPUT].setVoltage(5.f);
+		for (int i = 0; i < 4800; i++)
+			m.process(args);
+		CHECK(m.midiOutput.lastValues.size() == before, "re-trigger after low period resends again");
+	}
+
 	// ---- Target-conflict keys (grey-out logic core) ----
 	{
 		// Same module, two cells on the same param -> conflicting keys.

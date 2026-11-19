@@ -672,7 +672,9 @@ struct CyberlineMidiMap : rack::engine::Module {
 	};
 	enum InputIds {
 		CELL0_INPUT,
-		NUM_INPUTS = CELL0_INPUT + NUM_CELLS
+		NUM_INPUTS = CELL0_INPUT + NUM_CELLS,
+		SYNC_INPUT = NUM_INPUTS, // resend-all trigger (clocked flush)
+		NUM_INPUTS_WITH_SYNC
 	};
 	enum LightIds {
 		NUM_LIGHTS
@@ -689,13 +691,15 @@ struct CyberlineMidiMap : rack::engine::Module {
 
 	MidiMapOutput midiOutput;
 	rack::dsp::Timer rateLimiterTimer; // 200 Hz send rate (Core CV-CC style)
+	bool syncWasHigh = false;         // SYNC trigger edge detect
 	CyberlineCpuMeter cpuMeter;   // plugin-side CPU % ring (see CyberlineModels.hpp)
 
 	CyberlineMidiMap() {
-		config(NUM_PARAMS, NUM_INPUTS, 0, 0);
+		config(NUM_PARAMS, NUM_INPUTS_WITH_SYNC, 0, 0);
 		for (int c = 0; c < NUM_CELLS; c++)
 			configParam<CellParamQuantity>(CELL0_PARAM + c, 0.f, 1.f, 0.f, "Cell target");
 		configInput(CELL0_INPUT, "Cell 1 CV");
+		configInput(SYNC_INPUT, "Sync (resend all values on trigger)");
 		setSpec(SPEC_BLOFELD);
 	}
 
@@ -862,6 +866,15 @@ struct CyberlineMidiMap : rack::engine::Module {
 
 	void process(const ProcessArgs& args) override {
 		bool measure = cpuMeter.frameStart();
+		// SYNC trigger: a rising edge clears the change-gate so every cell
+		// retransmits on the next rate-limiter tick (clocked resync, e.g.
+		// after hand-editing hardware knobs or a preset change). Edge is
+		// detected per-sample so short pulses can't slip between ticks.
+		bool syncHigh = inputs[SYNC_INPUT].getVoltage() >= 1.f;
+		if (syncHigh && !syncWasHigh) {
+			midiOutput.resetValues();
+		}
+		syncWasHigh = syncHigh;
 		// 200 Hz send rate (matches Core's CV-CC rate limiter); CV is
 		// sampled and change-gated there so the MIDI line isn't flooded.
 		const float rateLimiterPeriod = 1 / 200.f;
@@ -897,6 +910,7 @@ struct CyberlineMidiMap : rack::engine::Module {
 
 	void onReset() override {
 		midiOutput.reset();
+		syncWasHigh = false;
 		resendAll();
 	}
 

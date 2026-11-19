@@ -72,6 +72,12 @@ struct CyberlineMidiMapWidget : rack::app::ModuleWidget {
 				addInput(rack::createInputCentered<PJ301MPort>(inPos, module, CyberlineMidiMap::CELL0_INPUT + cell));
 			}
 		}
+
+		// SYNC jack (mint ring, drawn by the grid's bottom-right plate):
+		// trigger clears the change-gate so every cell retransmits.
+		addInput(rack::createInputCentered<PJ301MPort>(
+			rack::Vec(PANEL_W - GRID_X - 24.f, GRID_Y + 3 * ROW_H + CELL_H - 18.f),
+			module, CyberlineMidiMap::SYNC_INPUT));
 	}
 
 	// Build the parameter-assign menu for one cell: one submenu per group
@@ -328,14 +334,25 @@ struct CyberlineMidiMapWidget : rack::app::ModuleWidget {
 				nvgFillColor(vg, nvgRGB(0x8a, 0x94, 0xa0));
 				nvgText(vg, x0 + 24.f - 15.5f, y0 + CELL_H - 26.f, "IN", NULL);
 
-				// Activity bar (right edge): last transmitted 7-bit value
+				// Activity bar (right edge): last transmitted 7-bit value.
+				// Bottom-right cell: the SYNC jack lives there instead —
+				// draw its mint label and skip the bar for that cell.
+				if (cell == 15) {
+					nvgFontSize(vg, 6.2f);
+					nvgTextAlign(vg, NVG_ALIGN_RIGHT | NVG_ALIGN_BOTTOM);
+					nvgFillColor(vg, nvgRGB(0x58, 0xe0, 0xa8));
+					nvgText(vg, x0 + cw - 6.f, y0 + CELL_H - 34.f, "SYNC", NULL);
+					nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_TOP);
+					continue;
+				}
 				float v = 0.f;
 				if (module) {
 					int k = p->key();
 					auto it = module->midiOutput.lastValues.find(k);
 					if (it != module->midiOutput.lastValues.end())
 						v = it->second / 127.f;
-				}float barH = (CELL_H - 14.f) * v;
+				}
+				float barH = (CELL_H - 14.f) * v;
 				nvgBeginPath(vg);
 				nvgRect(vg, x0 + cw - 9.f, y0 + CELL_H - 7.f - barH, 2.5f, barH);
 				nvgFillColor(vg, nvgRGB(0x58, 0xe0, 0xa8));
@@ -505,6 +522,7 @@ struct CyberlineMidiMapWidget : rack::app::ModuleWidget {
 		menu->addChild(rack::createMenuLabel("  centered (\xC2\xB1) -5..+5 V"));
 		menu->addChild(rack::createMenuLabel("  unpatched IN = range midpoint"));
 		menu->addChild(rack::createMenuLabel("  sends on change, 200 Hz max"));
+		menu->addChild(rack::createMenuLabel("  SYNC trigger: resend all values"));
 	}
 
 	void draw(const DrawArgs& args) override {
