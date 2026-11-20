@@ -362,13 +362,17 @@ void CyberlineBrocaSq::process(const ProcessArgs& args) {
 		? rack::math::clamp(tauBase * 0.3f, 0.0045f, 0.06f)
 		: tauBase;
 	float alpha = rack::math::clamp(dt / (tau + dt), 0.0005f, 1.f);
+	// Cap fricative slew so high MORPH blends vowels/tongue smoothly without
+	// smearing sibilant noise across subsequent steps.
+	float tauFric = std::fmin(tau, 0.022f);
+	float alphaFric = rack::math::clamp(dt / (tauFric + dt), 0.001f, 1.f);
 
 	curTongueX     += (tgtTx - curTongueX) * alpha;
 	curTongueY     += (tgtTy - curTongueY) * alpha;
 	curVelum       += (tgtVel - curVelum) * alpha;
 	curConstrPos   += (tgtCpos - curConstrPos) * alpha;
 	curConstrWidth += (tgtCwid - curConstrWidth) * alpha;
-	curFric        += (tgtFric - curFric) * alpha;
+	curFric        += (tgtFric - curFric) * alphaFric;
 	curVoicing     += (tgtVoic - curVoicing) * alpha;
 	curPressure    += (tgtPress - curPressure) * alpha;
 

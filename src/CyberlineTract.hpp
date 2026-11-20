@@ -50,8 +50,11 @@ struct CyberlineTract {
 	int decim = 1;           // host samples per waveguide step when host rate is very high
 	int decimCounter = 0;
 	float lipPrev = 0.f, lipCur = 0.f, nosePrev = 0.f, noseCur = 0.f;
-	float lastTurbulenceNoise = 0.f;
-	float turbulenceHp = 0.82f;
+	float turbulenceHp = 0.82f; // CRISP (0..1): sweeps bandpass sibilance center & focus
+	// TPT 2-pole SVF bandpass state + cached coefficients for turbulence noise
+	float turbIc1 = 0.f, turbIc2 = 0.f;
+	float turbA1 = 0.f, turbA2 = 0.f, turbA3 = 0.f, turbK = 1.f;
+	float turbCachedHp = -1.f, turbCachedPos = -2.f, turbCachedSr = 0.f;
 	bool initialized = false;
 	bool transientsEnabled = true;
 	// LOW quality: decouple reflection-coefficient refresh from the audio
@@ -173,8 +176,11 @@ struct CyberlineTract {
 		lastNoseOutput = 0.f;
 		decimCounter = 0;
 		lipPrev = lipCur = nosePrev = noseCur = 0.f;
-		lastTurbulenceNoise = 0.f;
 		turbulenceHp = 0.82f;
+		turbIc1 = turbIc2 = 0.f;
+		turbCachedHp = -1.f;
+		turbCachedPos = -2.f;
+		turbCachedSr = 0.f;
 		initialized = false;
 		silenceCounter = 0;
 		reflCounter = 0;
@@ -219,6 +225,7 @@ struct CyberlineTract {
 		}
 
 		n = sections;
+		turbCachedSr = 0.f;
 		bladeStart = (int) std::floor(10.f * n / 44.f);
 		tipStart = (int) std::floor(32.f * n / 44.f);
 		lipStart = (int) std::floor(39.f * n / 44.f);
@@ -392,7 +399,8 @@ struct CyberlineTract {
 			float d = constrictionDiameterAt(constrPos);
 			float thinness = std::fmax(0.f, std::fmin(8.f * (0.7f - d), 1.f));
 			float openness = std::fmax(0.f, std::fmin(30.f * (d - 0.3f), 1.f));
-			float amt = 0.32f * noise * fricativeAmount * thinness * openness;
+			float osScale = (oversample == 2) ? 0.65f : 1.0f;
+			float amt = 0.34f * osScale * noise * fricativeAmount * thinness * openness;
 			addTurbulence(amt, constrPos);
 		}
 
@@ -550,11 +558,55 @@ struct CyberlineTract {
 			calculateReflectionsPublic();
 		}
 
-		// High-pass pre-emphasis filter on turbulence noise to suppress low-frequency
-		// waveguide resonant ringing ("squish") and deliver clean consonant sibilance.
-		// Controlled by turbulenceHp (0 = raw broadband white noise, 1 = max high-pass).
-		float turbNoise = noise - turbulenceHp * lastTurbulenceNoise;
-		lastTurbulenceNoise = noise;
+		// Place-aware 2-pole TPT SVF bandpass filter on turbulence noise:
+		// eliminates both low-frequency waveguide resonant "squish" AND harsh
+		// ultra-high white-noise fizz, focusing energy into the natural vocal
+		// sibilant band (e.g. ~3.5 kHz for /ʃ/, ~5 kHz for /s/ at default CRISP).
+		float turbNoise = 0.f;
+		if (fricativeAmount > 0.f && constrPos >= 2.f) {
+			if (turbulenceHp != turbCachedHp || constrPos != turbCachedPos || sampleRate != turbCachedSr) {
+				turbCachedHp = turbulenceHp;
+				turbCachedPos = constrPos;
+				turbCachedSr = sampleRate;
+				float span = (float) (n - bladeStart);
+				float place = (span > 0.f)
+					? std::fmax(0.f, std::fmin((constrPos - (float) bladeStart) / span, 1.f))
+					: 0.75f;
+				// Place-of-articulation center frequency: peaks at alveolar (/s,z/ ~5 kHz),
+				// lower for postalveolar (/ʃ/ ~3.5 kHz), velar (~2.2 kHz), and glottal (/h/ ~1.5 kHz),
+				// and gently softer at the lips (/f,p,b/) where there is no teeth-obstacle sibilance.
+				float baseFc;
+				if (place <= 0.78f) {
+					float u = place / 0.78f;
+					baseFc = 1400.f + 3600.f * u * u;
+				} else {
+					float u = (place - 0.78f) / 0.22f;
+					baseFc = 5000.f - 1600.f * u;
+				}
+				float crispScale = 0.32f + turbulenceHp * 0.83f; // 0.32x warm -> 1.0x at 0.82 -> 1.15x bright
+				float fc = baseFc * crispScale;
+				float maxFc = std::fmin(9000.f, 0.42f * sampleRate);
+				if (fc < 300.f) fc = 300.f;
+				if (fc > maxFc) fc = maxFc;
+				float q = 0.85f + turbulenceHp * 0.95f; // 0.85 broad -> 1.63 focused at 0.82 -> 1.80 crisp
+				float g = std::tan((float) M_PI * fc / sampleRate);
+				turbK = 1.f / q;
+				turbA1 = 1.f / (1.f + g * (g + turbK));
+				turbA2 = g * turbA1;
+				turbA3 = g * turbA2;
+			}
+			float v3 = noise - turbIc2;
+			float v1 = turbA1 * turbIc1 + turbA2 * v3;
+			float v2 = turbIc2 + turbA2 * turbIc1 + turbA3 * v3;
+			turbIc1 = 2.f * v1 - turbIc1;
+			turbIc2 = 2.f * v2 - turbIc2;
+			// Flush tiny filter state residuals to avoid denormals
+			if (std::fabs(turbIc1) < 1e-15f) turbIc1 = 0.f;
+			if (std::fabs(turbIc2) < 1e-15f) turbIc2 = 0.f;
+			turbNoise = turbK * v1;
+		} else {
+			turbIc1 = turbIc2 = 0.f;
+		}
 
 		if (oversample == 2) {
 			if (fadeActive) {
